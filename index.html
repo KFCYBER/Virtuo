@@ -2000,46 +2000,65 @@ body.hand2-active #chip-strip .chip { position: relative; }
 }
 
 /* ─────────────────────────────────────────────
-   PREDICTION MARKETS
+   PREDICTION MARKETS MODAL
 ───────────────────────────────────────────── */
-.pm-wallet-row {
-  display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px;
+#pm-modal .pm-modal-inner {
+  width: 92vw; max-width: 860px; max-height: 88vh;
+  display: flex; flex-direction: column;
 }
-.pm-wallet-val { font-family: var(--mono); font-size: 12px; color: var(--gold); letter-spacing: 1px; }
+#pm-modal .pm-modal-body {
+  overflow-y: auto; flex: 1; padding-top: 8px;
+}
+.pm-modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.pm-modal-bal {
+  font-family: var(--mono); font-size: 11px; color: var(--gold); letter-spacing: 1px;
+}
+.pm-cols {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+}
+@media (max-width: 640px) { .pm-cols { grid-template-columns: 1fr; } }
+.pm-section-title {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 3px;
+  color: var(--muted); text-transform: uppercase;
+  margin-bottom: 10px; padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
 .pm-market {
   border: 1px solid var(--line); border-radius: 2px;
-  padding: 8px 10px; margin-bottom: 6px; background: var(--bg2);
+  padding: 10px 12px; margin-bottom: 8px; background: var(--bg2);
 }
 .pm-market-label {
   font-family: var(--mono); font-size: 8px; letter-spacing: 2px;
-  color: var(--muted); text-transform: uppercase; margin-bottom: 4px;
+  color: var(--muted); text-transform: uppercase; margin-bottom: 5px;
 }
 .pm-market-label.settled { color: var(--green); }
-.pm-market-desc { font-size: 10px; color: var(--white); letter-spacing: 0.3px; margin-bottom: 7px; line-height: 1.45; }
-.pm-odds-row { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 4px; }
+.pm-market-desc { font-size: 11px; color: var(--white); letter-spacing: 0.3px; margin-bottom: 8px; line-height: 1.45; }
+.pm-odds-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px; }
 .pm-outcome-btn {
   border: 1px solid var(--line2); background: var(--bg3); border-radius: 2px;
-  cursor: pointer; padding: 5px 4px; text-align: center;
-  transition: border-color .15s, background .15s; font-family: var(--sans); font-size: 9px;
+  cursor: pointer; padding: 7px 4px; text-align: center;
+  transition: border-color .15s, background .15s; font-family: var(--sans);
 }
 .pm-outcome-btn:hover:not(:disabled) { border-color: var(--gold-lo); background: var(--bg1); }
-.pm-outcome-btn:disabled { opacity: 0.5; cursor: default; }
+.pm-outcome-btn:disabled { opacity: 0.45; cursor: default; }
 .pm-outcome-btn .pm-lbl { color: var(--muted); font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
-.pm-outcome-btn .pm-pct { font-size: 13px; font-weight: 700; }
+.pm-outcome-btn .pm-pct { font-size: 15px; font-weight: 700; }
 .pm-outcome-btn .pm-pool { color: var(--muted2); font-size: 8px; font-family: var(--mono); }
 .pm-outcome-btn.pm-yes .pm-pct { color: var(--green); }
 .pm-outcome-btn.pm-no  .pm-pct { color: var(--red); }
 .pm-outcome-btn.pm-user-bet { border-color: var(--gold-lo); }
-.pm-game-prob { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
-.pm-my-bet { font-family: var(--mono); font-size: 8px; color: var(--muted2); text-align: right; margin-top: 3px; }
-.pm-settled-result { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; margin-top: 4px; text-align: center; }
+.pm-game-prob { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 5px; }
+.pm-my-bet { font-family: var(--mono); font-size: 8px; color: var(--muted2); text-align: right; margin-top: 4px; }
+.pm-settled-result { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; margin-top: 5px; text-align: center; }
 .pm-settled-result.win  { color: var(--green); }
 .pm-settled-result.loss { color: var(--red); }
 .pm-settled-result.push { color: var(--muted); }
-.pm-empty { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; padding: 12px 0; }
+.pm-empty { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; padding: 16px 0; }
 .pm-bet-out-btn {
-  flex: 1; padding: 8px; border: 1px solid var(--line2); background: var(--bg2);
+  flex: 1; padding: 10px; border: 1px solid var(--line2); background: var(--bg2);
   color: var(--muted); font-family: var(--sans); font-size: 10px; border-radius: 2px;
   cursor: pointer; transition: all .15s; letter-spacing: 1px; text-transform: uppercase;
 }
@@ -2114,6 +2133,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
       <span id="session-timer" title="Session duration">00:00</span>
       <button class="btn-ghost" id="btn-share" onclick="shareLastHand()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Share last hand">↗</button>
       <button class="btn-ghost" id="btn-music" onclick="toggleMusicPanel()" style="font-size:13px;padding:6px 10px;letter-spacing:1px;position:relative" title="Music">♪</button>
+      <button class="btn-ghost" id="btn-markets" onclick="PM.openModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700" title="Prediction Markets">MARKETS</button>
       <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
       <div class="badge" id="sync-badge">LOCAL</div>
@@ -2430,24 +2450,6 @@ body.hand2-active #chip-strip .chip { position: relative; }
         <div id="lb-wrap" style="overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:400px;opacity:1">
           <div id="lb-content" style="font-family:var(--mono);font-size:9px;color:var(--muted);padding:4px 0">Loading...</div>
           <div id="lb-updated"></div>
-        </div>
-      </div>
-
-      <!-- PREDICTION MARKETS -->
-      <div class="panel">
-        <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="PM.togglePanel()">
-          Markets
-          <span style="display:flex;align-items:center;gap:6px">
-            <button class="btn-ghost" onclick="event.stopPropagation();PM.poll()" title="Refresh" style="font-size:10px;padding:2px 7px">↺</button>
-            <span id="pm-toggle-icon" style="font-size:11px;color:var(--muted);letter-spacing:1px;font-family:var(--mono);transition:transform .2s">▼</span>
-          </span>
-        </div>
-        <div id="pm-wrap" style="overflow:hidden;transition:max-height .4s ease,opacity .4s ease;max-height:600px;opacity:1">
-          <div class="pm-wallet-row">
-            <span style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase">Balance</span>
-            <span class="pm-wallet-val" id="pm-wallet-display">—</span>
-          </div>
-          <div id="pm-markets-list"><div class="pm-empty">Loading…</div></div>
         </div>
       </div>
 
@@ -8546,6 +8548,7 @@ function _renderLeaderboard(players, errMsg){
     </div>`;
   }).join('');
   if(upd) upd.textContent = 'Updated '+new Date().toLocaleTimeString();
+  if(typeof PM !== 'undefined') PM.onLeaderboardUpdate(sorted);
 }
 
 // Auto-fetch leaderboard when app opens, and refresh after each cashout
@@ -8933,7 +8936,6 @@ const PM = (() => {
   const PM_PFX = 'kfc_pm_';
 
   let _markets = [];
-  let _panelOpen = true;
   let _betMktId = null;
   let _betOutcome = null;
   let _pollTimer = null;
@@ -9045,19 +9047,26 @@ const PM = (() => {
 
   // ── Render ─────────────────────────────────────────────────────────────────
   function render(){
-    const listEl = document.getElementById('pm-markets-list');
-    if(!listEl) return;
+    const balEl = document.getElementById('pm-modal-bal');
+    if(balEl) balEl.textContent = fmtKFC(G.balance||0);
 
-    // Show main balance in the wallet row
-    const wEl = document.getElementById('pm-wallet-display');
-    if(wEl) wEl.textContent = fmtKFC(G.balance||0);
+    const seasonEl = document.getElementById('pm-season-list');
+    const shoeEl   = document.getElementById('pm-shoe-list');
+    if(!seasonEl && !shoeEl) return;
 
-    const open    = _markets.filter(m => m.status === 'open');
-    const settled = _markets.filter(m => m.status === 'settled').slice(-2);
-    const display = [...open, ...settled];
+    const openSeason    = _markets.filter(m => m.type==='season' && m.status==='open');
+    const settledSeason = _markets.filter(m => m.type==='season' && m.status==='settled').slice(-3);
+    const openShoe      = _markets.filter(m => m.type==='shoe'   && m.status==='open');
+    const settledShoe   = _markets.filter(m => m.type==='shoe'   && m.status==='settled').slice(-2);
 
-    if(!display.length){ listEl.innerHTML = '<div class="pm-empty">No markets open</div>'; return; }
-    listEl.innerHTML = display.map(_renderMkt).join('');
+    if(seasonEl){
+      const d = [...openSeason, ...settledSeason];
+      seasonEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No season markets</div>';
+    }
+    if(shoeEl){
+      const d = [...openShoe, ...settledShoe];
+      shoeEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No shoe markets</div>';
+    }
   }
 
   function _renderMkt(mkt){
@@ -9239,21 +9248,30 @@ const PM = (() => {
   }
 
   // ── Market creation ────────────────────────────────────────────────────────
-  function _ensureSeasonMarkets(){
+  const MILESTONE_AMOUNTS = [100000,500000,1000000,5000000,10000000,50000000,100000000,500000000,1000000000,5000000000,10000000000,50000000000];
+
+  function _createPlayerMilestoneMarkets(players){
+    if(!players || !players.length) return;
     const today = new Date().toISOString().slice(0,10);
-    STAKE_ORDER.forEach((key, idx) => {
-      if(idx === 0) return;
-      const alreadyExists = _markets.some(m =>
-        m.type==='season' && m.condition && m.condition.type==='stake_reached' &&
-        m.condition.params && m.condition.params.level===key &&
-        m.condition.params.date===today
-      );
-      if(alreadyExists) return;
-      const s = STAKES[key];
-      _markets.push(_makeMarket('season',
-        'Will any player reach '+s.label+' stakes today?',
-        {type:'stake_reached', params:{level:key, date:today}}
-      ));
+    players.forEach(p => {
+      const pName = p.username || p.name || '';
+      if(!pName) return;
+      const balance = p.balance || 0;
+      MILESTONE_AMOUNTS.forEach(amount => {
+        if(balance >= amount) return;
+        const alreadyExists = _markets.some(m =>
+          m.type==='season' && m.condition &&
+          m.condition.type==='bankroll_milestone' &&
+          m.condition.params && m.condition.params.player===pName &&
+          m.condition.params.amount===amount &&
+          m.condition.params.date===today
+        );
+        if(alreadyExists) return;
+        _markets.push(_makeMarket('season',
+          'Will '+pName+' reach '+fmtKFC(amount)+' KFC this season?',
+          {type:'bankroll_milestone', params:{player:pName, amount, date:today}}
+        ));
+      });
     });
     _saveMarkets();
   }
@@ -9277,7 +9295,8 @@ const PM = (() => {
   }
 
   function onCardDrawn(){
-    if(!_panelOpen) return;
+    const modal = document.getElementById('pm-modal');
+    if(!modal || !modal.classList.contains('active')) return;
     if(!_markets.some(m => m.type==='shoe' && m.status==='open')) return;
     render();
   }
@@ -9311,6 +9330,24 @@ const PM = (() => {
       m.condition && m.condition.type==='stake_reached' &&
       m.condition.params && m.condition.params.level===stakeKey
     ).forEach(m => settle(m.id,'YES'));
+  }
+
+  function onLeaderboardUpdate(players){
+    if(!players || !players.length) return;
+    _createPlayerMilestoneMarkets(players);
+    players.forEach(p => {
+      const pName = p.username || p.name || '';
+      if(!pName) return;
+      const balance = p.balance || 0;
+      _markets.filter(m =>
+        m.type==='season' && m.status==='open' &&
+        m.condition && m.condition.type==='bankroll_milestone' &&
+        m.condition.params && m.condition.params.player===pName
+      ).forEach(m => {
+        if(balance >= m.condition.params.amount) settle(m.id,'YES');
+      });
+    });
+    render();
   }
 
   // ── Poll GAS ───────────────────────────────────────────────────────────────
@@ -9347,21 +9384,19 @@ const PM = (() => {
     render();
   }
 
-  // ── Panel toggle ───────────────────────────────────────────────────────────
-  function togglePanel(){
-    const wrap = document.getElementById('pm-wrap');
-    const icon = document.getElementById('pm-toggle-icon');
-    if(!wrap) return;
-    _panelOpen = !_panelOpen;
-    wrap.style.maxHeight = _panelOpen ? '600px' : '0';
-    wrap.style.opacity   = _panelOpen ? '1' : '0';
-    if(icon) icon.style.transform = _panelOpen ? '' : 'rotate(-90deg)';
+  // ── Modal open/close ───────────────────────────────────────────────────────
+  function _openModal(){
+    openModal('pm-modal');
+    render();
+  }
+  function _closeModal(){
+    closeModal('pm-modal');
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
   function init(){
     _loadMarkets();
-    _ensureSeasonMarkets();
+    // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     if(!_markets.some(m => m.type==='shoe' && m.status==='open')) _createShoeMarkets();
     render();
     if(_pollTimer) clearInterval(_pollTimer);
@@ -9369,7 +9404,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, togglePanel, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, onCardDrawn, onHandEnd, onStakeReached, onShoeNew };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
 })();
 
 </script>
@@ -9421,6 +9456,31 @@ const PM = (() => {
 <div id="pb-flash">🏆 NEW PERSONAL BEST</div>
 <!-- CONFETTI CANVAS -->
 <canvas id="confetti-canvas" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:900;display:none"></canvas>
+<!-- PM MAIN MODAL -->
+<div class="overlay" id="pm-modal">
+  <div class="modal pm-modal-inner">
+    <div class="pm-modal-header">
+      <span style="font-family:var(--sans);font-weight:800;font-size:14px;letter-spacing:2px">PREDICTION MARKETS</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span class="pm-modal-bal" id="pm-modal-bal">—</span>
+        <button class="btn-ghost" style="padding:5px 8px;font-size:9px;letter-spacing:1px" onclick="PM.poll()">REFRESH</button>
+        <button class="btn-ghost" style="padding:6px 12px;font-size:11px" onclick="PM.closeModal()">✕</button>
+      </div>
+    </div>
+    <div class="pm-modal-body">
+      <div class="pm-cols">
+        <div>
+          <div class="pm-section-title">Season Markets</div>
+          <div id="pm-season-list"><div class="pm-empty">Loading…</div></div>
+        </div>
+        <div>
+          <div class="pm-section-title">Shoe Markets</div>
+          <div id="pm-shoe-list"><div class="pm-empty">Loading…</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 <!-- PM BET MODAL -->
 <div class="overlay" id="pm-bet-modal">
   <div class="modal" style="min-width:300px;max-width:400px">

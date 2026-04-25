@@ -2444,7 +2444,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
         </div>
         <div id="pm-wrap" style="overflow:hidden;transition:max-height .4s ease,opacity .4s ease;max-height:600px;opacity:1">
           <div class="pm-wallet-row">
-            <span style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase">PM Wallet</span>
+            <span style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase">Balance</span>
             <span class="pm-wallet-val" id="pm-wallet-display">—</span>
           </div>
           <div id="pm-markets-list"><div class="pm-empty">Loading…</div></div>
@@ -8926,8 +8926,10 @@ function resetHand2State(){
 
 // ── PREDICTION MARKETS ────────────────────────────────────────────────────────
 const PM = (() => {
-  const HOUSE_SEED = 500;
-  const DEFAULT_WALLET = 10000;
+  // Seed = table minimum × multiplier. Scales automatically across all stake levels.
+  // One typical bet (1× min) moves odds from 50% to ~55.6% — feels like a real market.
+  const SEED_MULT_SEASON = 20;  // season markets: needs more bets to move significantly
+  const SEED_MULT_SHOE   = 8;   // shoe markets: more reactive, shorter duration
   const PM_PFX = 'kfc_pm_';
 
   let _markets = [];
@@ -8943,18 +8945,9 @@ const PM = (() => {
   let _pmShoeConsec = 0;
   let _pmShoeMaxConsec = 0;
 
-  // ── localStorage helpers ───────────────────────────────────────────────────
-  function _wk(){ return PM_PFX+'wallet_'+(G.username||G.player||'guest').toLowerCase(); }
+  // ── localStorage helpers (bets + markets only — balance uses G.balance) ────
   function _bk(){ return PM_PFX+'bets_'+(G.username||G.player||'guest').toLowerCase(); }
   function _mk(){ return PM_PFX+'markets'; }
-
-  function _loadWallet(){
-    const v = localStorage.getItem(_wk());
-    const n = v !== null ? parseFloat(v) : DEFAULT_WALLET;
-    return isNaN(n) ? DEFAULT_WALLET : n;
-  }
-  function _saveWallet(w){ localStorage.setItem(_wk(), w); }
-  function _getWallet(){ return _loadWallet(); }
 
   function _loadBets(){
     try{ return JSON.parse(localStorage.getItem(_bk())||'[]'); }catch(e){ return []; }
@@ -8972,13 +8965,19 @@ const PM = (() => {
   // ── Helpers ────────────────────────────────────────────────────────────────
   function _stkIdx(){ return STAKE_ORDER.indexOf(G.stake||'low'); }
 
+  function _seed(type){
+    const stakeMin = (G.s || STAKES[G.stake||'low'] || STAKES.low).min;
+    return stakeMin * (type === 'season' ? SEED_MULT_SEASON : SEED_MULT_SHOE);
+  }
+
   function _makeMarket(type, desc, condition){
+    const s = _seed(type);
     return {
       id: PM_PFX + type + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       type, desc,
       status: 'open',
-      pools: {YES: HOUSE_SEED, NO: HOUSE_SEED},
-      housePools: {YES: HOUSE_SEED, NO: HOUSE_SEED},
+      pools: {YES: s, NO: s},
+      housePools: {YES: s, NO: s},
       result: null, condition,
       createdAt: Date.now(), settledAt: null,
       createdStakeIdx: _stkIdx(),
@@ -9049,8 +9048,9 @@ const PM = (() => {
     const listEl = document.getElementById('pm-markets-list');
     if(!listEl) return;
 
+    // Show main balance in the wallet row
     const wEl = document.getElementById('pm-wallet-display');
-    if(wEl) wEl.textContent = fmtKFC(_loadWallet());
+    if(wEl) wEl.textContent = fmtKFC(G.balance||0);
 
     const open    = _markets.filter(m => m.status === 'open');
     const settled = _markets.filter(m => m.status === 'settled').slice(-2);
@@ -9094,9 +9094,9 @@ const PM = (() => {
       myBetHTML = `<div class="pm-my-bet">Your bets: ${parts.join(' / ')}</div>`;
     }
 
-    const lbl  = mkt.type==='season' ? 'SEASON' : 'SHOE';
+    const lbl    = mkt.type==='season' ? 'SEASON' : 'SHOE';
     const lblCls = isOpen ? '' : 'settled';
-    const dis  = isOpen ? '' : 'disabled';
+    const dis    = isOpen ? '' : 'disabled';
     const yClick = isOpen ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
     const nClick = isOpen ? `onclick="PM.openBetModal('${mkt.id}','NO')"` : '';
 
@@ -9134,8 +9134,8 @@ const PM = (() => {
 
     if(n) n.textContent = mkt.desc;
     if(t) t.textContent = (mkt.type==='season'?'SEASON':'SHOE') + ' MARKET';
-    if(w) w.textContent = fmtKFC(_loadWallet());
-    if(a){ a.value = ''; }
+    if(w) w.textContent = fmtKFC(G.balance||0);
+    if(a) a.value = '';
 
     _selectBetOutcome(_betOutcome);
     _updatePreview();
@@ -9177,12 +9177,14 @@ const PM = (() => {
     const rawAmt = (document.getElementById('pm-bet-amount')||{}).value||'';
     const amount = Math.floor(parseFloat(rawAmt.replace(/,/g,''))||0);
     if(amount <= 0){ notif('Enter bet amount'); return; }
-    const wallet = _loadWallet();
-    if(amount > wallet){ notif('Insufficient PM wallet ('+fmtKFC(wallet)+')'); return; }
+    if(amount > G.balance){ notif('Insufficient balance ('+fmtKFC(G.balance)+')'); return; }
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
-    _saveWallet(wallet - amount);
+    // Deduct from main balance
+    G.balance -= amount;
+    updateUI();
+
     mkt.pools[_betOutcome] += amount;
 
     const bets = _loadBets();
@@ -9191,7 +9193,7 @@ const PM = (() => {
     _saveMarkets();
 
     closeModal('pm-bet-modal');
-    notif('Bet '+fmtKFC(amount)+' on '+_betOutcome+' placed');
+    notif('Bet '+fmtKFC(amount)+' on '+_betOutcome);
     render();
 
     if(G.url && G.username){
@@ -9221,10 +9223,10 @@ const PM = (() => {
     _saveBets(bets);
 
     if(myTotal > 0){
-      const w = _loadWallet();
-      _saveWallet(w + myTotal);
+      G.balance += myTotal;
+      updateUI();
       const mySpend = bets.filter(b=>b.mktId===mktId&&b.outcome===result).reduce((a,b)=>a+b.amount,0);
-      setTimeout(()=>notif('Market settled '+result+' — you won +'+fmtKFC(myTotal-mySpend)+' PM chips'), 300);
+      setTimeout(()=>notif('Market settled '+result+' — +'+fmtKFC(myTotal-mySpend)), 300);
     }
 
     _saveMarkets();
@@ -9267,7 +9269,6 @@ const PM = (() => {
 
   // ── Event hooks ────────────────────────────────────────────────────────────
   function onShoeNew(){
-    // Settle any open shoe markets that didn't resolve (settle NO)
     _markets.filter(m => m.type==='shoe' && m.status==='open').forEach(m => settle(m.id,'NO'));
     _pmShoeHands = 0; _pmShoeBusts = 0; _pmShoeBJCount = 0;
     _pmShoeConsec = 0; _pmShoeMaxConsec = 0;
@@ -9278,7 +9279,7 @@ const PM = (() => {
   function onCardDrawn(){
     if(!_panelOpen) return;
     if(!_markets.some(m => m.type==='shoe' && m.status==='open')) return;
-    render(); // updates deck-derived probability display
+    render();
   }
 
   function onHandEnd(dealerBusted, playerBJ, playerWon){
@@ -9293,8 +9294,7 @@ const PM = (() => {
       if(c.type === 'dealer_bust_threshold'){
         if(_pmShoeBusts >= c.params.target){ settle(m.id,'YES'); return; }
         const deckLeft = G.deck ? G.deck.filter(x=>!x.cutCard).length : 0;
-        const handsLeft = Math.floor(deckLeft / 6);
-        if(handsLeft + _pmShoeBusts < c.params.target) settle(m.id,'NO');
+        if(Math.floor(deckLeft/6) + _pmShoeBusts < c.params.target) settle(m.id,'NO');
       }
       if(c.type === 'natural_bj'){
         if(playerBJ){ settle(m.id,'YES'); return; }
@@ -9324,7 +9324,7 @@ const PM = (() => {
           if(!local){ _markets.push(sm); }
           else if(sm.status==='settled' && local.status==='open'){
             Object.assign(local, sm);
-            // Credit payouts for any won bets
+            // Credit won bets to main balance
             const bets = _loadBets();
             let credit = 0;
             const settleIdx = _stkIdx();
@@ -9336,15 +9336,12 @@ const PM = (() => {
               bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
               credit += bet.payout;
             });
-            if(credit > 0){ _saveWallet(_loadWallet()+credit); _saveBets(bets); }
+            if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); }
           } else if(sm.status==='open' && local.status==='open'){
             local.pools = sm.pools;
           }
         });
         _saveMarkets();
-      }
-      if(d && typeof d.pmWallet === 'number'){
-        _saveWallet(d.pmWallet);
       }
     }catch(e){}
     render();
@@ -9437,7 +9434,7 @@ const PM = (() => {
       <button class="pm-bet-out-btn" id="pm-bet-yes" onclick="PM._selectBetOutcome('YES')">YES</button>
       <button class="pm-bet-out-btn" id="pm-bet-no"  onclick="PM._selectBetOutcome('NO')">NO</button>
     </div>
-    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px">PM Wallet: <span id="pm-bet-wallet">—</span></div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px">Balance: <span id="pm-bet-wallet">—</span></div>
     <label class="field-label">Bet amount</label>
     <input type="text" id="pm-bet-amount" placeholder="100" inputmode="numeric" oninput="PM._onBetAmountInput()" autocomplete="off" style="margin-bottom:6px">
     <div class="pm-payout-preview" id="pm-bet-preview"></div>

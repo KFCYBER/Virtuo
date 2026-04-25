@@ -119,14 +119,13 @@ select option { background: var(--bg2); }
 ───────────────────────────────────────────── */
 #topbar {
   height: 56px; border-bottom: 1px solid var(--line);
-  display: flex; align-items: center; justify-content: space-between;
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center;
   padding: 0 24px; background: var(--bg1); position: sticky; top: 0; z-index: 100;
 }
-/* True-center the player info regardless of left/right widths */
 .tb-center {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  justify-self: center;
 }
-.tb-logo { font-size: 11px; letter-spacing: 5px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+.tb-logo { justify-self: start; display: flex; align-items: center; gap: 8px; }
 .mtrack-btn { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--muted2); padding: 5px 10px; border-radius: 2px; cursor: pointer; border: 1px solid transparent; transition: all .15s; user-select: none; }
 .mtrack-btn:hover { color: var(--white); border-color: var(--line2); background: rgba(255,255,255,.04); }
 .mtrack-btn.active { color: var(--gold-hi); border-color: rgba(201,168,76,.35); background: rgba(201,168,76,.07); }
@@ -134,7 +133,7 @@ select option { background: var(--bg2); }
 .tb-center > * { pointer-events: auto; }
 .tb-player { font-size: 13px; font-weight: 700; color: var(--white); }
 .tb-balance { font-family: var(--mono); font-size: 18px; color: var(--gold-hi); font-weight: 500; letter-spacing: -0.5px; }
-.tb-right { display: flex; align-items: center; gap: 8px; }
+.tb-right { display: flex; align-items: center; gap: 8px; justify-self: end; }
 .badge {
   font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted);
   border: 1px solid var(--line2); padding: 3px 8px; text-transform: uppercase;
@@ -902,7 +901,7 @@ body.pass-player #felt-toggle-btn { display:flex; }
     align-items: stretch;
     gap: 0;
   }
-  .tb-logo { display: none; }
+  .tb-logo { display: flex; order: 0; padding: 4px 10px; border-bottom: 1px solid var(--line); width: 100%; box-sizing: border-box; }
   /* Row 1: name + balance + stake badge */
   .tb-center {
     position: static;
@@ -2057,6 +2056,16 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-settled-result.loss { color: var(--red); }
 .pm-settled-result.push { color: var(--muted); }
 .pm-empty { font-family: var(--mono); font-size: 9px; color: var(--muted); text-align: center; padding: 16px 0; }
+.pm-player-group { margin-bottom: 8px; border: 1px solid var(--line2); border-radius: 2px; overflow: hidden; }
+.pm-player-toggle { display: flex; align-items: center; gap: 8px; width: 100%; background: var(--bg3); border: none; padding: 9px 12px; cursor: pointer; text-align: left; transition: background .15s; }
+.pm-player-toggle:hover { background: rgba(255,255,255,.06); }
+.pm-ptog-name { font-size: 11px; font-weight: 700; color: var(--white); flex: 1; font-family: var(--sans); }
+.pm-ptog-count { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; }
+.pm-ptog-chevron { color: var(--muted); font-size: 9px; transition: transform .2s; flex-shrink: 0; }
+.pm-ptog-chevron.closed { transform: rotate(-90deg); }
+.pm-player-markets { padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.pm-player-markets.collapsed { display: none; }
+.pm-player-group .pm-market { margin-bottom: 0; }
 .pm-bet-out-btn {
   flex: 1; padding: 10px; border: 1px solid var(--line2); background: var(--bg2);
   color: var(--muted); font-family: var(--sans); font-size: 10px; border-radius: 2px;
@@ -2119,7 +2128,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
   <canvas id="grid-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;"></canvas>
   <!-- TOP BAR -->
   <div id="topbar">
-    <div class="tb-logo" style="display:flex;align-items:center;gap:8px">
+    <div class="tb-logo">
+      <button class="btn-ghost" id="btn-markets" onclick="PM.openModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700" title="Prediction Markets">MARKETS</button>
     </div>
     <div class="tb-center">
       <div class="tb-player" id="tb-name">—</div>
@@ -2133,7 +2143,6 @@ body.hand2-active #chip-strip .chip { position: relative; }
       <span id="session-timer" title="Session duration">00:00</span>
       <button class="btn-ghost" id="btn-share" onclick="shareLastHand()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Share last hand">↗</button>
       <button class="btn-ghost" id="btn-music" onclick="toggleMusicPanel()" style="font-size:13px;padding:6px 10px;letter-spacing:1px;position:relative" title="Music">♪</button>
-      <button class="btn-ghost" id="btn-markets" onclick="PM.openModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700" title="Prediction Markets">MARKETS</button>
       <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
       <div class="badge" id="sync-badge">LOCAL</div>
@@ -8939,6 +8948,7 @@ const PM = (() => {
   let _betMktId = null;
   let _betOutcome = null;
   let _pollTimer = null;
+  const _expandedGroups = new Set();
 
   // Per-shoe tracking
   let _pmShoeHands = 0;
@@ -8972,14 +8982,17 @@ const PM = (() => {
     return stakeMin * (type === 'season' ? SEED_MULT_SEASON : SEED_MULT_SHOE);
   }
 
-  function _makeMarket(type, desc, condition){
+  function _makeMarket(type, desc, condition, yesBias){
     const s = _seed(type);
+    const total = s * 2;
+    const yesPool = yesBias != null ? Math.round(total * yesBias) : s;
+    const noPool  = total - yesPool;
     return {
       id: PM_PFX + type + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       type, desc,
       status: 'open',
-      pools: {YES: s, NO: s},
-      housePools: {YES: s, NO: s},
+      pools: {YES: yesPool, NO: noPool},
+      housePools: {YES: yesPool, NO: noPool},
       result: null, condition,
       createdAt: Date.now(), settledAt: null,
       createdStakeIdx: _stkIdx(),
@@ -9054,19 +9067,63 @@ const PM = (() => {
     const shoeEl   = document.getElementById('pm-shoe-list');
     if(!seasonEl && !shoeEl) return;
 
-    const openSeason    = _markets.filter(m => m.type==='season' && m.status==='open');
-    const settledSeason = _markets.filter(m => m.type==='season' && m.status==='settled').slice(-3);
-    const openShoe      = _markets.filter(m => m.type==='shoe'   && m.status==='open');
-    const settledShoe   = _markets.filter(m => m.type==='shoe'   && m.status==='settled').slice(-2);
-
-    if(seasonEl){
-      const d = [...openSeason, ...settledSeason];
-      seasonEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No season markets</div>';
-    }
+    if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
+      const openShoe    = _markets.filter(m => m.type==='shoe' && m.status==='open');
+      const settledShoe = _markets.filter(m => m.type==='shoe' && m.status==='settled').slice(-2);
       const d = [...openShoe, ...settledShoe];
       shoeEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No shoe markets</div>';
     }
+  }
+
+  function _renderSeasonList(seasonEl){
+    const openSeason    = _markets.filter(m => m.type==='season' && m.status==='open');
+    const settledSeason = _markets.filter(m => m.type==='season' && m.status==='settled').slice(-3);
+    const all = [...openSeason, ...settledSeason];
+    if(!all.length){ seasonEl.innerHTML = '<div class="pm-empty">No season markets yet — waiting for leaderboard data</div>'; return; }
+
+    const groups = {};
+    all.forEach(m => {
+      const player = (m.condition && m.condition.params && m.condition.params.player) || '__misc';
+      if(!groups[player]) groups[player] = [];
+      groups[player].push(m);
+    });
+
+    const me = (G.username || G.player || '').toLowerCase();
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if(a.toLowerCase() === me) return -1;
+      if(b.toLowerCase() === me) return 1;
+      return a.localeCompare(b);
+    });
+
+    seasonEl.innerHTML = sortedKeys.map(player => {
+      const mkts = groups[player];
+      const key = player.toLowerCase().replace(/[^a-z0-9]/g,'_');
+      const isMe = player.toLowerCase() === me;
+      const openCount = mkts.filter(m => m.status==='open').length;
+      const settled   = mkts.length - openCount;
+      const countTxt  = openCount + ' open' + (settled ? ', '+settled+' settled' : '');
+      const expanded  = _expandedGroups.has(key);
+      return `<div class="pm-player-group">
+        <button class="pm-player-toggle" onclick="PM._togglePlayerGroup('${key}')">
+          <span class="pm-ptog-name">${player}${isMe?' (you)':''}</span>
+          <span class="pm-ptog-count">${countTxt}</span>
+          <span class="pm-ptog-chevron${expanded?'':' closed'}" id="pm-pc-${key}">▾</span>
+        </button>
+        <div class="pm-player-markets${expanded?'':' collapsed'}" id="pm-pm-${key}">
+          ${mkts.map(_renderMkt).join('')}
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function _togglePlayerGroup(key){
+    if(_expandedGroups.has(key)) _expandedGroups.delete(key);
+    else _expandedGroups.add(key);
+    const marketsEl = document.getElementById('pm-pm-'+key);
+    const chevronEl = document.getElementById('pm-pc-'+key);
+    if(marketsEl) marketsEl.classList.toggle('collapsed', !_expandedGroups.has(key));
+    if(chevronEl) chevronEl.classList.toggle('closed',    !_expandedGroups.has(key));
   }
 
   function _renderMkt(mkt){
@@ -9267,9 +9324,13 @@ const PM = (() => {
           m.condition.params.date===today
         );
         if(alreadyExists) return;
+        // Pre-calibrate odds: player at 90% of target → ~78% YES; at 10% → ~22% YES
+        const ratio = Math.min(balance / amount, 0.99);
+        const yesBias = 0.15 + 0.70 * ratio;
         _markets.push(_makeMarket('season',
           'Will '+pName+' reach '+fmtKFC(amount)+' KFC this season?',
-          {type:'bankroll_milestone', params:{player:pName, amount, date:today}}
+          {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
+          yesBias
         ));
       });
     });
@@ -9386,6 +9447,8 @@ const PM = (() => {
 
   // ── Modal open/close ───────────────────────────────────────────────────────
   function _openModal(){
+    const meKey = (G.username || G.player || '').toLowerCase().replace(/[^a-z0-9]/g,'_');
+    if(meKey) _expandedGroups.add(meKey);
     openModal('pm-modal');
     render();
   }
@@ -9396,6 +9459,7 @@ const PM = (() => {
   // ── Init ───────────────────────────────────────────────────────────────────
   function init(){
     _loadMarkets();
+    _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     if(!_markets.some(m => m.type==='shoe' && m.status==='open')) _createShoeMarkets();
     render();
@@ -9404,7 +9468,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
 })();
 
 </script>

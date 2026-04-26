@@ -10870,8 +10870,10 @@ const MP = {
     if (buyIn > bal)       { errEl.textContent='Buy-in exceeds your balance'; return; }
 
     btn.disabled = true; btn.textContent = 'Creating…';
+    const targetUrl = `${this._url}/mp/tables/create`;
+    console.log('[MP] POST', targetUrl);
     try {
-      const r = await fetch(`${this._url}/mp/tables/create`, {
+      const r = await fetch(targetUrl, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           username:    G.username,
@@ -10880,12 +10882,26 @@ const MP = {
           balance: buyIn,
         }),
       });
-      const d = await r.json();
-      if (!d.ok) { errEl.textContent = d.error||'Failed to create table'; return; }
-      _pendingLogin.balance = buyIn; // session balance = buy-in amount
+      const text = await r.text();
+      console.log('[MP] Response status:', r.status, 'body:', text);
+      let d;
+      try { d = JSON.parse(text); } catch(_) { d = { error: 'Bad response: '+text.slice(0,200) }; }
+      if (!d.ok) {
+        // Diagnose common error shapes
+        let msg = d.error || 'Failed to create table';
+        if (msg === 'Unknown action') {
+          msg = 'Worker not deployed with /mp/ routes — run "npx wrangler deploy"';
+        } else if (msg.includes('not configured')) {
+          msg = 'KV not bound to worker — check wrangler.toml + redeploy';
+        }
+        errEl.textContent = msg;
+        return;
+      }
+      _pendingLogin.balance = buyIn;
       this._enterGame(d.tableId, d.table);
     } catch(e) {
-      errEl.textContent = 'Network error — check worker deployment';
+      console.error('[MP] createTable error:', e);
+      errEl.textContent = 'Network error: ' + e.message;
     } finally {
       btn.disabled = false; btn.textContent = '+ CREATE TABLE';
     }

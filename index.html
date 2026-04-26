@@ -2126,6 +2126,146 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-payout-preview { font-family: var(--mono); font-size: 10px; color: var(--gold-lo); margin-bottom: 12px; min-height: 15px; }
 .pm-stake-note { font-family: var(--mono); font-size: 8px; color: var(--muted); margin-bottom: 14px; }
 
+
+/* ─────────────────────────────────────────────
+   MULTIPLAYER
+───────────────────────────────────────────── */
+#mp-mode-select,
+#mp-lobby-overlay,
+#mp-game-overlay {
+  position:fixed;inset:0;z-index:900;
+  display:none;align-items:center;justify-content:center;
+  background:var(--bg);
+  overflow-y:auto;
+}
+.mp-modal {
+  width:100%;max-width:560px;
+  border:1px solid var(--line2);
+  background:var(--bg1);
+  padding:40px 36px 36px;
+  border-radius:16px;
+  box-shadow:0 24px 80px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.03);
+  margin:auto;
+}
+.mp-title {
+  font-size:11px;letter-spacing:5px;color:var(--gold);
+  text-transform:uppercase;margin-bottom:28px;font-weight:700;
+}
+.mp-mode-btn {
+  width:100%;padding:18px;margin-bottom:12px;
+  border-radius:var(--radius);cursor:pointer;
+  font-family:var(--sans);font-size:12px;font-weight:700;
+  letter-spacing:3px;text-transform:uppercase;transition:background .15s;
+  border:1px solid var(--line2);
+}
+.mp-mode-btn.primary{background:var(--gold);color:#080C10;border-color:var(--gold);}
+.mp-mode-btn.primary:hover{background:var(--gold-hi);}
+.mp-mode-btn.ghost{background:transparent;color:var(--white);}
+.mp-mode-btn.ghost:hover{border-color:var(--gold-lo);}
+/* lobby */
+.mp-lobby-inner{width:100%;max-width:680px;padding:32px 20px;margin:auto;}
+.mp-section-title{font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;}
+.mp-card-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px;}
+.mp-table-card{
+  border:1px solid var(--line2);border-radius:8px;padding:14px 16px;
+  background:var(--bg2);cursor:pointer;transition:border-color .15s;
+}
+.mp-table-card:hover{border-color:var(--gold-lo);}
+.mp-table-card .tc-name{font-size:13px;font-weight:600;margin-bottom:4px;}
+.mp-table-card .tc-stake{font-size:10px;letter-spacing:2px;color:var(--gold);text-transform:uppercase;}
+.mp-table-card .tc-players{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:8px;}
+.mp-table-card .tc-status{font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
+.mp-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:20px 0;}
+.mp-create-form{border:1px solid var(--line2);border-radius:8px;padding:20px;background:var(--bg2);margin-bottom:24px;}
+/* game overlay */
+#mp-game-overlay{display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px 100px;}
+.mp-go-topbar{
+  width:100%;max-width:900px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:28px;
+}
+.mp-go-topbar .mp-table-name{font-size:11px;letter-spacing:4px;color:var(--gold);text-transform:uppercase;}
+.mp-phase-badge{
+  font-family:var(--mono);font-size:10px;letter-spacing:2px;
+  color:var(--muted);text-transform:uppercase;
+}
+.mp-timer{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--gold-hi);}
+/* dealer area */
+.mp-dealer-wrap{text-align:center;margin-bottom:32px;width:100%;max-width:900px;}
+.mp-dealer-label{font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
+.mp-dealer-cards{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.mp-dealer-val{font-family:var(--mono);font-size:14px;color:var(--white);margin-top:10px;}
+/* player slots */
+.mp-players-row{
+  display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
+  width:100%;max-width:900px;margin-bottom:28px;
+}
+.mp-player-slot{
+  flex:1;min-width:180px;max-width:260px;
+  border:1px solid var(--line2);border-radius:10px;
+  padding:16px;background:var(--bg1);
+  transition:border-color .2s;
+}
+.mp-player-slot.active-turn{border-color:var(--gold);box-shadow:0 0 12px rgba(201,168,76,.25);}
+.mp-player-slot.my-slot{background:var(--bg2);}
+.mp-slot-name{font-size:12px;font-weight:700;margin-bottom:2px;}
+.mp-slot-bal{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;}
+.mp-slot-cards{display:flex;gap:4px;flex-wrap:wrap;min-height:36px;margin-bottom:8px;}
+.mp-slot-val{font-family:var(--mono);font-size:12px;color:var(--white);margin-bottom:6px;}
+.mp-slot-status{font-size:9px;letter-spacing:2px;text-transform:uppercase;}
+.mp-slot-status.won{color:var(--green);}
+.mp-slot-status.lost{color:var(--red);}
+.mp-slot-status.pushed{color:var(--muted);}
+.mp-slot-status.playing{color:var(--gold);}
+.mp-slot-status.waiting-bet{color:var(--muted);}
+.mp-slot-bet{font-family:var(--mono);font-size:10px;color:var(--gold-lo);margin-bottom:4px;}
+/* cards in MP */
+.mp-c{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:32px;height:44px;border-radius:4px;
+  background:var(--white);color:#111;
+  font-size:11px;font-weight:700;font-family:var(--mono);
+  box-shadow:0 1px 4px rgba(0,0,0,.4);user-select:none;
+}
+.mp-c.red{color:#c0392b;}
+.mp-c.hidden{background:var(--line2);color:var(--muted);}
+/* action bar */
+.mp-action-bar{
+  position:fixed;bottom:0;left:0;right:0;
+  background:var(--bg1);border-top:1px solid var(--line);
+  padding:14px 20px;display:flex;gap:10px;align-items:center;
+  justify-content:center;flex-wrap:wrap;z-index:950;
+}
+.mp-action-bar .mp-btn{
+  padding:10px 22px;border-radius:var(--radius);
+  font-family:var(--sans);font-size:11px;font-weight:700;
+  letter-spacing:2px;text-transform:uppercase;cursor:pointer;
+  border:1px solid var(--line2);transition:background .15s;
+}
+.mp-action-bar .mp-btn.gold{background:var(--gold);color:#080C10;border-color:var(--gold);}
+.mp-action-bar .mp-btn.gold:hover{background:var(--gold-hi);}
+.mp-action-bar .mp-btn.green{background:var(--green);color:#080C10;border-color:var(--green);}
+.mp-action-bar .mp-btn.red-btn{background:var(--red);color:#fff;border-color:var(--red);}
+.mp-action-bar .mp-btn.ghost{background:transparent;color:var(--white);}
+.mp-action-bar .mp-btn.ghost:hover{border-color:var(--gold-lo);}
+.mp-action-bar .mp-btn:disabled{opacity:.35;cursor:not-allowed;}
+.mp-bet-row{display:flex;gap:8px;align-items:center;}
+.mp-bet-inp{
+  width:120px;padding:9px 12px;
+  background:var(--bg2);border:1px solid var(--line2);
+  color:var(--white);font-family:var(--mono);font-size:14px;
+  outline:none;border-radius:var(--radius);
+}
+.mp-bet-inp:focus{border-color:var(--gold-lo);}
+.mp-wait-msg{font-family:var(--mono);font-size:11px;color:var(--muted);letter-spacing:1px;}
+.mp-payout-badge{
+  display:inline-block;padding:4px 10px;border-radius:20px;
+  font-family:var(--mono);font-size:11px;font-weight:600;
+  margin-top:4px;
+}
+.mp-payout-badge.win{background:rgba(63,185,80,.15);color:var(--green);}
+.mp-payout-badge.lose{background:rgba(248,81,73,.15);color:var(--red);}
+.mp-payout-badge.push{background:rgba(110,118,129,.15);color:var(--muted);}
 </style>
 </head>
 <body class="betting">
@@ -2840,6 +2980,116 @@ body.hand2-active #chip-strip .chip { position: relative; }
       <button class="btn-primary" style="flex:1" onclick="saveSettings()">Save</button>
       <button class="btn-ghost" onclick="closeModal('settings-modal')">Cancel</button>
     </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+   MULTIPLAYER: MODE SELECT
+══════════════════════════════════════════════ -->
+<div id="mp-mode-select" style="display:none;position:fixed;inset:0;z-index:900;align-items:center;justify-content:center;background:var(--bg);">
+  <div class="mp-modal" style="max-width:380px;text-align:center">
+    <div class="mp-title">SELECT MODE</div>
+    <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
+    <button class="mp-mode-btn primary" onclick="MP._chooseSP()">&#9654; SINGLEPLAYER</button>
+    <button class="mp-mode-btn ghost" onclick="MP._chooseMP()">&#9782; MULTIPLAYER</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+   MULTIPLAYER: LOBBY
+══════════════════════════════════════════════ -->
+<div id="mp-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;">
+  <div class="mp-lobby-inner">
+    <!-- header -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;border-bottom:1px solid var(--line);padding-bottom:16px;">
+      <div>
+        <div class="mp-title" style="margin-bottom:0">MULTIPLAYER LOBBY</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;" id="mp-lobby-user"></div>
+      </div>
+      <button class="mp-mode-btn ghost" style="width:auto;padding:8px 18px;margin:0;font-size:10px;" onclick="MP._backToModeSelect()">&#8592; Back</button>
+    </div>
+
+    <!-- create table -->
+    <div class="mp-section-title">CREATE A TABLE</div>
+    <div class="mp-create-form">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="field-label">Table Name</label>
+          <input type="text" id="mp-create-name" placeholder="My Table" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+        </div>
+        <div>
+          <label class="field-label">Stake Level</label>
+          <select id="mp-create-stake" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+            <option value="low">Low (min 5)</option>
+            <option value="mid">Mid (min 50)</option>
+            <option value="high">High (min 500)</option>
+            <option value="royale">Royale (min 5,000)</option>
+            <option value="legendary">Legendary (min 50,000)</option>
+            <option value="mythic">Mythic (min 500,000)</option>
+            <option value="highroller">High-Roller (min 5M)</option>
+            <option value="champion">Champion (min 50M)</option>
+          </select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label class="field-label">Your Buy-In</label>
+        <input type="text" id="mp-buyin-inp" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;" oninput="MP._fmtBuyIn(this)">
+        <div id="mp-buyin-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:1px;"></div>
+      </div>
+      <button class="mp-mode-btn primary" style="margin:0;" onclick="MP.createTable()" id="mp-create-btn">+ CREATE TABLE</button>
+      <div id="mp-create-err" style="font-family:var(--mono);font-size:11px;color:var(--red);margin-top:8px;min-height:16px;"></div>
+    </div>
+
+    <!-- table list -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="mp-section-title" style="margin-bottom:0">OPEN TABLES</div>
+      <button class="mp-mode-btn ghost" style="width:auto;padding:6px 14px;margin:0;font-size:9px;" onclick="MP.refreshLobby()">&#8635; Refresh</button>
+    </div>
+    <div id="mp-tables-list"><div class="mp-empty">Loading tables…</div></div>
+
+    <!-- join modal fields (hidden, shown inline on card) -->
+    <div id="mp-join-form" style="display:none;border:1px solid var(--gold-lo);border-radius:8px;padding:20px;background:var(--bg2);margin-top:16px;">
+      <div class="mp-section-title">JOIN TABLE: <span id="mp-join-name-lbl"></span></div>
+      <label class="field-label">Your Buy-In</label>
+      <input type="text" id="mp-join-buyin" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:12px;" oninput="MP._fmtBuyIn(this)">
+      <div style="display:flex;gap:8px;">
+        <button class="mp-mode-btn primary" style="flex:2;margin:0;" onclick="MP._confirmJoin()">JOIN TABLE</button>
+        <button class="mp-mode-btn ghost" style="flex:1;margin:0;" onclick="MP._cancelJoin()">Cancel</button>
+      </div>
+      <div id="mp-join-err" style="font-family:var(--mono);font-size:11px;color:var(--red);margin-top:8px;min-height:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+   MULTIPLAYER: GAME OVERLAY
+══════════════════════════════════════════════ -->
+<div id="mp-game-overlay" style="display:none;position:fixed;inset:0;z-index:910;background:var(--bg);overflow-y:auto;flex-direction:column;align-items:center;padding:24px 16px 110px;">
+  <!-- top bar -->
+  <div class="mp-go-topbar">
+    <div>
+      <div class="mp-table-name" id="mp-go-tablename">TABLE</div>
+      <div class="mp-phase-badge" id="mp-go-phase">WAITING</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:18px;">
+      <div class="mp-timer" id="mp-go-timer"></div>
+      <button class="mp-mode-btn ghost" style="width:auto;padding:7px 16px;margin:0;font-size:9px;" onclick="MP.leaveTable()">&#9660; LEAVE</button>
+    </div>
+  </div>
+
+  <!-- dealer -->
+  <div class="mp-dealer-wrap">
+    <div class="mp-dealer-label">DEALER</div>
+    <div class="mp-dealer-cards" id="mp-dealer-cards"></div>
+    <div class="mp-dealer-val" id="mp-dealer-val"></div>
+  </div>
+
+  <!-- players row (rendered dynamically) -->
+  <div class="mp-players-row" id="mp-players-row"></div>
+
+  <!-- action bar (fixed bottom) -->
+  <div class="mp-action-bar" id="mp-action-bar">
+    <span class="mp-wait-msg" id="mp-action-msg">Waiting…</span>
   </div>
 </div>
 
@@ -4923,7 +5173,7 @@ async function doLogin(){
         }catch(e){}
         localStorage.setItem('kfc_last_user', username.toLowerCase());
         document.getElementById('login-step1').style.display='none';
-        goLoginStep(2);
+        MP._showModeSelect();
         return;
       }
       // Auth returned but auth=false with no error message
@@ -4961,7 +5211,7 @@ async function doLogin(){
   const localBal=parseFloat(localStorage.getItem('kfc_bal_'+username)||'0');
   _pendingLogin={name:username,balance:localBal}; // G.player set only in openApp
   document.getElementById('login-step1').style.display='none';
-  goLoginStep(2);
+  MP._showModeSelect();
 }
 
 const BALANCE_CAP = 50_000_000_000; // 50 Billion KFC hard cap
@@ -9342,11 +9592,11 @@ const PM = (() => {
     if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
       const open = _markets.filter(m => m.type==='shoe' && m.status==='open');
-      const whole  = open.filter(m => !_isWindowShoeType(m));
-      const window = open.filter(m =>  _isWindowShoeType(m));
+      const whole      = open.filter(m => !_isWindowShoeType(m));
+      const windowMkts = open.filter(m =>  _isWindowShoeType(m));
       let shoeHTML = '';
-      if(whole.length)  shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
-      if(window.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + window.map(_renderMkt).join('');
+      if(whole.length)      shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
+      if(windowMkts.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + windowMkts.map(_renderMkt).join('');
       shoeEl.innerHTML = shoeHTML || '<div class="pm-empty">No shoe markets</div>';
     }
     if(portPane && portPane.style.display !== 'none') _renderPortfolio();
@@ -10414,6 +10664,538 @@ const PM = (() => {
   return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
 })();
 
+
+// ══════════════════════════════════════════════════════════════
+//  MULTIPLAYER MODULE
+// ══════════════════════════════════════════════════════════════
+const MP = {
+  tableId:     null,
+  state:       null,
+  pollTimer:   null,
+  timerTick:   null,
+  _pendingJoinId:   null,
+  _pendingJoinName: null,
+
+  // ── helpers ──────────────────────────────────────────────
+  // Always use the Cloudflare Worker base URL (strip any trailing slash).
+  // This is independent of where index_mp.html is hosted (GitHub Pages, Vercel, file://, etc.)
+  get _url() {
+    const base = (G.url || 'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/, '');
+    return base;
+  },
+  get _me()  { return G.username; },
+  get _myPlayer() {
+    if (!this.state) return null;
+    return this.state.players.find(p => p.username === this._me) || null;
+  },
+
+  _fmt(n) {
+    if (n === undefined || n === null) return '—';
+    if (Math.abs(n) >= 1e9)  return (n/1e9).toFixed(2)+'B';
+    if (Math.abs(n) >= 1e6)  return (n/1e6).toFixed(2)+'M';
+    if (Math.abs(n) >= 1e3)  return (n/1e3).toFixed(1)+'K';
+    return n.toLocaleString('de-CH');
+  },
+
+  _fmtBuyIn(inp) {
+    const raw = inp.value.replace(/[^0-9]/g,'');
+    inp._raw  = parseInt(raw)||0;
+    inp.value = inp._raw ? inp._raw.toLocaleString('de-CH') : '';
+  },
+
+  _card(c) {
+    if (!c || c === '??') return '<span class="mp-c hidden">?</span>';
+    const rank = c.slice(0,-1);
+    const suit = c.slice(-1);
+    const sym  = {S:'♠',H:'♥',D:'♦',C:'♣'}[suit] || suit;
+    const red  = (suit==='H'||suit==='D') ? ' red' : '';
+    return `<span class="mp-c${red}">${rank}${sym}</span>`;
+  },
+
+  _handHtml(hand) {
+    if (!hand || !hand.length) return '<span style="color:var(--muted);font-size:11px;">—</span>';
+    return hand.map(c => this._card(c)).join('');
+  },
+
+  _hv(hand) {
+    if (!hand || !hand.length) return 0;
+    let v=0, a=0;
+    for (const c of hand) {
+      if (c==='??') continue;
+      const r=c.slice(0,-1);
+      if (['J','Q','K'].includes(r)) v+=10;
+      else if (r==='A') { v+=11; a++; }
+      else v+=parseInt(r)||0;
+    }
+    while(v>21 && a-->0) v-=10;
+    return v;
+  },
+
+  _stakeLabel(k) {
+    return {low:'Low',mid:'Mid',high:'High',royale:'Royale',
+            legendary:'Legendary',mythic:'Mythic',
+            highroller:'High-Roller',champion:'Champion'}[k] || k;
+  },
+
+  _phaseLabel(p) {
+    return {waiting:'Waiting for players',betting:'Placing bets',
+            playing:'Player turns',dealer:"Dealer's turn",
+            result:'Round over'}[p] || p;
+  },
+
+  _outcomeClass(o) {
+    return {win:'won',blackjack:'won',bust:'lost',lose:'lost',push:'pushed'}[o]||'';
+  },
+  _outcomeLabel(o) {
+    return {win:'WIN',blackjack:'BLACKJACK',bust:'BUST',lose:'LOSE',push:'PUSH'}[o]||o||'';
+  },
+
+  // ── login flow hooks ─────────────────────────────────────
+  _showModeSelect() {
+    const el = document.getElementById('mp-mode-select');
+    if (el) { el.style.display='flex'; }
+  },
+
+  _hideModeSelect() {
+    const el = document.getElementById('mp-mode-select');
+    if (el) el.style.display='none';
+  },
+
+  _chooseSP() {
+    this._hideModeSelect();
+    goLoginStep(2);
+  },
+
+  _chooseMP() {
+    this._hideModeSelect();
+    this._openLobby();
+  },
+
+  _backToModeSelect() {
+    document.getElementById('mp-lobby-overlay').style.display='none';
+    this._showModeSelect();
+  },
+
+  // ── lobby ─────────────────────────────────────────────────
+  _openLobby() {
+    const lo = document.getElementById('mp-lobby-overlay');
+    lo.style.display = 'block';
+    const userLbl = document.getElementById('mp-lobby-user');
+    if (userLbl) userLbl.textContent = `Logged in as ${G.username}  ·  Balance: ${this._fmt(_pendingLogin?.balance||0)} KFC`;
+    // update buy-in hint
+    const bal = _pendingLogin?.balance || 0;
+    const hint = document.getElementById('mp-buyin-hint');
+    if (hint) hint.textContent = `Available: ${this._fmt(bal)} KFC`;
+    this.refreshLobby();
+  },
+
+  async refreshLobby() {
+    const container = document.getElementById('mp-tables-list');
+    if (container) container.innerHTML = '<div class="mp-empty">Loading…</div>';
+    try {
+      const r = await fetch(`${this._url}/mp/tables`, {cache:'no-store'});
+      const d = await r.json();
+      this._renderLobbyTables(d.tables || []);
+    } catch(e) {
+      if (container) container.innerHTML = `<div class="mp-empty" style="color:var(--red)">Could not load tables — is the worker deployed with KV?</div>`;
+    }
+  },
+
+  _renderLobbyTables(tables) {
+    const container = document.getElementById('mp-tables-list');
+    if (!container) return;
+    if (!tables.length) {
+      container.innerHTML = '<div class="mp-empty">No open tables. Create one above!</div>';
+      return;
+    }
+    const phaseLabel = p => ({waiting:'Open',betting:'Betting',playing:'In progress',dealer:'In progress',result:'Round end'}[p]||p);
+    const canJoin    = t => (t.phase==='waiting'||t.phase==='betting') && t.playerCount < t.maxPlayers;
+    container.innerHTML = tables.map(t => `
+      <div class="mp-table-card" style="${canJoin(t)?'':'opacity:.6;cursor:default'}">
+        <div class="tc-name">${t.name}</div>
+        <div class="tc-stake">${this._stakeLabel(t.stake)}</div>
+        <div class="tc-players">${t.players.map(p=>p.displayName).join(', ')||'—'}
+          &nbsp;·&nbsp; ${t.playerCount}/${t.maxPlayers} players</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
+          <span class="tc-status" style="color:${canJoin(t)?'var(--green)':'var(--muted)'}">${phaseLabel(t.phase)}</span>
+          ${canJoin(t)
+            ? `<button class="mp-mode-btn primary" style="width:auto;padding:6px 16px;margin:0;font-size:9px;"
+                onclick="MP._startJoin('${t.id}','${t.name.replace(/'/g,"\\'")}')">JOIN</button>`
+            : '<span style="font-size:9px;letter-spacing:1px;color:var(--muted)">FULL / IN PROGRESS</span>'
+          }
+        </div>
+      </div>`).join('');
+  },
+
+  _startJoin(tableId, tableName) {
+    this._pendingJoinId   = tableId;
+    this._pendingJoinName = tableName;
+    document.getElementById('mp-join-name-lbl').textContent = tableName;
+    document.getElementById('mp-join-form').style.display = 'block';
+    document.getElementById('mp-join-err').textContent = '';
+    document.getElementById('mp-join-buyin').value = '';
+    const bal  = _pendingLogin?.balance || 0;
+    const hint = document.getElementById('mp-buyin-hint');
+    if (hint) hint.textContent = `Available: ${this._fmt(bal)} KFC`;
+    document.getElementById('mp-join-buyin').focus();
+  },
+
+  _cancelJoin() {
+    this._pendingJoinId   = null;
+    this._pendingJoinName = null;
+    document.getElementById('mp-join-form').style.display = 'none';
+  },
+
+  async createTable() {
+    const nameInp  = document.getElementById('mp-create-name');
+    const stakeEl  = document.getElementById('mp-create-stake');
+    const buyInEl  = document.getElementById('mp-buyin-inp');
+    const errEl    = document.getElementById('mp-create-err');
+    const btn      = document.getElementById('mp-create-btn');
+
+    const stake   = stakeEl.value;
+    const name    = nameInp.value.trim() || `Table #${Date.now().toString(36).toUpperCase().slice(-4)}`;
+    const buyIn   = buyInEl._raw || 0;
+    const bal     = _pendingLogin?.balance || 0;
+    const stakeMin = {low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000}[stake]||5;
+
+    errEl.textContent = '';
+    if (buyIn < stakeMin)  { errEl.textContent=`Min buy-in for this stake is ${this._fmt(stakeMin)} KFC`; return; }
+    if (buyIn > bal)       { errEl.textContent='Buy-in exceeds your balance'; return; }
+
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      const r = await fetch(`${this._url}/mp/tables/create`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          username:    G.username,
+          displayName: _pendingLogin?.name || G.username,
+          stake, tableName: name,
+          balance: buyIn,
+        }),
+      });
+      const d = await r.json();
+      if (!d.ok) { errEl.textContent = d.error||'Failed to create table'; return; }
+      _pendingLogin.balance = buyIn; // session balance = buy-in amount
+      this._enterGame(d.tableId, d.table);
+    } catch(e) {
+      errEl.textContent = 'Network error — check worker deployment';
+    } finally {
+      btn.disabled = false; btn.textContent = '+ CREATE TABLE';
+    }
+  },
+
+  async _confirmJoin() {
+    const buyInEl = document.getElementById('mp-join-buyin');
+    const errEl   = document.getElementById('mp-join-err');
+    const buyIn   = buyInEl._raw || 0;
+    const bal     = _pendingLogin?.balance || 0;
+
+    errEl.textContent = '';
+    if (!this._pendingJoinId) return;
+    if (buyIn <= 0) { errEl.textContent='Enter a buy-in amount'; return; }
+    if (buyIn > bal) { errEl.textContent='Buy-in exceeds your balance'; return; }
+
+    try {
+      const r = await fetch(`${this._url}/mp/tables/join`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({
+          tableId:     this._pendingJoinId,
+          username:    G.username,
+          displayName: _pendingLogin?.name || G.username,
+          balance: buyIn,
+        }),
+      });
+      const d = await r.json();
+      if (!d.ok) { errEl.textContent = d.error||'Could not join'; return; }
+      _pendingLogin.balance = buyIn;
+      this._enterGame(this._pendingJoinId, d.table);
+    } catch(e) {
+      errEl.textContent = 'Network error';
+    }
+  },
+
+  // ── game ──────────────────────────────────────────────────
+  _enterGame(tableId, tableState) {
+    this.tableId = tableId;
+    this.state   = tableState;
+    document.getElementById('mp-lobby-overlay').style.display = 'none';
+    const go = document.getElementById('mp-game-overlay');
+    go.style.display = 'flex';
+    this._render();
+    this._startPolling();
+    this._startTimerTick();
+  },
+
+  _startPolling() {
+    this._stopPolling();
+    this.pollTimer = setInterval(() => this._poll(), 5000);
+  },
+  _stopPolling() {
+    if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer=null; }
+  },
+
+  _startTimerTick() {
+    if (this.timerTick) clearInterval(this.timerTick);
+    this.timerTick = setInterval(() => this._updateTimer(), 1000);
+  },
+  _stopTimerTick() {
+    if (this.timerTick) { clearInterval(this.timerTick); this.timerTick=null; }
+  },
+
+  async _poll() {
+    if (!this.tableId) return;
+    try {
+      const r = await fetch(
+        `${this._url}/mp/tables/${this.tableId}/state?username=${encodeURIComponent(this._me)}`,
+        {cache:'no-store'}
+      );
+      const d = await r.json();
+      if (d.ok && d.table) {
+        this.state = d.table;
+        this._render();
+      }
+    } catch(e) { /* network hiccup — keep going */ }
+  },
+
+  async _action(action, extra={}) {
+    if (!this.tableId) return;
+    try {
+      const r = await fetch(`${this._url}/mp/tables/${this.tableId}/action`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: this._me, action, ...extra }),
+      });
+      const d = await r.json();
+      if (d.ok && d.table) {
+        this.state = d.table;
+        this._render();
+      } else {
+        notif(d.error||'Action failed');
+      }
+    } catch(e) { notif('Network error'); }
+  },
+
+  async leaveTable() {
+    this._stopPolling();
+    this._stopTimerTick();
+    if (this.tableId) await this._action('leave');
+    this.tableId = null;
+    this.state   = null;
+    document.getElementById('mp-game-overlay').style.display='none';
+    // Return to login
+    document.getElementById('login').style.display='flex';
+    const s1 = document.getElementById('login-step1');
+    if (s1) s1.style.display='block';
+    // Reset any partial login state
+    _pendingLogin=null;
+  },
+
+  // ── rendering ─────────────────────────────────────────────
+  _render() {
+    const t = this.state;
+    if (!t) return;
+
+    // top bar
+    const tnEl = document.getElementById('mp-go-tablename');
+    if (tnEl) tnEl.textContent = `${t.name}  ·  ${this._stakeLabel(t.stake)}`;
+    const phEl = document.getElementById('mp-go-phase');
+    if (phEl) phEl.textContent = this._phaseLabel(t.phase).toUpperCase();
+
+    // dealer
+    const dcEl = document.getElementById('mp-dealer-cards');
+    const dvEl = document.getElementById('mp-dealer-val');
+    if (dcEl) dcEl.innerHTML = t.dealerHand?.length
+      ? t.dealerHand.map(c=>this._card(c)).join('')
+      : '<span style="color:var(--muted);font-size:11px;">—</span>';
+    if (dvEl) {
+      const vis = t.dealerHand?.filter(c=>c!=='??') || [];
+      dvEl.textContent = vis.length ? `${this._hv(vis)}${t.dealerHidden?' (+??)':''}` : '';
+    }
+
+    // players
+    this._renderPlayers(t);
+
+    // action bar
+    this._renderActions(t);
+  },
+
+  _renderPlayers(t) {
+    const row = document.getElementById('mp-players-row');
+    if (!row) return;
+    const myTurnIdx = t.phase==='playing' ? t.currentTurnIdx : -1;
+
+    row.innerHTML = t.players.map((p, i) => {
+      const isMe      = p.username === this._me;
+      const isMyTurn  = i === myTurnIdx;
+      const classes   = ['mp-player-slot',
+        isMe     ? 'my-slot'    : '',
+        isMyTurn ? 'active-turn': '',
+      ].filter(Boolean).join(' ');
+
+      let statusHtml = '';
+      if (t.phase==='result' && p.status==='done') {
+        const oc  = this._outcomeClass(p.result);
+        const lbl = this._outcomeLabel(p.result);
+        const pay = p.payout||0;
+        const sign= pay>0?'+':'';
+        statusHtml = `
+          <div class="mp-slot-status ${oc}">${lbl}</div>
+          <span class="mp-payout-badge ${pay>0?'win':pay<0?'lose':'push'}">${sign}${this._fmt(pay)} KFC</span>`;
+        // Split hand result
+        if (p.result2) {
+          const oc2=this._outcomeClass(p.result2);
+          statusHtml+=`<div class="mp-slot-status ${oc2}" style="margin-top:4px">Hand 2: ${this._outcomeLabel(p.result2)}</div>`;
+        }
+      } else {
+        const smap={
+          waiting:'Waiting', betting:'Waiting for bet', bet_placed:'Bet placed ✓',
+          sitting_out:'Sitting out', playing:isMyTurn?'YOUR TURN':'Playing…',
+          stood:'Stood', busted:'Bust!', blackjack:'Blackjack!', done:'Done',
+        };
+        const sc = {playing:'playing',bust:'lost',blackjack:'won',stood:'pushed'}[p.status]||'waiting-bet';
+        statusHtml=`<div class="mp-slot-status ${sc}">${smap[p.status]||p.status||''}</div>`;
+      }
+
+      const betHtml = p.bet
+        ? `<div class="mp-slot-bet">Bet: ${this._fmt(p.bet)} KFC${p.hand2?` + ${this._fmt(p.bet2||p.bet)}`:''}${p.hasDoubled?' (2×)':''}</div>`
+        : '';
+
+      const hand2Html = p.hand2?.length
+        ? `<div style="margin-top:6px;font-size:9px;letter-spacing:1px;color:var(--muted)">HAND 2</div>
+           <div class="mp-slot-cards">${this._handHtml(p.hand2)}</div>
+           <div class="mp-slot-val">${this._hv(p.hand2)}</div>`
+        : '';
+
+      const hostBadge = p.isHost
+        ? '<span style="font-size:8px;letter-spacing:2px;color:var(--gold-lo);margin-left:6px;">HOST</span>' : '';
+
+      return `<div class="${classes}">
+        <div class="mp-slot-name">${p.displayName}${hostBadge}${isMe?'<span style="font-size:8px;color:var(--muted);margin-left:4px;">(you)</span>':''}</div>
+        <div class="mp-slot-bal">${this._fmt(p.balance)} KFC</div>
+        ${betHtml}
+        <div class="mp-slot-cards">${this._handHtml(p.hand)}</div>
+        ${p.hand?.length ? `<div class="mp-slot-val">${this._hv(p.hand)}</div>` : ''}
+        ${hand2Html}
+        ${statusHtml}
+      </div>`;
+    }).join('');
+  },
+
+  _renderActions(t) {
+    const bar = document.getElementById('mp-action-bar');
+    if (!bar) return;
+    const me = this._myPlayer;
+    if (!me) { bar.innerHTML=''; return; }
+
+    // WAITING phase — host sees "Start Game" button
+    if (t.phase==='waiting') {
+      if (me.isHost) {
+        bar.innerHTML=`
+          <span class="mp-wait-msg">Waiting for players…</span>
+          <button class="mp-btn gold" onclick="MP._action('start')">START GAME</button>`;
+      } else {
+        bar.innerHTML='<span class="mp-wait-msg">Waiting for host to start…</span>';
+      }
+      return;
+    }
+
+    // BETTING phase
+    if (t.phase==='betting') {
+      if (me.status==='betting') {
+        const stakeMin={low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000}[t.stake]||5;
+        const deadline = t.bettingDeadline;
+        bar.innerHTML=`
+          <div class="mp-bet-row">
+            <input class="mp-bet-inp" id="mp-live-bet" type="text" inputmode="numeric"
+              placeholder="${this._fmt(stakeMin)}" oninput="MP._fmtBuyIn(this)">
+            <button class="mp-btn gold" onclick="MP._placeBet()">PLACE BET</button>
+          </div>
+          <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC</div>`;
+      } else if (me.status==='bet_placed') {
+        bar.innerHTML='<span class="mp-wait-msg" style="color:var(--green)">✓ Bet placed — waiting for others…</span>';
+      } else {
+        bar.innerHTML='<span class="mp-wait-msg">Sitting out this round</span>';
+      }
+      return;
+    }
+
+    // PLAYING phase
+    if (t.phase==='playing') {
+      const myTurn = t.players[t.currentTurnIdx]?.username === this._me;
+      if (!myTurn) {
+        const cur = t.players[t.currentTurnIdx];
+        bar.innerHTML=`<span class="mp-wait-msg">Waiting for ${cur?.displayName||'player'}…</span>`;
+        return;
+      }
+      if (me.status!=='playing') {
+        bar.innerHTML=`<span class="mp-wait-msg">${me.status==='stood'?'You stood.':me.status==='busted'?'You busted!':''}</span>`;
+        return;
+      }
+      // Determine if on hand2
+      const onHand2 = me._onHand2 && me.hand2?.length >= 2 && !me._hand2Done;
+      const hand    = onHand2 ? me.hand2 : me.hand;
+      const hv      = this._hv(hand);
+      const canDouble = !onHand2 && me.hand.length===2 && me.balance>=me.bet;
+      const canSplit  = !onHand2 && !me.hasSplit && me.hand.length===2
+        && me.hand[0].slice(0,-1)===me.hand[1].slice(0,-1)
+        && me.balance>=me.bet;
+
+      bar.innerHTML=`
+        ${onHand2?'<span class="mp-wait-msg" style="color:var(--gold)">Playing Hand 2</span>':''}
+        <button class="mp-btn gold" onclick="MP._action('hit'${onHand2?',{hand2:true}':''})">HIT</button>
+        <button class="mp-btn ghost" onclick="MP._action('stand'${onHand2?',{hand2:true}':''})">STAND</button>
+        ${canDouble?`<button class="mp-btn ghost" onclick="MP._action('double')">DOUBLE</button>`:''}
+        ${canSplit ?`<button class="mp-btn ghost" onclick="MP._action('split')">SPLIT</button>`:''}
+        <span class="mp-wait-msg">${hv>0?'Hand: '+hv:''}</span>`;
+      return;
+    }
+
+    // DEALER / RESULT phase
+    if (t.phase==='dealer') {
+      bar.innerHTML='<span class="mp-wait-msg">Dealer is playing…</span>';
+      return;
+    }
+
+    if (t.phase==='result') {
+      const me2 = this._myPlayer;
+      let summary='';
+      if (me2?.status==='done' && me2.result) {
+        const pay=me2.payout||0;
+        const sign=pay>0?'+':'';
+        summary=`<span class="mp-payout-badge ${pay>0?'win':pay<0?'lose':'push'}" style="font-size:13px;">${this._outcomeLabel(me2.result)} &nbsp; ${sign}${this._fmt(pay)} KFC</span>`;
+      }
+      bar.innerHTML=`${summary}<span class="mp-wait-msg">Next round starting soon…</span>`;
+      return;
+    }
+
+    bar.innerHTML='';
+  },
+
+  _placeBet() {
+    const inp = document.getElementById('mp-live-bet');
+    if (!inp) return;
+    const amt = inp._raw || parseInt((inp.value||'').replace(/[^0-9]/g,''))||0;
+    if (!amt) { notif('Enter a bet amount'); return; }
+    this._action('bet', { amount: amt });
+  },
+
+  _updateTimer() {
+    const t    = this.state;
+    const el   = document.getElementById('mp-go-timer');
+    if (!el) return;
+    if (!t) { el.textContent=''; return; }
+
+    let deadline = null;
+    if (t.phase==='betting')  deadline = t.bettingDeadline;
+    if (t.phase==='playing')  deadline = t.turnDeadline;
+    if (t.phase==='result')   deadline = t.turnDeadline;
+
+    if (!deadline) { el.textContent=''; return; }
+    const secs = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
+    el.textContent = secs > 0 ? `${secs}s` : '';
+    el.style.color = secs <= 10 ? 'var(--red)' : 'var(--gold-hi)';
+  },
+};
 </script>
 
 <!-- ALL-IN SPLASH -->

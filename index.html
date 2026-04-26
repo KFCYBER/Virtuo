@@ -10689,6 +10689,8 @@ const MP = {
   timerTick:   null,
   _pendingJoinId:   null,
   _pendingJoinName: null,
+  _sbStakes:   {},
+  _lastPhase:  null,
 
   // ── helpers ──────────────────────────────────────────────
   // Always use the Cloudflare Worker base URL (strip any trailing slash).
@@ -11301,6 +11303,12 @@ const MP = {
           const oc2=this._outcomeClass(p.result2);
           statusHtml+=`<div class="mp-slot-status ${oc2}" style="margin-top:4px">Hand 2: ${this._outcomeLabel(p.result2)}</div>`;
         }
+        // Side bet results
+        if (p.sideBetResults?.length) {
+          p.sideBetResults.filter(r=>r.won&&r.bet>0).forEach(r=>{
+            statusHtml+=`<div style="font-size:9px;color:var(--gold);letter-spacing:1px;font-family:var(--mono);margin-top:2px;">${r.label} +${this._fmt(r.pl)}</div>`;
+          });
+        }
       } else {
         const smap={
           waiting:'Waiting', betting:'Waiting for bet', bet_placed:'Bet placed ✓',
@@ -11352,6 +11360,10 @@ const MP = {
       return;
     }
 
+    // Reset side bet selection when a fresh betting round begins
+    if (t.phase === 'betting' && this._lastPhase !== 'betting') this._sbStakes = {};
+    this._lastPhase = t.phase;
+
     // WAITING phase
     if (t.phase==='waiting') {
       if (me.isHost) {
@@ -11387,6 +11399,15 @@ const MP = {
           } catch(e) { svg = `<span>${lbl}</span>`; }
           return `<button class="chip" data-val="${v}" onclick="MP._addChip(${v})" title="${this._fmt(v)} KFC" style="background:transparent;border:none;padding:2px;cursor:pointer;">${svg}</button>`;
         }).join('');
+        const sbCirclesHtml = ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'].map(name => {
+          const amt = this._sbStakes[name] || 0;
+          const key = name.replace(/\s/g,'_').replace(/\+/g,'p');
+          const lbl = name==='Perfect Pairs'?'PP':name==='21+3'?'21+3':name==='Crazy 7s'?'C7s':'DB';
+          return `<div class="sb-circle${amt>0?' active':''}" id="mp-sbc-${key}" onclick="MP._cycleSB('${name}')" style="cursor:pointer;">
+            <span class="sb-circle-label">${lbl}</span>
+            <span class="sb-circle-amt">${amt>0?this._fmt(amt):'—'}</span>
+          </div>`;
+        }).join('');
         bar.innerHTML=`
           <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:720px;">
             <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">${chipsHtml}</div>
@@ -11397,6 +11418,8 @@ const MP = {
               <button class="mp-btn gold" onclick="MP._placeBet()">PLACE BET</button>
             </div>
             <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC &nbsp;·&nbsp; ${this._stakeLabel(me.stake||'')} &nbsp;·&nbsp; Balance: ${this._fmt(me.balance)}</div>
+            <div style="display:flex;gap:8px;align-items:center;justify-content:center;">${sbCirclesHtml}</div>
+            <div class="mp-wait-msg" style="font-size:9px;">SIDE BETS — click to place (${this._fmt(stakeDef?.sMin || stakeMin/2)} each)</div>
           </div>`;
       } else if (me.status==='bet_placed') {
         bar.innerHTML='<span class="mp-wait-msg" style="color:var(--green)">✓ Bet placed — waiting for others…</span>';
@@ -11450,6 +11473,11 @@ const MP = {
         const pay=me2.payout||0;
         const sign=pay>0?'+':'';
         summary=`<span class="mp-payout-badge ${pay>0?'win':pay<0?'lose':'push'}" style="font-size:13px;">${this._outcomeLabel(me2.result)} &nbsp; ${sign}${this._fmt(pay)} KFC</span>`;
+        if (me2.sideBetResults?.length) {
+          me2.sideBetResults.filter(r=>r.won&&r.bet>0).forEach(r=>{
+            summary+=`<span style="font-size:10px;color:var(--gold);letter-spacing:1px;font-family:var(--mono);margin-left:8px;">${r.label} +${this._fmt(r.pl)}</span>`;
+          });
+        }
       }
       bar.innerHTML=`${summary}<span class="mp-wait-msg">Next round starting soon…</span>`;
       return;
@@ -11482,7 +11510,32 @@ const MP = {
     if (!inp) return;
     const amt = inp._raw || parseInt((inp.value||'').replace(/[^0-9]/g,''))||0;
     if (!amt) { notif('Enter a bet amount'); return; }
-    this._action('bet', { amount: amt });
+    this._action('bet', { amount: amt, sideBets: { ...this._sbStakes } });
+  },
+
+  _cycleSB(name) {
+    const me = this._myPlayer;
+    if (!me) return;
+    const stakeData = (typeof STAKES !== 'undefined' && STAKES[me.stake]) || null;
+    const sMin = stakeData?.sMin || (this._STAKE_MINS[me.stake] || 5) / 2;
+    const maxSB = stakeData?.max || sMin * 10;
+    const cur = this._sbStakes[name] || 0;
+    const next = cur === 0 ? sMin : (cur + sMin > maxSB ? 0 : cur + sMin);
+    this._sbStakes[name] = next;
+    if (typeof sfx === 'function') try { sfx('chip'); } catch(e) {}
+    this._updateSBCircles();
+  },
+
+  _updateSBCircles() {
+    ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'].forEach(name => {
+      const key = name.replace(/\s/g,'_').replace(/\+/g,'p');
+      const el = document.getElementById('mp-sbc-'+key);
+      if (!el) return;
+      const amt = this._sbStakes[name] || 0;
+      el.classList.toggle('active', amt > 0);
+      const amtEl = el.querySelector('.sb-circle-amt');
+      if (amtEl) amtEl.textContent = amt > 0 ? this._fmt(amt) : '—';
+    });
   },
 
   _updateTimer() {

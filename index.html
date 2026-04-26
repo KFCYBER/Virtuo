@@ -9179,10 +9179,12 @@ const PM = (() => {
   }
 
   function _rawPayoutIfWin(mkt, outcome, amount){
-    const np = {...mkt.pools};
-    np[outcome] = (np[outcome]||0) + amount;
-    const total = Object.values(np).reduce((a,b)=>a+b,0);
-    return amount > 0 ? (amount / np[outcome]) * total : 0;
+    // Snapshot odds — do NOT add bet to pool before pricing (avoids self-dilution).
+    // Same model as Polymarket: you buy shares at the current price; others' later bets move odds.
+    const outPool   = mkt.pools[outcome] || 0;
+    const totalPool = Object.values(mkt.pools).reduce((a,b)=>a+b, 0);
+    if(amount <= 0 || outPool <= 0 || totalPool <= 0) return amount;
+    return (amount * totalPool) / outPool;
   }
 
   // ── Deck-derived probability (shoe markets) ───────────────────────────────
@@ -9646,8 +9648,8 @@ const PM = (() => {
     const adjPay = amt + profit * mult;
     const adjProfit = Math.round(adjPay - amt);
     const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
-    pEl.textContent = (adjProfit >= 0 ? '+' : '') + fmtKFC(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '% return)';
-    if(sEl) sEl.textContent = mult > 1 ? 'Stake factor ×'+fmt(mult)+' on profit (early bet bonus)' : '';
+    pEl.textContent = 'Est. ' + (adjProfit >= 0 ? '+' : '') + fmtKFC(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '%)';
+    if(sEl) sEl.textContent = mult > 1 ? 'Stake ×'+fmt(mult)+' bonus on profit' : 'Odds at current price — final payout shifts as others bet';
   }
 
   function _confirmBet(){

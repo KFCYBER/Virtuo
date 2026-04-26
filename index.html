@@ -8998,6 +8998,12 @@ const PM = (() => {
   function _loadPrevBal(){ try{ return JSON.parse(localStorage.getItem(LS_PREV_BAL)||'{}'); }catch(e){ return {}; } }
   function _savePrevBal(s){ try{ localStorage.setItem(LS_PREV_BAL, JSON.stringify(s)); }catch(e){} }
 
+  // Season history: manually-entered end-of-season balances for long-term calibration
+  let _seasonHist = {};
+  const LS_SEASON_HIST = 'kfc_pm_season_hist';
+  function _loadSeasonHist(){ try{ return JSON.parse(localStorage.getItem(LS_SEASON_HIST)||'{}'); }catch(e){ return {}; } }
+  function _saveSeasonHistLS(s){ try{ localStorage.setItem(LS_SEASON_HIST, JSON.stringify(s)); }catch(e){} }
+
   // Per-shoe tracking
   let _pmShoeHands = 0;
   let _pmShoeBusts = 0;
@@ -9039,6 +9045,26 @@ const PM = (() => {
     if(!prev || prev <= 0 || currentBal <= 0) return 1.0;
     const growth = currentBal / prev;
     return Math.min(1.8, Math.max(0.55, Math.sqrt(growth)));
+  }
+
+  // Combined factor: uses season history end balance if available, otherwise falls back to shoe-to-shoe
+  function _seasonFactor(pName, currentBal){
+    const key = (pName||'').toLowerCase();
+    const hist = _seasonHist[key];
+    if(hist && hist > 0 && currentBal > 0){
+      return Math.min(1.8, Math.max(0.55, Math.sqrt(currentBal / hist)));
+    }
+    return _sessionFactor(pName, currentBal);
+  }
+
+  // Parse "5M", "500K", "2B", or plain number string → integer
+  function _parseKFC(s){
+    if(!s) return 0;
+    s = String(s).replace(/,/g,'').toUpperCase().trim();
+    const m = s.match(/^([0-9.]+)\s*([KMBT]?)$/);
+    if(!m) return 0;
+    const mult = {K:1e3,M:1e6,B:1e9,T:1e12}[m[2]]||1;
+    return Math.round(parseFloat(m[1]) * mult);
   }
 
   function _makeMarket(type, desc, condition, yesBias, seedType){
@@ -9612,10 +9638,10 @@ const PM = (() => {
           m.condition.params.date===today
         );
         if(alreadyExists) return;
-        // Base bias from proximity to target; session factor boosts hot players, lowers cold ones
+        // Base bias from proximity to target; season/session factor boosts hot players, lowers cold ones
         const ratio = Math.min(balance / amount, 0.99);
         const baseBias = 0.15 + 0.70 * ratio;
-        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _sessionFactor(pName, balance)));
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance)));
         _markets.push(_makeMarket('season',
           'Will '+pName+' reach '+fmtKFC(amount)+' this season?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
@@ -9708,10 +9734,10 @@ const PM = (() => {
           m.condition.params.player===pName
         );
         if(alreadyOpen) return;
-        // YES bias = balance share among competitors × session momentum factor
+        // YES bias = balance share among competitors × season/session momentum factor
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
         const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
-        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _sessionFactor(pName, p.balance||0)));
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0)));
         _markets.push(_makeMarket('race',
           'Will '+pName+' be first to reach '+fmtKFC(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
@@ -9953,14 +9979,71 @@ const PM = (() => {
   }
 
   // ── Modal open/close ───────────────────────────────────────────────────────
+  // ── Season History panel ───────────────────────────────────────────────────
+  function _renderSeasonHistPanel(){
+    const panel = document.getElementById('pm-pane-history');
+    if(!panel || panel.style.display === 'none') return;
+    const players = Object.keys(_currBalances).sort();
+    const hasHist = Object.keys(_seasonHist).length > 0;
+    let inputRows = '';
+    if(players.length){
+      inputRows = players.map(p => {
+        const histVal = _seasonHist[p] ? fmtKFC(_seasonHist[p]) : '';
+        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--white);min-width:90px;text-transform:capitalize">${p}</span>
+          <input type="text" class="pm-hist-input" data-player="${p}"
+            placeholder="e.g. 5M" inputmode="text" value="${histVal}"
+            style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--white);outline:none">
+        </div>`;
+      }).join('');
+    } else {
+      inputRows = '<div class="pm-empty" style="margin-bottom:12px">No players loaded yet — start a game first</div>';
+    }
+    panel.innerHTML = `
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;line-height:1.6;margin-bottom:14px">
+        Enter each player's final balance from last season.<br>
+        Last season's winner gets tighter YES odds — others get a boost.
+      </div>
+      ${inputRows}
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <button class="btn-ghost" style="flex:1;padding:8px;font-size:9px;letter-spacing:1px" onclick="PM._clearSeasonHist()">CLEAR ALL</button>
+        <button class="btn-primary" style="flex:2;padding:8px;font-size:10px" onclick="PM._saveSeasonHist()">SAVE</button>
+      </div>
+      ${hasHist ? '<div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px;margin-top:10px;text-align:center">Season history active — '+Object.keys(_seasonHist).length+' player'+(Object.keys(_seasonHist).length!==1?'s':'')+' calibrated</div>' : ''}
+    `;
+  }
+
+  function _saveSeasonHist(){
+    const inputs = document.querySelectorAll('.pm-hist-input');
+    const hist = {};
+    inputs.forEach(inp => {
+      const p = inp.dataset.player;
+      const v = _parseKFC(inp.value);
+      if(p && v > 0) hist[p] = v;
+    });
+    _seasonHist = hist;
+    _saveSeasonHistLS(_seasonHist);
+    const count = Object.keys(hist).length;
+    notif('Season history saved — ' + count + ' player' + (count !== 1 ? 's' : ''));
+    _renderSeasonHistPanel();
+  }
+
+  function _clearSeasonHist(){
+    _seasonHist = {};
+    _saveSeasonHistLS({});
+    notif('Season history cleared');
+    _renderSeasonHistPanel();
+  }
+
   function _switchTab(name){
-    ['markets','portfolio'].forEach(t => {
+    ['markets','portfolio','history'].forEach(t => {
       const tab  = document.getElementById('pm-tab-'+t);
       const pane = document.getElementById('pm-pane-'+t);
       if(tab)  tab.classList.toggle('active', t===name);
       if(pane) pane.style.display = (t===name) ? '' : 'none';
     });
     if(name==='portfolio') _renderPortfolio();
+    if(name==='history')   _renderSeasonHistPanel();
   }
 
   function _openModal(){
@@ -9977,6 +10060,7 @@ const PM = (() => {
   // ── Init ───────────────────────────────────────────────────────────────────
   function init(){
     _prevBalances = _loadPrevBal();
+    _seasonHist   = _loadSeasonHist();
     _loadMarkets();
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
     // Milestone markets with double-KFC description (pre-fix)
@@ -10036,7 +10120,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
 })();
 
 </script>
@@ -10102,6 +10186,7 @@ const PM = (() => {
     <div class="pm-tabs">
       <button class="pm-tab active" id="pm-tab-markets"   onclick="PM._switchTab('markets')">MARKETS</button>
       <button class="pm-tab"        id="pm-tab-portfolio" onclick="PM._switchTab('portfolio')">PORTFOLIO</button>
+      <button class="pm-tab"        id="pm-tab-history"   onclick="PM._switchTab('history')">HISTORY</button>
     </div>
     <div id="pm-pane-markets" class="pm-modal-body">
       <div id="pm-race-section" style="display:none;margin-bottom:14px">
@@ -10121,6 +10206,9 @@ const PM = (() => {
     </div>
     <div id="pm-pane-portfolio" class="pm-modal-body" style="display:none">
       <div id="pm-portfolio-content"><div class="pm-empty">No bets yet</div></div>
+    </div>
+    <div id="pm-pane-history" class="pm-modal-body" style="display:none">
+      <div class="pm-empty">Loading…</div>
     </div>
   </div>
 </div>

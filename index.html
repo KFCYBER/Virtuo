@@ -10722,16 +10722,20 @@ const MP = {
     inp.value = inp._raw ? inp._raw.toLocaleString('de-CH') : '';
   },
 
-  // Render a card using SP's exact card class + cardInner HTML so MP matches SP visually.
+  // Render a card. Handles normal strings ("7H"), bonus objects ({bonus:'gold',repIdx:0}), and hole card ("??").
   _card(c) {
     if (!c || c === '??') {
       return '<div class="card down"><div class="card-shimmer"></div></div>';
+    }
+    // Bonus card object — use SP's bonusCardInner directly
+    if (typeof c === 'object' && c.bonus) {
+      const bc = BONUS_CARDS.find(b => b.id === c.bonus) || { id: c.bonus, label: c.bonus };
+      return `<div class="card up" style="position:relative;overflow:hidden;">${bonusCardInner(bc, c.repIdx ?? 0)}</div>`;
     }
     const rank = c.slice(0, -1);
     const suit = c.slice(-1);
     const sym  = {S:'♠',H:'♥',D:'♦',C:'♣'}[suit] || suit;
     const colorClass = (suit==='H'||suit==='D') ? 'red' : 'black';
-    // Shape mirrors SP `cardInner({r, s})`: top rank+suit, big pip, rotated bottom rank.
     const inner =
       `<div class="top">${rank}<br><span style="font-size:11px">${sym}</span></div>` +
       `<div class="pip">${sym}</div>` +
@@ -11268,6 +11272,9 @@ const MP = {
       }
     } catch(e) {}
 
+    // Bonus card toast — fires once when a new bonus card appears in our hand
+    try { this._checkBonusToast(t); } catch(e) {}
+
     // players — isolated so any error here doesn't block the action bar
     try { this._renderPlayers(t); } catch(e) {
       const row = document.getElementById('mp-players-row');
@@ -11287,19 +11294,11 @@ const MP = {
     const canBuy = t.phase === 'betting' || t.phase === 'waiting';
     if (!me || (!canBuy && !(me.powerups?.length))) { bar.innerHTML = ''; return; }
 
-    const POWERUP_DEFS = [
-      { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10+', ratio:5, minStake:'mid' },
-      { id:'net',    label:'Safety Net',       sub:'22 → push',               ratio:4, minStake:'mid' },
-      { id:'seeker', label:'Seven-Seeker',     sub:'+2× Crazy 7s',            ratio:4, minStake:'high' },
-      { id:'guard',  label:'BJ Guard',         sub:'Dealer BJ → push',        ratio:3, minStake:'legendary' },
-      { id:'novak',  label:'BJ Novak',         sub:'Blackjack pays 2:1',      ratio:3, minStake:'legendary' },
-    ];
-    const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
     const myStakeIdx = STAKE_ORDER.indexOf(me.stake);
     const ownedSet = new Set(me.powerups || []);
     const atMax = ownedSet.size >= 2;
 
-    bar.innerHTML = POWERUP_DEFS.map(pu => {
+    bar.innerHTML = POWERUPS.map(pu => {
       const owned   = ownedSet.has(pu.id);
       const minIdx  = STAKE_ORDER.indexOf(pu.minStake);
       const locked  = myStakeIdx < minIdx;
@@ -11329,6 +11328,29 @@ const MP = {
 
   _buyPowerup(puId) {
     this._action('buyPowerup', { puId });
+  },
+
+  _checkBonusToast(t) {
+    const me = this._myPlayer;
+    if (!me) return;
+    // Reset tracking at the start of each new round
+    if (t.phase === 'betting' || t.phase === 'waiting') {
+      this._lastBonusIds = new Set();
+      return;
+    }
+    if (!this._lastBonusIds) this._lastBonusIds = new Set();
+    // Check both hands for new bonus cards
+    const hands = [(me.hand || []), (me.hand2 || [])];
+    hands.forEach((hand, hi) => {
+      hand.forEach((c, ci) => {
+        if (typeof c !== 'object' || !c.bonus) return;
+        const key = `${hi}:${ci}:${c.bonus}:${c.repIdx ?? 0}`;
+        if (this._lastBonusIds.has(key)) return;
+        this._lastBonusIds.add(key);
+        const bc = BONUS_CARDS.find(b => b.id === c.bonus) || { id: c.bonus, label: c.bonus, desc: '' };
+        bonusToast(bc, bc.desc || '');
+      });
+    });
   },
 
   _renderPlayers(t) {
@@ -11575,7 +11597,7 @@ const MP = {
   _cycleSB(name) {
     const me = this._myPlayer;
     if (!me) return;
-    const stakeData = (typeof STAKES !== 'undefined' && STAKES[me.stake]) || null;
+    const stakeData = STAKES[me.stake] || null;
     const sMin = stakeData?.sMin || (this._STAKE_MINS[me.stake] || 5) / 2;
     const maxSB = stakeData?.max || sMin * 10;
     const cur = this._sbStakes[name] || 0;

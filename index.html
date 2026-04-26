@@ -9173,17 +9173,59 @@ const PM = (() => {
     return ['dealer_bust_range','player_hot_streak','consec_bj'].includes(t) && _pmShoeHands > 0;
   }
 
+  function _isWindowShoeType(mkt){
+    const t = mkt.condition && mkt.condition.type;
+    return ['natural_bj','push_streak'].includes(t);
+  }
+
+  // Live probability based on actual game state (balance/deck), not pool ratio.
+  function _fundamentalPct(mkt, outcome){
+    let yesBias = null;
+    if(mkt.type === 'season' && mkt.condition && mkt.condition.type === 'bankroll_milestone'){
+      const {player, amount} = mkt.condition.params;
+      const bal = _currBalances[(player||'').toLowerCase()] || 0;
+      const ratio = Math.min(bal / amount, 0.99);
+      const baseBias = 0.15 + 0.70 * ratio;
+      yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(player, bal) * _timeFactor()));
+    } else if(mkt.type === 'race' && mkt.condition && mkt.condition.type === 'bankroll_race_player'){
+      const {amount, player} = mkt.condition.params;
+      const playerBal = _currBalances[(player||'').toLowerCase()] || 0;
+      const eligBals = Object.values(_currBalances).filter(b => b < amount);
+      const eligTotal = eligBals.reduce((s,b) => s+b, 0);
+      const ratio = eligTotal > 0 ? playerBal / eligTotal : 0.5;
+      const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
+      yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(player, playerBal) * _timeFactor()));
+    }
+    if(yesBias === null) return null;
+    return outcome === 'YES' ? Math.round(yesBias * 100) : Math.round((1 - yesBias) * 100);
+  }
+
   function _pct(mkt, outcome){
+    // Shoe: real deck probability, unaffected by bets
+    if(mkt.type === 'shoe' && mkt.condition){
+      const p = _deckProb(mkt.condition);
+      return outcome === 'YES' ? Math.round(p) : Math.round(100 - p);
+    }
+    // Race/Season: live balance-based probability (falls back to pool ratio)
+    const fp = _fundamentalPct(mkt, outcome);
+    if(fp !== null) return fp;
     const t = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
     return t ? Math.round((mkt.pools[outcome]||0) / t * 100) : 0;
   }
 
   function _rawPayoutIfWin(mkt, outcome, amount){
-    // Snapshot odds — do NOT add bet to pool before pricing (avoids self-dilution).
-    // Same model as Polymarket: you buy shares at the current price; others' later bets move odds.
+    if(amount <= 0) return amount;
+    // Shoe: fixed-odds payout based on deck probability (no pool dilution in single-player)
+    if(mkt.type === 'shoe' && mkt.condition){
+      const p = _deckProb(mkt.condition) / 100;
+      const prob = outcome === 'YES' ? p : (1 - p);
+      if(prob <= 0) return amount;
+      return amount / prob;
+    }
+    // Race/Season: snapshot pool odds — no self-dilution
     const outPool   = mkt.pools[outcome] || 0;
     const totalPool = Object.values(mkt.pools).reduce((a,b)=>a+b, 0);
-    if(amount <= 0 || outPool <= 0 || totalPool <= 0) return amount;
+    if(outPool <= 0 || totalPool <= 0) return amount;
     return (amount * totalPool) / outPool;
   }
 
@@ -9301,11 +9343,13 @@ const PM = (() => {
     if(raceEl) _renderRaceSection(raceEl, raceSect);
     if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
-      const d = [
-        ..._markets.filter(m => m.type==='shoe' && m.status==='open'),
-        ..._markets.filter(m => m.type==='shoe' && m.status==='settled').slice(-2),
-      ];
-      shoeEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No shoe markets</div>';
+      const open = _markets.filter(m => m.type==='shoe' && m.status==='open');
+      const whole  = open.filter(m => !_isWindowShoeType(m));
+      const window = open.filter(m =>  _isWindowShoeType(m));
+      let shoeHTML = '';
+      if(whole.length)  shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
+      if(window.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + window.map(_renderMkt).join('');
+      shoeEl.innerHTML = shoeHTML || '<div class="pm-empty">No shoe markets</div>';
     }
     if(portPane && portPane.style.display !== 'none') _renderPortfolio();
   }
@@ -9512,9 +9556,11 @@ const PM = (() => {
       mkt.condition.params.player.toLowerCase() === me;
 
     let gameOddsHTML = '';
-    if(mkt.type==='shoe' && mkt.condition && isOpen){
-      const gp = _deckProb(mkt.condition);
-      gameOddsHTML = `<div class="pm-game-prob">Deck odds: ${gp}% YES</div>`;
+    if((mkt.type==='race' || mkt.type==='season') && isOpen){
+      // Show pool consensus separately so players see what bettors have put in vs game probability
+      const t = Object.values(mkt.pools).reduce((a,b)=>a+b, 0);
+      const poolPct = t ? Math.round((mkt.pools.YES||0) / t * 100) : null;
+      if(poolPct !== null) gameOddsHTML = `<div class="pm-game-prob">Pool consensus: ${poolPct}% YES</div>`;
     }
 
     let settledHTML = '';
@@ -9866,6 +9912,9 @@ const PM = (() => {
   }
 
   function onShoeNew(){
+    // Purge all settled shoe markets — new shoe gets a clean slate
+    _markets = _markets.filter(m => !(m.type === 'shoe' && m.status === 'settled'));
+    _cleanupOrphanBets();
     _createShoeMarkets();
     render();
   }
@@ -10252,6 +10301,20 @@ const PM = (() => {
   }
 
   // ── Init ───────────────────────────────────────────────────────────────────
+  function _cleanupOrphanBets(){
+    const bets = _loadBets();
+    let changed = false;
+    const cleaned = bets.map(b => {
+      if(b.payout !== null) return b;
+      if(_markets.find(m => m.id === b.mktId)) return b;
+      G.balance += b.amount;
+      b.payout = b.amount; // refund: return exact stake
+      changed = true;
+      return b;
+    });
+    if(changed){ _saveBets(cleaned); updateUI(); }
+  }
+
   function init(){
     _prevBalances = _loadPrevBal();
     _seasonHist   = _loadSeasonHist();
@@ -10279,6 +10342,7 @@ const PM = (() => {
       if(hasPlayerBets) return true;
       return m.housePools.YES !== m.housePools.NO; // keep only if already calibrated
     });
+    _cleanupOrphanBets(); // refund any open bets whose markets were just purged
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){

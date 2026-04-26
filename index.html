@@ -10752,8 +10752,16 @@ const MP = {
     if (!hand || !hand.length) return 0;
     let v=0, a=0;
     for (const c of hand) {
-      if (c==='??') continue;
-      const r=c.slice(0,-1);
+      if (!c || c==='??') continue;
+      // bonus card object — look up rank via BONUS_CARD_REPS
+      let r;
+      if (typeof c === 'object' && c.bonus) {
+        const reps = BONUS_CARD_REPS[c.bonus];
+        r = reps ? (reps[c.repIdx ?? 0] || reps[0])?.r : null;
+        if (!r) continue;
+      } else {
+        r = c.slice(0,-1);
+      }
       if (['J','Q','K'].includes(r)) v+=10;
       else if (r==='A') { v+=11; a++; }
       else v+=parseInt(r)||0;
@@ -10785,6 +10793,7 @@ const MP = {
 
   _phaseLabel(p) {
     return {waiting:'Waiting for players',betting:'Placing bets',
+            insurance:'Insurance round',
             playing:'Player turns',dealer:"Dealer's turn",
             result:'Round over'}[p] || p;
   },
@@ -11298,6 +11307,19 @@ const MP = {
     const ownedSet = new Set(me.powerups || []);
     const atMax = ownedSet.size >= 2;
 
+    const levCards = me.levCards || [];
+    const levHtml = (canBuy && levCards.length > 0) ? levCards.map((lc, i) => {
+      const label = lc === 'blood' ? '2× LEV' : '3× LEV';
+      const active = me.leverage === `c${i}`;
+      if (active) {
+        return `<div style="display:flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid rgba(201,168,76,.6);border-radius:2px;background:rgba(201,168,76,.1);">
+          <span style="font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold)">${label}</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--gold-lo);margin-left:2px;">✓ ACTIVE</span>
+        </div>`;
+      }
+      return `<button onclick="MP._useLeverage(${i})" style="padding:4px 10px;border:1px solid rgba(201,168,76,.4);border-radius:2px;background:transparent;color:var(--gold);cursor:pointer;font-family:var(--sans);font-size:9px;letter-spacing:1px;">${label}</button>`;
+    }).join('') : '';
+
     bar.innerHTML = POWERUPS.map(pu => {
       const owned   = ownedSet.has(pu.id);
       const minIdx  = STAKE_ORDER.indexOf(pu.minStake);
@@ -11323,11 +11345,22 @@ const MP = {
         style="padding:4px 10px;border:1px solid var(--line2);border-radius:2px;background:transparent;color:var(--white);cursor:pointer;font-family:var(--sans);font-size:9px;letter-spacing:1px;opacity:${dim?.4:1};">
         ${pu.label} <span style="font-family:var(--mono);font-size:8px;color:var(--muted);">${this._fmt(cost)}</span>
       </button>`;
-    }).join('');
+    }).join('') + levHtml;
   },
 
   _buyPowerup(puId) {
     this._action('buyPowerup', { puId });
+  },
+
+  _takeInsurance()    { this._action('takeInsurance'); },
+  _declineInsurance() { this._action('declineInsurance'); },
+  _useLeverage(idx)   { this._action('useLeverage', { levCard: `c${idx}` }); },
+  _stampedBoost(val) {
+    const inp = document.getElementById('mp-stamped-inp');
+    const amt = val !== undefined ? val : (parseInt((inp?.value||'').replace(/[^0-9]/g,''))||0);
+    const me  = this._myPlayer;
+    const max = me?.bonusFlags?.stampedInitialBet || me?.bet || 0;
+    this._action('stampedBoost', { amount: Math.min(amt, max) });
   },
 
   _checkBonusToast(t) {
@@ -11507,6 +11540,26 @@ const MP = {
       return;
     }
 
+    // INSURANCE phase
+    if (t.phase==='insurance') {
+      if (me.status==='sitting_out' || !me.bet) {
+        bar.innerHTML='<span class="mp-wait-msg">Dealer shows Ace — insurance round…</span>';
+        return;
+      }
+      if (me.insuranceDecided) {
+        const iStr = me.insuranceBet>0 ? `Insurance placed: ${this._fmt(me.insuranceBet)} KFC` : 'No insurance';
+        bar.innerHTML=`<span class="mp-wait-msg" style="color:var(--green)">✓ ${iStr} — waiting for others…</span>`;
+        return;
+      }
+      const maxIns = Math.floor(me.bet/2);
+      const canAfford = me.balance >= maxIns;
+      bar.innerHTML=`
+        <span class="mp-wait-msg" style="color:var(--gold)">Dealer shows Ace — Insurance?</span>
+        ${canAfford?`<button class="act" style="background:rgba(63,185,80,.12);border-color:var(--green);color:var(--green);" onclick="MP._takeInsurance()">Take (${this._fmt(maxIns)})</button>`:''}
+        <button class="act" onclick="MP._declineInsurance()">No Insurance</button>`;
+      return;
+    }
+
     // PLAYING phase
     if (t.phase==='playing') {
       const myTurn = t.players[t.currentTurnIdx]?.username === this._me;
@@ -11523,18 +11576,33 @@ const MP = {
       const onHand2 = me._onHand2 && me.hand2?.length >= 2 && !me._hand2Done;
       const hand    = onHand2 ? me.hand2 : me.hand;
       const hv      = this._hv(hand);
-      const canDouble   = !onHand2 && me.hand.length===2 && me.balance>=me.bet;
-      const canSplit    = !onHand2 && !me.hasSplit && me.hand.length===2
-        && me.hand[0].slice(0,-1)===me.hand[1].slice(0,-1)
-        && me.balance>=me.bet;
+      // Helper to extract rank from either a string card or bonus card object
+      const _mpRnk = c => typeof c==='string' ? c.slice(0,-1)
+        : (BONUS_CARD_REPS[c?.bonus]?.[c.repIdx??0]?.r ?? null);
+      const arrowFree   = (me.bonusFlags?.arrowCount||0) > 0;
+      const canDouble   = !onHand2 && me.hand.length===2 && (arrowFree || me.balance>=me.bet);
+      const r0=_mpRnk(me.hand?.[0]), r1=_mpRnk(me.hand?.[1]);
+      const canSplit    = !onHand2 && !me.hasSplit && me.hand?.length===2
+        && r0!==null && r0===r1 && me.balance>=me.bet;
       const dUpVal      = t.dealerHand?.[0] ? this._hv([t.dealerHand[0]]) : 0;
       const canSurrender = !onHand2 && me.hand.length===2 && me.powerups?.includes('sally') && dUpVal >= 10;
+      // Stamped boost: show before action buttons if flag is set and not yet boosted
+      const canStamped  = me.bonusFlags?.stamped && !me.bonusFlags?.stampedBoosted;
+      const stampedHtml = canStamped ? `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:6px;flex-wrap:wrap;justify-content:center;">
+          <span style="font-family:var(--sans);font-size:9px;color:var(--gold);letter-spacing:1px;">STAMPED BOOST:</span>
+          <input id="mp-stamped-inp" type="text" inputmode="numeric"
+            style="width:80px;padding:4px 8px;background:var(--surface);border:1px solid var(--gold);color:var(--white);font-family:var(--mono);font-size:11px;border-radius:2px;" placeholder="0">
+          <button onclick="MP._stampedBoost()" style="padding:4px 10px;background:rgba(201,168,76,.12);border:1px solid var(--gold);border-radius:2px;color:var(--gold);cursor:pointer;font-family:var(--sans);font-size:9px;letter-spacing:1px;">BOOST</button>
+          <button onclick="MP._stampedBoost(0)" style="padding:4px 10px;border:1px solid var(--line);border-radius:2px;background:transparent;color:var(--muted);cursor:pointer;font-family:var(--sans);font-size:9px;">SKIP</button>
+        </div>` : '';
 
       bar.innerHTML=`
+        ${stampedHtml}
         ${onHand2?'<span class="mp-wait-msg" style="color:var(--gold)">Playing Hand 2</span>':''}
         <button class="act stand"  onclick="MP._action('stand'${onHand2?',{hand2:true}':''})">Stand</button>
         <button class="act hit"    onclick="MP._action('hit'${onHand2?',{hand2:true}':''})">Hit</button>
-        ${canDouble?`<button class="act double" onclick="MP._action('double')">Double</button>`:''}
+        ${canDouble?`<button class="act double" onclick="MP._action('double')">Double${arrowFree?' (free)':''}</button>`:''}
         ${canSplit ?`<button class="act split"  onclick="MP._action('split')">Split</button>`:''}
         ${canSurrender?`<button class="act" style="background:rgba(248,81,73,.15);border-color:var(--red);color:var(--red);" onclick="MP._action('surrender')">Surrender</button>`:''}
         <span class="mp-wait-msg" style="margin-left:12px;">${hv>0?'Hand: '+hv:''}</span>`;
@@ -11626,9 +11694,10 @@ const MP = {
     if (!t) { el.textContent=''; return; }
 
     let deadline = null;
-    if (t.phase==='betting')  deadline = t.bettingDeadline;
-    if (t.phase==='playing')  deadline = t.turnDeadline;
-    if (t.phase==='result')   deadline = t.turnDeadline;
+    if (t.phase==='betting')   deadline = t.bettingDeadline;
+    if (t.phase==='insurance') deadline = t.insuranceDeadline;
+    if (t.phase==='playing')   deadline = t.turnDeadline;
+    if (t.phase==='result')    deadline = t.turnDeadline;
 
     if (!deadline) { el.textContent=''; return; }
     const secs = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));

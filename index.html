@@ -8991,6 +8991,13 @@ const PM = (() => {
   const _expandedGroups = new Set();
   const _prevOdds = {};
 
+  // Session/shoe balance snapshots for market calibration
+  let _currBalances = {};   // updated each onLeaderboardUpdate
+  let _prevBalances = {};   // snapshot from end of previous shoe, persisted to LS
+  const LS_PREV_BAL = 'kfc_pm_prev_bal';
+  function _loadPrevBal(){ try{ return JSON.parse(localStorage.getItem(LS_PREV_BAL)||'{}'); }catch(e){ return {}; } }
+  function _savePrevBal(s){ try{ localStorage.setItem(LS_PREV_BAL, JSON.stringify(s)); }catch(e){} }
+
   // Per-shoe tracking
   let _pmShoeHands = 0;
   let _pmShoeBusts = 0;
@@ -9023,6 +9030,15 @@ const PM = (() => {
   function _seed(type){
     const stakeMin = (G.s || STAKES[G.stake||'low'] || STAKES.low).min;
     return stakeMin * (type === 'season' ? SEED_MULT_SEASON : SEED_MULT_SHOE);
+  }
+
+  // Growth rate from last shoe end → boosts YES bias for hot players, lowers for cold ones
+  function _sessionFactor(pName, currentBal){
+    const key = (pName||'').toLowerCase();
+    const prev = _prevBalances[key];
+    if(!prev || prev <= 0 || currentBal <= 0) return 1.0;
+    const growth = currentBal / prev;
+    return Math.min(1.8, Math.max(0.55, Math.sqrt(growth)));
   }
 
   function _makeMarket(type, desc, condition, yesBias, seedType){
@@ -9131,6 +9147,20 @@ const PM = (() => {
       if(_pmShoeLastBJ) return Math.round(Math.min(85, Math.max(5, pBJHand * 100)));
       const pConsec = 1 - Math.pow(1 - pBJHand * pBJHand, Math.max(1, handsLeft - 1));
       return Math.round(Math.min(80, Math.max(2, pConsec * 100)));
+    }
+
+    if(condition.type === 'dealer_bust_range'){
+      const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
+      const bustR = smalls / tot;
+      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + bustR * 0.75));
+      const hLeft = Math.max(Math.max(0, condition.params.min - _pmShoeBusts), Math.floor(tot/6));
+      const lo = Math.max(0, (condition.params.min||0) - _pmShoeBusts);
+      const hi = Math.min((condition.params.max||9999) - _pmShoeBusts, hLeft);
+      if(lo > hLeft) return 4;
+      if(_pmShoeBusts > (condition.params.max||9999)) return 4;
+      let p = 0;
+      for(let k=lo; k<=Math.min(hi, 30); k++) p += _binom(hLeft, k, bustP);
+      return Math.round(Math.min(95, Math.max(5, p * 100)));
     }
 
     return 50;
@@ -9582,9 +9612,10 @@ const PM = (() => {
           m.condition.params.date===today
         );
         if(alreadyExists) return;
-        // Pre-calibrate odds: player at 90% of target → ~78% YES; at 10% → ~22% YES
+        // Base bias from proximity to target; session factor boosts hot players, lowers cold ones
         const ratio = Math.min(balance / amount, 0.99);
-        const yesBias = 0.15 + 0.70 * ratio;
+        const baseBias = 0.15 + 0.70 * ratio;
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _sessionFactor(pName, balance)));
         _markets.push(_makeMarket('season',
           'Will '+pName+' reach '+fmtKFC(amount)+' this season?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
@@ -9628,26 +9659,23 @@ const PM = (() => {
   }
 
   function _createShoeMarkets(){
-    const bustBands = [
-      {label:'Under 10', min:0,  max:9},
-      {label:'10-12',    min:10, max:12},
-      {label:'13-15',    min:13, max:15},
-      {label:'16-18',    min:16, max:18},
-      {label:'19-21',    min:19, max:21},
-      {label:'22-24',    min:22, max:24},
-      {label:'25+',      min:25, max:9999},
+    const _yn = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
+    // Dealer bust range markets (5 YES/NO markets, each covers a count range)
+    const BUST_RANGES = [
+      {min:0,  max:14,   desc:'Dealer busts under 15 times this shoe?'},
+      {min:15, max:18,   desc:'Dealer busts 15-18 times this shoe?'},
+      {min:19, max:22,   desc:'Dealer busts 19-22 times this shoe?'},
+      {min:23, max:26,   desc:'Dealer busts 23-26 times this shoe?'},
+      {min:27, max:9999, desc:'Dealer busts 27+ times this shoe?'},
     ];
-    _markets.push(_makeShoeMultiMarket(
-      'How many times will the dealer bust this shoe?',
-      bustBands,
-      {type:'dealer_bust_count', params:{bands: bustBands}}
-    ));
-    const _shoeYN = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
-    _markets.push(_shoeYN('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8}}));
-    _markets.push(_shoeYN('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8}}));
-    _markets.push(_shoeYN('Player wins 5 hands in a row this shoe?',   {type:'player_hot_streak', params:{streak:5}}));
-    _markets.push(_shoeYN('Two consecutive blackjacks this shoe?',     {type:'consec_bj',         params:{count:2}}));
-    if(_markets.length > 60) _markets = _markets.slice(-60);
+    BUST_RANGES.forEach(r => {
+      _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
+    });
+    _markets.push(_yn('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8}}));
+    _markets.push(_yn('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8}}));
+    _markets.push(_yn('Player wins 5 hands in a row this shoe?',   {type:'player_hot_streak', params:{streak:5}}));
+    _markets.push(_yn('Two consecutive blackjacks this shoe?',     {type:'consec_bj',         params:{count:2}}));
+    if(_markets.length > 80) _markets = _markets.slice(-80);
     _saveMarkets();
   }
 
@@ -9680,9 +9708,10 @@ const PM = (() => {
           m.condition.params.player===pName
         );
         if(alreadyOpen) return;
-        // Seed YES bias proportional to player's share of total eligible balance
+        // YES bias = balance share among competitors × session momentum factor
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
-        const yesBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
+        const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _sessionFactor(pName, p.balance||0)));
         _markets.push(_makeMarket('race',
           'Will '+pName+' be first to reach '+fmtKFC(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
@@ -9695,11 +9724,13 @@ const PM = (() => {
 
   // ── Event hooks ────────────────────────────────────────────────────────────
   function onShoeNew(){
+    // Save current balances as "previous shoe" for next shoe's market calibration
+    if(Object.keys(_currBalances).length){ _prevBalances = {..._currBalances}; _savePrevBal(_prevBalances); }
+
     _markets.filter(m => m.type==='shoe' && m.status==='open').forEach(m => {
-      if(m.condition && m.condition.type === 'dealer_bust_count'){
-        const bands = m.condition.params && m.condition.params.bands;
-        const winner = bands && bands.find(b => _pmShoeBusts >= b.min && _pmShoeBusts <= (b.max||9999));
-        settle(m.id, winner ? winner.label : (bands ? bands[bands.length-1].label : '25+'));
+      if(m.condition && m.condition.type === 'dealer_bust_range'){
+        const {min, max} = m.condition.params;
+        settle(m.id, (_pmShoeBusts >= min && _pmShoeBusts <= (max||9999)) ? 'YES' : 'NO');
       } else {
         settle(m.id, 'NO');
       }
@@ -9736,6 +9767,11 @@ const PM = (() => {
         if(_pmShoeBusts >= c.params.target){ settle(m.id,'YES'); return; }
         if(handsLeft + _pmShoeBusts < c.params.target) settle(m.id,'NO');
       }
+      if(c.type === 'dealer_bust_range'){
+        const {min, max} = c.params;
+        if(_pmShoeBusts > (max||9999)){ settle(m.id,'NO'); return; }
+        if(handsLeft + _pmShoeBusts < min){ settle(m.id,'NO'); return; }
+      }
       if(c.type === 'natural_bj'){
         if(playerBJ){ settle(m.id,'YES'); return; }
         if(_pmShoeHands >= (c.params.hands||8)) settle(m.id,'NO');
@@ -9769,6 +9805,8 @@ const PM = (() => {
 
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
+    // Track current balances for session factor (saved to prev at shoe boundaries)
+    players.forEach(p => { const n=(p.username||p.name||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
 
     // Recalibrate milestone odds if only house money remains
     players.forEach(p => {
@@ -9938,52 +9976,55 @@ const PM = (() => {
 
   // ── Init ───────────────────────────────────────────────────────────────────
   function init(){
+    _prevBalances = _loadPrevBal();
     _loadMarkets();
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
-    // Milestone markets with double-KFC description (pre-fix): remove so they regenerate cleanly
+    // Milestone markets with double-KFC description (pre-fix)
     _markets = _markets.filter(m => !(m.type==='season' && m.desc && m.desc.includes('KFC KFC')));
-    // Remove old multi-outcome race markets (pre-redesign: had outcomes array, bankroll_race type)
-    _markets = _markets.filter(m => !(m.type==='race' && m.outcomes && m.outcomes.length &&
-      m.condition && m.condition.type==='bankroll_race'));
-    // Also clean stale race markets from before the no-Nobody / no-expiry rework
+    // Remove all old multi-outcome race markets (pre-redesign)
+    _markets = _markets.filter(m => !(m.type==='race' && m.outcomes && m.outcomes.length));
+    // Remove stale race markets from the no-Nobody/no-expiry rework
     _markets = _markets.filter(m => !(
-      m.type==='race' && (
-        (m.outcomes && m.outcomes.includes('Nobody today')) ||
-        (m.condition && m.condition.params && m.condition.params.date)
-      )
+      m.type==='race' && m.condition && m.condition.params && m.condition.params.date
     ));
-    // Replace old single-threshold dealer bust markets; also remove bust markets with old band set
+    // Remove all old bust-related shoe markets (dealer_bust_threshold, dealer_bust_count, dealer_bust_range)
+    // so they are replaced fresh with calibrated odds
     _markets = _markets.filter(m => !(m.type==='shoe' && m.condition && (
       m.condition.type==='dealer_bust_threshold' ||
-      (m.condition.type==='dealer_bust_count' &&
-       m.condition.params && m.condition.params.bands && m.condition.params.bands.length < 7)
+      m.condition.type==='dealer_bust_count' ||
+      m.condition.type==='dealer_bust_range'
     )));
+    // Remove uncalibrated 50/50 shoe YES/NO markets (housePools equal, no player bets)
+    const _savedBets = _loadBets();
+    _markets = _markets.filter(m => {
+      if(m.type!=='shoe' || m.status!=='open' || m.outcomes || !m.housePools) return true;
+      const hasPlayerBets = _savedBets.some(b => b.mktId===m.id && b.payout==null);
+      if(hasPlayerBets) return true;
+      return m.housePools.YES !== m.housePools.NO; // keep only if already calibrated
+    });
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){
       _createShoeMarkets();
     } else {
-      // Backfill any new market types added after these markets were first created
       const _existTypes = new Set(_openShoe.map(m=>m.condition&&m.condition.type).filter(Boolean));
       let _backfilled = false;
-      if(!_existTypes.has('dealer_bust_count')){
-        const bustBands = [
-          {label:'Under 10', min:0,  max:9},
-          {label:'10-12',    min:10, max:12},
-          {label:'13-15',    min:13, max:15},
-          {label:'16-18',    min:16, max:18},
-          {label:'19-21',    min:19, max:21},
-          {label:'22-24',    min:22, max:24},
-          {label:'25+',      min:25, max:9999},
-        ];
-        _markets.push(_makeShoeMultiMarket(
-          'How many times will the dealer bust this shoe?',
-          bustBands,
-          {type:'dealer_bust_count', params:{bands: bustBands}}
-        ));
-        _backfilled=true;
-      }
       const _bf = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
+      // Backfill bust range markets if missing
+      const hasBustRange = _openShoe.some(m => m.condition && m.condition.type==='dealer_bust_range');
+      if(!hasBustRange){
+        const BUST_RANGES = [
+          {min:0,  max:14,   desc:'Dealer busts under 15 times this shoe?'},
+          {min:15, max:18,   desc:'Dealer busts 15-18 times this shoe?'},
+          {min:19, max:22,   desc:'Dealer busts 19-22 times this shoe?'},
+          {min:23, max:26,   desc:'Dealer busts 23-26 times this shoe?'},
+          {min:27, max:9999, desc:'Dealer busts 27+ times this shoe?'},
+        ];
+        BUST_RANGES.forEach(r => {
+          _markets.push(_bf(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
+        });
+        _backfilled = true;
+      }
       if(!_existTypes.has('push_streak'))       { _markets.push(_bf('2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8}})); _backfilled=true; }
       if(!_existTypes.has('player_hot_streak')) { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
       if(!_existTypes.has('consec_bj'))         { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }

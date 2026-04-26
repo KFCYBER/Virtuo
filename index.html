@@ -9047,6 +9047,8 @@ const PM = (() => {
     return Math.min(1.8, Math.max(0.55, Math.sqrt(growth)));
   }
 
+  function _isCreator(){ return (G.username||G.player||'').toLowerCase().includes('creator'); }
+
   // Combined factor: uses season history end balance if available, otherwise falls back to shoe-to-shoe
   function _seasonFactor(pName, currentBal){
     const key = (pName||'').toLowerCase();
@@ -9196,6 +9198,10 @@ const PM = (() => {
   function render(){
     const balEl = document.getElementById('pm-modal-bal');
     if(balEl) balEl.textContent = fmtKFC(G.balance||0);
+
+    // Show HISTORY tab only to creator accounts
+    const histTab = document.getElementById('pm-tab-history');
+    if(histTab) histTab.style.display = _isCreator() ? '' : 'none';
 
     const raceEl   = document.getElementById('pm-race-list');
     const raceSect = document.getElementById('pm-race-section');
@@ -9979,10 +9985,11 @@ const PM = (() => {
   }
 
   // ── Modal open/close ───────────────────────────────────────────────────────
-  // ── Season History panel ───────────────────────────────────────────────────
+  // ── Season History panel (creator-only) ────────────────────────────────────
   function _renderSeasonHistPanel(){
     const panel = document.getElementById('pm-pane-history');
     if(!panel || panel.style.display === 'none') return;
+    if(!_isCreator()){ panel.innerHTML = '<div class="pm-empty">Access restricted</div>'; return; }
     const players = Object.keys(_currBalances).sort();
     const hasHist = Object.keys(_seasonHist).length > 0;
     let inputRows = '';
@@ -10014,6 +10021,7 @@ const PM = (() => {
   }
 
   function _saveSeasonHist(){
+    if(!_isCreator()){ notif('Access restricted'); return; }
     const inputs = document.querySelectorAll('.pm-hist-input');
     const hist = {};
     inputs.forEach(inp => {
@@ -10029,6 +10037,7 @@ const PM = (() => {
   }
 
   function _clearSeasonHist(){
+    if(!_isCreator()){ notif('Access restricted'); return; }
     _seasonHist = {};
     _saveSeasonHistLS({});
     notif('Season history cleared');
@@ -10186,7 +10195,7 @@ const PM = (() => {
     <div class="pm-tabs">
       <button class="pm-tab active" id="pm-tab-markets"   onclick="PM._switchTab('markets')">MARKETS</button>
       <button class="pm-tab"        id="pm-tab-portfolio" onclick="PM._switchTab('portfolio')">PORTFOLIO</button>
-      <button class="pm-tab"        id="pm-tab-history"   onclick="PM._switchTab('history')">HISTORY</button>
+      <button class="pm-tab"        id="pm-tab-history"   onclick="PM._switchTab('history')" style="display:none">HISTORY</button>
     </div>
     <div id="pm-pane-markets" class="pm-modal-body">
       <div id="pm-race-section" style="display:none;margin-bottom:14px">

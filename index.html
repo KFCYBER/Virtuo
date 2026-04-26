@@ -2133,7 +2133,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 #mp-mode-select,
 #mp-lobby-overlay,
 #mp-game-overlay {
-  position:fixed;inset:0;z-index:900;
+  position:fixed;inset:0;z-index:1100;
   display:none;align-items:center;justify-content:center;
   background:var(--bg);
   overflow-y:auto;
@@ -2986,7 +2986,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: MODE SELECT
 ══════════════════════════════════════════════ -->
-<div id="mp-mode-select" style="display:none;position:fixed;inset:0;z-index:900;align-items:center;justify-content:center;background:var(--bg);">
+<div id="mp-mode-select" style="display:none;position:fixed;inset:0;z-index:1100;align-items:center;justify-content:center;background:var(--bg);">
   <div class="mp-modal" style="max-width:380px;text-align:center">
     <div class="mp-title">SELECT MODE</div>
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
@@ -2998,7 +2998,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: LOBBY
 ══════════════════════════════════════════════ -->
-<div id="mp-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:900;background:var(--bg);overflow-y:auto;">
+<div id="mp-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:1100;background:var(--bg);overflow-y:auto;">
   <div class="mp-lobby-inner">
     <!-- header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;border-bottom:1px solid var(--line);padding-bottom:16px;">
@@ -3064,7 +3064,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: GAME OVERLAY
 ══════════════════════════════════════════════ -->
-<div id="mp-game-overlay" style="display:none;position:fixed;inset:0;z-index:910;background:var(--bg);overflow-y:auto;flex-direction:column;align-items:center;padding:24px 16px 110px;">
+<div id="mp-game-overlay" style="display:none;position:fixed;inset:0;z-index:1110;background:var(--bg);overflow-y:auto;flex-direction:column;align-items:center;padding:24px 16px 110px;">
   <!-- top bar -->
   <div class="mp-go-topbar">
     <div>
@@ -10752,6 +10752,9 @@ const MP = {
 
   // ── login flow hooks ─────────────────────────────────────
   _showModeSelect() {
+    // The #login container has z-index 1000 — hide it so our overlay shows cleanly
+    const lg = document.getElementById('login');
+    if (lg) lg.style.display = 'none';
     const el = document.getElementById('mp-mode-select');
     if (el) { el.style.display='flex'; }
   },
@@ -10762,6 +10765,9 @@ const MP = {
   },
 
   _chooseSP() {
+    // Restore the login container so step 2 (stake selection) can render inside it
+    const lg = document.getElementById('login');
+    if (lg) lg.style.display = 'flex';
     this._hideModeSelect();
     goLoginStep(2);
   },
@@ -10982,12 +10988,8 @@ const MP = {
     this.tableId = null;
     this.state   = null;
     document.getElementById('mp-game-overlay').style.display='none';
-    // Return to login
-    document.getElementById('login').style.display='flex';
-    const s1 = document.getElementById('login-step1');
-    if (s1) s1.style.display='block';
-    // Reset any partial login state
-    _pendingLogin=null;
+    // Hard reload — cleanest way to fully reset state and return to fresh login
+    window.location.reload();
   },
 
   // ── rendering ─────────────────────────────────────────────

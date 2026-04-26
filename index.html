@@ -3012,27 +3012,28 @@ body.hand2-active #chip-strip .chip { position: relative; }
     <!-- create table -->
     <div class="mp-section-title">CREATE A TABLE</div>
     <div class="mp-create-form">
+      <div style="margin-bottom:12px;">
+        <label class="field-label">Table Name <span style="color:var(--red)">*</span></label>
+        <input type="text" id="mp-create-name" placeholder="e.g. Friday Night" maxlength="40" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+      </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
         <div>
-          <label class="field-label">Table Name</label>
-          <input type="text" id="mp-create-name" placeholder="My Table" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+          <label class="field-label">Category</label>
+          <select id="mp-create-category" onchange="MP._onCategoryChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+            <option value="standard">Standard</option>
+            <option value="vip" id="mp-vip-opt">VIP</option>
+          </select>
+          <div id="mp-vip-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:1px;"></div>
         </div>
         <div>
-          <label class="field-label">Stake Level</label>
-          <select id="mp-create-stake" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
-            <option value="low">Low (min 5)</option>
-            <option value="mid">Mid (min 50)</option>
-            <option value="high">High (min 500)</option>
-            <option value="royale">Royale (min 5,000)</option>
-            <option value="legendary">Legendary (min 50,000)</option>
-            <option value="mythic">Mythic (min 500,000)</option>
-            <option value="highroller">High-Roller (min 5M)</option>
-            <option value="champion">Champion (min 50M)</option>
+          <label class="field-label">Your Stake</label>
+          <select id="mp-create-stake" onchange="MP._onStakeChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+            <!-- populated by JS -->
           </select>
         </div>
       </div>
       <div style="margin-bottom:12px;">
-        <label class="field-label">Your Buy-In</label>
+        <label class="field-label">Your Buy-In <span style="color:var(--red)">*</span></label>
         <input type="text" id="mp-buyin-inp" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;" oninput="MP._fmtBuyIn(this)">
         <div id="mp-buyin-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:1px;"></div>
       </div>
@@ -3049,9 +3050,14 @@ body.hand2-active #chip-strip .chip { position: relative; }
 
     <!-- join modal fields (hidden, shown inline on card) -->
     <div id="mp-join-form" style="display:none;border:1px solid var(--gold-lo);border-radius:8px;padding:20px;background:var(--bg2);margin-top:16px;">
-      <div class="mp-section-title">JOIN TABLE: <span id="mp-join-name-lbl"></span></div>
-      <label class="field-label">Your Buy-In</label>
-      <input type="text" id="mp-join-buyin" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:12px;" oninput="MP._fmtBuyIn(this)">
+      <div class="mp-section-title">JOIN TABLE: <span id="mp-join-name-lbl"></span> <span id="mp-join-cat-lbl" style="color:var(--gold);margin-left:6px;"></span></div>
+      <label class="field-label">Your Stake</label>
+      <select id="mp-join-stake" onchange="MP._onJoinStakeChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:12px;">
+        <!-- populated by JS -->
+      </select>
+      <label class="field-label">Your Buy-In <span style="color:var(--red)">*</span></label>
+      <input type="text" id="mp-join-buyin" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:4px;" oninput="MP._fmtBuyIn(this)">
+      <div id="mp-join-buyin-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:12px;letter-spacing:1px;"></div>
       <div style="display:flex;gap:8px;">
         <button class="mp-mode-btn primary" style="flex:2;margin:0;" onclick="MP._confirmJoin()">JOIN TABLE</button>
         <button class="mp-mode-btn ghost" style="flex:1;margin:0;" onclick="MP._cancelJoin()">Cancel</button>
@@ -10737,6 +10743,21 @@ const MP = {
             highroller:'High-Roller',champion:'Champion'}[k] || k;
   },
 
+  _categoryLabel(c) {
+    return c === 'standard' ? 'STANDARD' : c === 'vip' ? 'VIP' : (c||'').toUpperCase();
+  },
+
+  // Stake → minimum bet table (mirrors worker)
+  _STAKE_MINS: {low:5,mid:50,high:500,royale:5000,
+                legendary:50000,mythic:500000,highroller:5000000,champion:50000000},
+  _STANDARD_STAKES: ['low','mid','high','royale'],
+  _VIP_STAKES:      ['legendary','mythic','highroller','champion'],
+  _VIP_BAL_REQ: 50000,
+
+  _stakesForCategory(cat) {
+    return cat === 'vip' ? this._VIP_STAKES : this._STANDARD_STAKES;
+  },
+
   _phaseLabel(p) {
     return {waiting:'Waiting for players',betting:'Placing bets',
             playing:'Player turns',dealer:"Dealer's turn",
@@ -10788,11 +10809,61 @@ const MP = {
     lo.style.display = 'block';
     const userLbl = document.getElementById('mp-lobby-user');
     if (userLbl) userLbl.textContent = `Logged in as ${G.username}  ·  Balance: ${this._fmt(_pendingLogin?.balance||0)} KFC`;
-    // update buy-in hint
-    const bal = _pendingLogin?.balance || 0;
-    const hint = document.getElementById('mp-buyin-hint');
-    if (hint) hint.textContent = `Available: ${this._fmt(bal)} KFC`;
+
+    // VIP gate — disable VIP option if bankroll < 50K
+    const bal     = _pendingLogin?.balance || 0;
+    const vipOpt  = document.getElementById('mp-vip-opt');
+    const vipHint = document.getElementById('mp-vip-hint');
+    if (vipOpt) {
+      if (bal >= this._VIP_BAL_REQ) {
+        vipOpt.disabled = false;
+        vipOpt.textContent = 'VIP';
+        if (vipHint) vipHint.textContent = '';
+      } else {
+        vipOpt.disabled = true;
+        vipOpt.textContent = 'VIP (locked)';
+        if (vipHint) vipHint.textContent = `VIP needs ${this._fmt(this._VIP_BAL_REQ)}+ bankroll`;
+        // Force category back to standard if VIP was selected
+        const catEl = document.getElementById('mp-create-category');
+        if (catEl && catEl.value === 'vip') catEl.value = 'standard';
+      }
+    }
+
+    // Initialize stake dropdown for current category
+    this._populateStakeDropdown('mp-create-stake', document.getElementById('mp-create-category')?.value || 'standard');
+    this._onStakeChange();
     this.refreshLobby();
+  },
+
+  _populateStakeDropdown(selectId, category) {
+    const sel = document.getElementById(selectId);
+    if (!sel) return;
+    const stakes = this._stakesForCategory(category);
+    sel.innerHTML = stakes.map(s =>
+      `<option value="${s}">${this._stakeLabel(s)} (min ${this._fmt(this._STAKE_MINS[s])})</option>`
+    ).join('');
+  },
+
+  _onCategoryChange() {
+    const cat = document.getElementById('mp-create-category').value;
+    this._populateStakeDropdown('mp-create-stake', cat);
+    this._onStakeChange();
+  },
+
+  _onStakeChange() {
+    const stake = document.getElementById('mp-create-stake')?.value;
+    const min   = this._STAKE_MINS[stake] || 0;
+    const bal   = _pendingLogin?.balance || 0;
+    const hint  = document.getElementById('mp-buyin-hint');
+    if (hint) hint.textContent = `Min buy-in: ${this._fmt(min)} KFC  ·  Available: ${this._fmt(bal)}`;
+  },
+
+  _onJoinStakeChange() {
+    const stake = document.getElementById('mp-join-stake')?.value;
+    const min   = this._STAKE_MINS[stake] || 0;
+    const bal   = _pendingLogin?.balance || 0;
+    const hint  = document.getElementById('mp-join-buyin-hint');
+    if (hint) hint.textContent = `Min buy-in: ${this._fmt(min)} KFC  ·  Available: ${this._fmt(bal)}`;
   },
 
   async refreshLobby() {
@@ -10815,92 +10886,117 @@ const MP = {
       return;
     }
     const phaseLabel = p => ({waiting:'Open',betting:'Betting',playing:'In progress',dealer:'In progress',result:'Round end'}[p]||p);
-    const canJoin    = t => (t.phase==='waiting'||t.phase==='betting') && t.playerCount < t.maxPlayers;
-    container.innerHTML = tables.map(t => `
-      <div class="mp-table-card" style="${canJoin(t)?'':'opacity:.6;cursor:default'}">
+    const canJoin    = t => t.playerCount < t.maxPlayers; // joins now allowed in any phase
+    const bal = _pendingLogin?.balance || 0;
+    const eligibleVIP = bal >= this._VIP_BAL_REQ;
+    container.innerHTML = tables.map(t => {
+      const lockedVIP = t.category === 'vip' && !eligibleVIP;
+      const open      = canJoin(t) && !lockedVIP;
+      const playerStakes = (t.players||[]).map(p =>
+        `${p.displayName}<span style="color:var(--muted);font-size:9px;letter-spacing:1px;"> · ${this._stakeLabel(p.stake||'?')}</span>`
+      ).join(', ') || '—';
+      return `<div class="mp-table-card" style="${open?'':'opacity:.55;cursor:default'}">
         <div class="tc-name">${t.name}</div>
-        <div class="tc-stake">${this._stakeLabel(t.stake)}</div>
-        <div class="tc-players">${t.players.map(p=>p.displayName).join(', ')||'—'}
-          &nbsp;·&nbsp; ${t.playerCount}/${t.maxPlayers} players</div>
+        <div class="tc-stake">${this._categoryLabel(t.category)}</div>
+        <div class="tc-players">${playerStakes}
+          <br>${t.playerCount}/${t.maxPlayers} seated</div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
-          <span class="tc-status" style="color:${canJoin(t)?'var(--green)':'var(--muted)'}">${phaseLabel(t.phase)}</span>
-          ${canJoin(t)
+          <span class="tc-status" style="color:${open?'var(--green)':'var(--muted)'}">${phaseLabel(t.phase)}</span>
+          ${open
             ? `<button class="mp-mode-btn primary" style="width:auto;padding:6px 16px;margin:0;font-size:9px;"
-                onclick="MP._startJoin('${t.id}','${t.name.replace(/'/g,"\\'")}')">JOIN</button>`
-            : '<span style="font-size:9px;letter-spacing:1px;color:var(--muted)">FULL / IN PROGRESS</span>'
+                onclick="MP._startJoin('${t.id}','${t.name.replace(/'/g,"\\'")}','${t.category}')">JOIN</button>`
+            : (lockedVIP
+                ? '<span style="font-size:9px;letter-spacing:1px;color:var(--gold-lo)">VIP LOCKED</span>'
+                : '<span style="font-size:9px;letter-spacing:1px;color:var(--muted)">FULL</span>')
           }
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
   },
 
-  _startJoin(tableId, tableName) {
-    this._pendingJoinId   = tableId;
-    this._pendingJoinName = tableName;
+  _startJoin(tableId, tableName, category) {
+    this._pendingJoinId       = tableId;
+    this._pendingJoinName     = tableName;
+    this._pendingJoinCategory = category;
     document.getElementById('mp-join-name-lbl').textContent = tableName;
+    const catLbl = document.getElementById('mp-join-cat-lbl');
+    if (catLbl) catLbl.textContent = `[${this._categoryLabel(category)}]`;
+    this._populateStakeDropdown('mp-join-stake', category);
+    this._onJoinStakeChange();
     document.getElementById('mp-join-form').style.display = 'block';
     document.getElementById('mp-join-err').textContent = '';
     document.getElementById('mp-join-buyin').value = '';
-    const bal  = _pendingLogin?.balance || 0;
-    const hint = document.getElementById('mp-buyin-hint');
-    if (hint) hint.textContent = `Available: ${this._fmt(bal)} KFC`;
     document.getElementById('mp-join-buyin').focus();
   },
 
   _cancelJoin() {
-    this._pendingJoinId   = null;
-    this._pendingJoinName = null;
+    this._pendingJoinId       = null;
+    this._pendingJoinName     = null;
+    this._pendingJoinCategory = null;
     document.getElementById('mp-join-form').style.display = 'none';
   },
 
   async createTable() {
     const nameInp  = document.getElementById('mp-create-name');
+    const catEl    = document.getElementById('mp-create-category');
     const stakeEl  = document.getElementById('mp-create-stake');
     const buyInEl  = document.getElementById('mp-buyin-inp');
     const errEl    = document.getElementById('mp-create-err');
     const btn      = document.getElementById('mp-create-btn');
 
-    const stake   = stakeEl.value;
-    const name    = nameInp.value.trim() || `Table #${Date.now().toString(36).toUpperCase().slice(-4)}`;
-    const buyIn   = buyInEl._raw || 0;
-    const bal     = _pendingLogin?.balance || 0;
-    const stakeMin = {low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000}[stake]||5;
-
     errEl.textContent = '';
-    if (buyIn < stakeMin)  { errEl.textContent=`Min buy-in for this stake is ${this._fmt(stakeMin)} KFC`; return; }
-    if (buyIn > bal)       { errEl.textContent='Buy-in exceeds your balance'; return; }
+
+    // ── Field validation ──
+    const name = (nameInp.value || '').trim();
+    if (!name) { errEl.textContent='Table name is required'; nameInp.focus(); return; }
+
+    const category = catEl.value;
+    const stake    = stakeEl.value;
+    if (!category)  { errEl.textContent='Pick a category'; return; }
+    if (!stake)     { errEl.textContent='Pick your stake'; return; }
+    if (!this._stakesForCategory(category).includes(stake)) {
+      errEl.textContent = `${this._stakeLabel(stake)} is not a ${this._categoryLabel(category)} stake`;
+      return;
+    }
+
+    const buyIn = buyInEl._raw || 0;
+    if (!buyIn) { errEl.textContent='Buy-in is required'; buyInEl.focus(); return; }
+
+    const bal      = _pendingLogin?.balance || 0;
+    const stakeMin = this._STAKE_MINS[stake] || 5;
+    if (category === 'vip' && bal < this._VIP_BAL_REQ) {
+      errEl.textContent = `VIP requires a ${this._fmt(this._VIP_BAL_REQ)}+ bankroll`; return;
+    }
+    if (buyIn < stakeMin) { errEl.textContent=`Min buy-in for ${this._stakeLabel(stake)} is ${this._fmt(stakeMin)}`; return; }
+    if (buyIn > bal)      { errEl.textContent='Buy-in exceeds your balance'; return; }
 
     btn.disabled = true; btn.textContent = 'Creating…';
     const targetUrl = `${this._url}/mp/tables/create`;
-    console.log('[MP] POST', targetUrl);
     try {
       const r = await fetch(targetUrl, {
         method:'POST', headers:{'Content-Type':'application/json'},
         body: JSON.stringify({
           username:    G.username,
           displayName: _pendingLogin?.name || G.username,
-          stake, tableName: name,
-          balance: buyIn,
+          category, stake,
+          tableName:    name,
+          balance:      buyIn,
+          totalBalance: bal,
         }),
       });
       const text = await r.text();
-      console.log('[MP] Response status:', r.status, 'body:', text);
-      let d;
-      try { d = JSON.parse(text); } catch(_) { d = { error: 'Bad response: '+text.slice(0,200) }; }
+      let d; try { d = JSON.parse(text); } catch(_) { d = { error:'Bad response: '+text.slice(0,200) }; }
       if (!d.ok) {
-        // Diagnose common error shapes
         let msg = d.error || 'Failed to create table';
-        if (msg === 'Unknown action') {
-          msg = 'Worker not deployed with /mp/ routes — run "npx wrangler deploy"';
-        } else if (msg.includes('not configured')) {
-          msg = 'KV not bound to worker — check wrangler.toml + redeploy';
-        }
+        if (msg === 'Unknown action') msg = 'Worker not deployed with /mp/ routes — run "npx wrangler deploy"';
+        else if (msg.includes('not configured')) msg = 'KV not bound to worker — check wrangler.toml + redeploy';
         errEl.textContent = msg;
         return;
       }
       _pendingLogin.balance = buyIn;
+      this._myStake = stake;
       this._enterGame(d.tableId, d.table);
     } catch(e) {
-      console.error('[MP] createTable error:', e);
       errEl.textContent = 'Network error: ' + e.message;
     } finally {
       btn.disabled = false; btn.textContent = '+ CREATE TABLE';
@@ -10908,15 +11004,30 @@ const MP = {
   },
 
   async _confirmJoin() {
+    const stakeEl = document.getElementById('mp-join-stake');
     const buyInEl = document.getElementById('mp-join-buyin');
     const errEl   = document.getElementById('mp-join-err');
-    const buyIn   = buyInEl._raw || 0;
-    const bal     = _pendingLogin?.balance || 0;
 
     errEl.textContent = '';
     if (!this._pendingJoinId) return;
-    if (buyIn <= 0) { errEl.textContent='Enter a buy-in amount'; return; }
-    if (buyIn > bal) { errEl.textContent='Buy-in exceeds your balance'; return; }
+
+    const stake = stakeEl.value;
+    if (!stake) { errEl.textContent='Pick your stake'; return; }
+    if (!this._stakesForCategory(this._pendingJoinCategory).includes(stake)) {
+      errEl.textContent = `${this._stakeLabel(stake)} is not a ${this._categoryLabel(this._pendingJoinCategory)} stake`;
+      return;
+    }
+
+    const buyIn = buyInEl._raw || 0;
+    if (!buyIn) { errEl.textContent='Buy-in is required'; buyInEl.focus(); return; }
+
+    const bal      = _pendingLogin?.balance || 0;
+    const stakeMin = this._STAKE_MINS[stake] || 5;
+    if (this._pendingJoinCategory === 'vip' && bal < this._VIP_BAL_REQ) {
+      errEl.textContent = `VIP requires a ${this._fmt(this._VIP_BAL_REQ)}+ bankroll`; return;
+    }
+    if (buyIn < stakeMin) { errEl.textContent=`Min buy-in for ${this._stakeLabel(stake)} is ${this._fmt(stakeMin)}`; return; }
+    if (buyIn > bal)      { errEl.textContent='Buy-in exceeds your balance'; return; }
 
     try {
       const r = await fetch(`${this._url}/mp/tables/join`, {
@@ -10925,12 +11036,15 @@ const MP = {
           tableId:     this._pendingJoinId,
           username:    G.username,
           displayName: _pendingLogin?.name || G.username,
-          balance: buyIn,
+          stake,
+          balance:      buyIn,
+          totalBalance: bal,
         }),
       });
       const d = await r.json();
       if (!d.ok) { errEl.textContent = d.error||'Could not join'; return; }
       _pendingLogin.balance = buyIn;
+      this._myStake = stake;
       this._enterGame(this._pendingJoinId, d.table);
     } catch(e) {
       errEl.textContent = 'Network error';
@@ -11015,7 +11129,7 @@ const MP = {
 
     // top bar
     const tnEl = document.getElementById('mp-go-tablename');
-    if (tnEl) tnEl.textContent = `${t.name}  ·  ${this._stakeLabel(t.stake)}`;
+    if (tnEl) tnEl.textContent = `${t.name}  ·  ${this._categoryLabel(t.category)}`;
     const phEl = document.getElementById('mp-go-phase');
     if (phEl) phEl.textContent = this._phaseLabel(t.phase).toUpperCase();
 
@@ -11087,9 +11201,16 @@ const MP = {
       const hostBadge = p.isHost
         ? '<span style="font-size:8px;letter-spacing:2px;color:var(--gold-lo);margin-left:6px;">HOST</span>' : '';
 
+      const stakeTag = p.stake
+        ? `<span style="font-size:8px;letter-spacing:1px;color:var(--muted);margin-left:4px;">${this._stakeLabel(p.stake)}</span>` : '';
+
+      const midRoundTag = p.joinedMidRound
+        ? `<div style="font-size:9px;color:var(--muted);margin-top:2px;letter-spacing:1px;">Joining next round</div>` : '';
+
       return `<div class="${classes}">
-        <div class="mp-slot-name">${p.displayName}${hostBadge}${isMe?'<span style="font-size:8px;color:var(--muted);margin-left:4px;">(you)</span>':''}</div>
+        <div class="mp-slot-name">${p.displayName}${hostBadge}${stakeTag}${isMe?'<span style="font-size:8px;color:var(--muted);margin-left:4px;">(you)</span>':''}</div>
         <div class="mp-slot-bal">${this._fmt(p.balance)} KFC</div>
+        ${midRoundTag}
         ${betHtml}
         <div class="mp-slot-cards">${this._handHtml(p.hand)}</div>
         ${p.hand?.length ? `<div class="mp-slot-val">${this._hv(p.hand)}</div>` : ''}
@@ -11105,12 +11226,14 @@ const MP = {
     const me = this._myPlayer;
     if (!me) { bar.innerHTML=''; return; }
 
-    // WAITING phase — host sees "Start Game" button
+    // WAITING phase
     if (t.phase==='waiting') {
       if (me.isHost) {
+        const hasOthers = t.players.length > 1;
         bar.innerHTML=`
-          <span class="mp-wait-msg">Waiting for players…</span>
-          <button class="mp-btn gold" onclick="MP._action('start')">START GAME</button>`;
+          <span class="mp-wait-msg">${hasOthers ? 'Players joined — ready to start.' : 'Waiting for players to join…'}</span>
+          ${hasOthers ? `<button class="mp-btn gold" onclick="MP._action('start')">START GAME</button>` : ''}
+          <button class="mp-btn ghost" onclick="MP._action('start')" style="margin-left:${hasOthers?'8px':'0'}">PLAY SOLO</button>`;
       } else {
         bar.innerHTML='<span class="mp-wait-msg">Waiting for host to start…</span>';
       }
@@ -11120,15 +11243,14 @@ const MP = {
     // BETTING phase
     if (t.phase==='betting') {
       if (me.status==='betting') {
-        const stakeMin={low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000}[t.stake]||5;
-        const deadline = t.bettingDeadline;
+        const stakeMin = this._STAKE_MINS[me.stake] || 5;
         bar.innerHTML=`
           <div class="mp-bet-row">
             <input class="mp-bet-inp" id="mp-live-bet" type="text" inputmode="numeric"
               placeholder="${this._fmt(stakeMin)}" oninput="MP._fmtBuyIn(this)">
             <button class="mp-btn gold" onclick="MP._placeBet()">PLACE BET</button>
           </div>
-          <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC</div>`;
+          <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC &nbsp;·&nbsp; ${this._stakeLabel(me.stake||'')}</div>`;
       } else if (me.status==='bet_placed') {
         bar.innerHTML='<span class="mp-wait-msg" style="color:var(--green)">✓ Bet placed — waiting for others…</span>';
       } else {

@@ -11090,6 +11090,15 @@ const MP = {
       if (d.ok && d.table) {
         this.state = d.table;
         this._render();
+      } else if (r.status === 410 || d.error === 'Table closed' || d.error === 'Table not found') {
+        // Table was deleted or expired — bounce back to lobby
+        notif('Table closed — returning to lobby');
+        this._stopPolling();
+        this._stopTimerTick();
+        this.tableId = null;
+        this.state   = null;
+        document.getElementById('mp-game-overlay').style.display = 'none';
+        this._openLobby();
       }
     } catch(e) { /* network hiccup — keep going */ }
   },
@@ -11128,35 +11137,43 @@ const MP = {
     if (!t) return;
 
     // top bar
-    const tnEl = document.getElementById('mp-go-tablename');
-    if (tnEl) tnEl.textContent = `${t.name}  ·  ${this._categoryLabel(t.category)}`;
-    const phEl = document.getElementById('mp-go-phase');
-    if (phEl) phEl.textContent = this._phaseLabel(t.phase).toUpperCase();
+    try {
+      const tnEl = document.getElementById('mp-go-tablename');
+      if (tnEl) tnEl.textContent = `${t.name}  ·  ${this._categoryLabel(t.category)}`;
+      const phEl = document.getElementById('mp-go-phase');
+      if (phEl) phEl.textContent = this._phaseLabel(t.phase).toUpperCase();
+    } catch(e) {}
 
     // dealer
-    const dcEl = document.getElementById('mp-dealer-cards');
-    const dvEl = document.getElementById('mp-dealer-val');
-    if (dcEl) dcEl.innerHTML = t.dealerHand?.length
-      ? t.dealerHand.map(c=>this._card(c)).join('')
-      : '<span style="color:var(--muted);font-size:11px;">—</span>';
-    if (dvEl) {
-      const vis = t.dealerHand?.filter(c=>c!=='??') || [];
-      dvEl.textContent = vis.length ? `${this._hv(vis)}${t.dealerHidden?' (+??)':''}` : '';
+    try {
+      const dcEl = document.getElementById('mp-dealer-cards');
+      const dvEl = document.getElementById('mp-dealer-val');
+      if (dcEl) dcEl.innerHTML = t.dealerHand?.length
+        ? t.dealerHand.map(c=>this._card(c)).join('')
+        : '<span style="color:var(--muted);font-size:11px;">—</span>';
+      if (dvEl) {
+        const vis = t.dealerHand?.filter(c=>c!=='??') || [];
+        dvEl.textContent = vis.length ? `${this._hv(vis)}${t.dealerHidden?' (+??)':''}` : '';
+      }
+    } catch(e) {}
+
+    // players — isolated so any error here doesn't block the action bar
+    try { this._renderPlayers(t); } catch(e) {
+      const row = document.getElementById('mp-players-row');
+      if (row) row.innerHTML = '<span style="color:var(--red);font-size:10px;">Render error — please refresh</span>';
     }
 
-    // players
-    this._renderPlayers(t);
-
-    // action bar
-    this._renderActions(t);
+    // action bar — always runs
+    try { this._renderActions(t); } catch(e) {}
   },
 
   _renderPlayers(t) {
     const row = document.getElementById('mp-players-row');
     if (!row) return;
     const myTurnIdx = t.phase==='playing' ? t.currentTurnIdx : -1;
+    const players = t.players ?? [];
 
-    row.innerHTML = t.players.map((p, i) => {
+    row.innerHTML = players.map((p, i) => {
       const isMe      = p.username === this._me;
       const isMyTurn  = i === myTurnIdx;
       const classes   = ['mp-player-slot',
@@ -11224,7 +11241,10 @@ const MP = {
     const bar = document.getElementById('mp-action-bar');
     if (!bar) return;
     const me = this._myPlayer;
-    if (!me) { bar.innerHTML=''; return; }
+    if (!me) {
+      bar.innerHTML='<span class="mp-wait-msg" style="color:var(--red);">Not seated — <button class="mp-btn ghost" style="padding:4px 10px;font-size:9px;" onclick="MP.leaveTable()">LEAVE</button></span>';
+      return;
+    }
 
     // WAITING phase
     if (t.phase==='waiting') {

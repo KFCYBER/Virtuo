@@ -2049,6 +2049,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-outcome-btn.pm-yes .pm-pct { color: var(--green); }
 .pm-outcome-btn.pm-no  .pm-pct { color: var(--red); }
 .pm-outcome-btn.pm-user-bet { border-color: var(--gold-lo); }
+.pm-outcome-btn.pm-self-bet { opacity: 0.35; cursor: not-allowed; }
+.pm-self-note { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 5px; }
 .pm-game-prob { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 5px; }
 .pm-my-bet { font-family: var(--mono); font-size: 8px; color: var(--muted2); text-align: right; margin-top: 4px; }
 .pm-settled-result { font-family: var(--mono); font-size: 9px; letter-spacing: 1px; margin-top: 5px; text-align: center; }
@@ -9154,7 +9156,9 @@ const PM = (() => {
     const myBets = _loadBets().filter(b => b.mktId === mkt.id);
     const isOpen = mkt.status === 'open';
     const outcomes = mkt.outcomes || Object.keys(mkt.pools);
-    const cols = Math.min(outcomes.length, 3);
+    const cols = outcomes.length <= 3 ? outcomes.length : 2;
+    const typeLabel = mkt.type === 'race' ? 'RACE' : mkt.type.toUpperCase();
+    const me = (G.username||G.player||'').toLowerCase();
 
     const myBetHTML = myBets.length
       ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtKFC(b.amount)).join(' / ')}</div>`
@@ -9179,22 +9183,21 @@ const PM = (() => {
       const deltaHTML = delta !== 0
         ? `<div class="pm-odds-delta ${delta>0?'up':'down'}">${delta>0?'▲+':'▼'}${delta}%</div>`
         : '';
-      // Snapshot AFTER computing delta so next render shows change vs this render
       _prevOdds[key] = pct;
+      const isSelf = isOpen && me && o.toLowerCase() === me;
       const myO = myBets.filter(b=>b.outcome===o).reduce((a,b)=>a+b.amount,0);
       const sel  = myO > 0 ? ' pm-user-bet' : '';
       const esc  = o.replace(/'/g,"\\'");
-      const click = isOpen ? `onclick="PM.openBetModal('${mkt.id}','${esc}')"` : '';
-      return `<button class="pm-outcome-btn pm-race-opt${sel}" ${click} ${isOpen?'':'disabled'}>
-        <div class="pm-lbl" style="word-break:break-word;white-space:normal;line-height:1.2">${o}</div>
+      const click = (isOpen && !isSelf) ? `onclick="PM.openBetModal('${mkt.id}','${esc}')"` : '';
+      return `<button class="pm-outcome-btn pm-race-opt${sel}${isSelf?' pm-self-bet':''}" ${click} ${(isOpen && !isSelf)?'':'disabled'}>
+        <div class="pm-lbl" style="word-break:break-word;white-space:normal;line-height:1.2">${isSelf?o+' (you)':o}</div>
         <div class="pm-pct" style="color:var(--gold-lo)">${pct}%</div>
         ${deltaHTML}
-        <div class="pm-pool">${fmtKFC(mkt.pools[o]||0)}</div>
       </button>`;
     }).join('');
 
     return `<div class="pm-market">
-      <div class="pm-market-label${isOpen?'':' settled'}">RACE${isOpen?'':' — SETTLED'}</div>
+      <div class="pm-market-label${isOpen?'':' settled'}">${typeLabel}${isOpen?'':' — SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
       <div class="pm-race-grid" style="grid-template-columns:repeat(${cols},1fr)">${outHTML}</div>
       ${myBetHTML}${settledHTML}
@@ -9252,12 +9255,18 @@ const PM = (() => {
   }
 
   function _renderMkt(mkt){
-    if(mkt.type === 'race') return _renderRaceMkt(mkt);
+    if(mkt.type === 'race' || (mkt.outcomes && mkt.outcomes.length)) return _renderRaceMkt(mkt);
     const myBets = _loadBets().filter(b => b.mktId === mkt.id);
     const myY = myBets.filter(b => b.outcome==='YES').reduce((a,b)=>a+b.amount,0);
     const myN = myBets.filter(b => b.outcome==='NO').reduce((a,b)=>a+b.amount,0);
     const yPct = _pct(mkt,'YES'), nPct = 100 - yPct;
     const isOpen = mkt.status === 'open';
+
+    // Self-bet guard for milestone markets
+    const me = (G.username||G.player||'').toLowerCase();
+    const isSelfMarket = me && mkt.type==='season' &&
+      mkt.condition && mkt.condition.params && mkt.condition.params.player &&
+      mkt.condition.params.player.toLowerCase() === me;
 
     let gameOddsHTML = '';
     if(mkt.type==='shoe' && mkt.condition && isOpen){
@@ -9288,24 +9297,23 @@ const PM = (() => {
 
     const lbl    = mkt.type==='season' ? 'SEASON' : 'SHOE';
     const lblCls = isOpen ? '' : 'settled';
-    const dis    = isOpen ? '' : 'disabled';
-    const yClick = isOpen ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
-    const nClick = isOpen ? `onclick="PM.openBetModal('${mkt.id}','NO')"` : '';
+    const dis    = (isOpen && !isSelfMarket) ? '' : 'disabled';
+    const yClick = (isOpen && !isSelfMarket) ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
+    const nClick = (isOpen && !isSelfMarket) ? `onclick="PM.openBetModal('${mkt.id}','NO')"` : '';
+    const selfNote = isSelfMarket ? `<div class="pm-self-note">You can't bet on yourself</div>` : '';
 
     return `<div class="pm-market">
       <div class="pm-market-label ${lblCls}">${isOpen?lbl:'SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
-      ${gameOddsHTML}
+      ${gameOddsHTML}${selfNote}
       <div class="pm-odds-row">
-        <button class="pm-outcome-btn pm-yes${myY>0?' pm-user-bet':''}" ${yClick} ${dis}>
+        <button class="pm-outcome-btn pm-yes${myY>0?' pm-user-bet':''}${isSelfMarket?' pm-self-bet':''}" ${yClick} ${dis}>
           <div class="pm-lbl">YES</div>
           <div class="pm-pct">${yPct}%</div>
-          <div class="pm-pool">${fmtKFC(mkt.pools.YES)}</div>
         </button>
-        <button class="pm-outcome-btn pm-no${myN>0?' pm-user-bet':''}" ${nClick} ${dis}>
+        <button class="pm-outcome-btn pm-no${myN>0?' pm-user-bet':''}${isSelfMarket?' pm-self-bet':''}" ${nClick} ${dis}>
           <div class="pm-lbl">NO</div>
           <div class="pm-pct">${nPct}%</div>
-          <div class="pm-pool">${fmtKFC(mkt.pools.NO)}</div>
         </button>
       </div>
       ${myBetHTML}${settledHTML}
@@ -9318,8 +9326,20 @@ const PM = (() => {
   function openBetModal(mktId, defaultOutcome){
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); return; }
+    // Self-bet guard
+    const me = (G.username||G.player||'').toLowerCase();
+    if(me){
+      if(mkt.type==='race' && defaultOutcome && defaultOutcome.toLowerCase() === me){
+        notif("You can't bet on yourself"); return;
+      }
+      if(mkt.type==='season' && mkt.condition && mkt.condition.params && mkt.condition.params.player &&
+         mkt.condition.params.player.toLowerCase() === me){
+        notif("You can't bet on yourself"); return;
+      }
+    }
+    const isMulti = mkt.outcomes && mkt.outcomes.length;
     _betMktId = mktId;
-    _betOutcome = defaultOutcome || (mkt.type==='race' ? (mkt.outcomes||[])[0] : 'YES');
+    _betOutcome = defaultOutcome || (isMulti ? (mkt.outcomes||[])[0] : 'YES');
 
     const n      = document.getElementById('pm-bet-mkt-name');
     const t      = document.getElementById('pm-bet-mkt-type');
@@ -9333,7 +9353,7 @@ const PM = (() => {
     if(a) a.value = '';
 
     if(btnRow){
-      if(mkt.type==='race'){
+      if(isMulti){
         btnRow.innerHTML = (mkt.outcomes||Object.keys(mkt.pools)).map(o =>
           `<button class="pm-bet-out-btn" id="pm-bet-out-${_safeId(o)}" onclick="PM._selectBetOutcome('${o.replace(/'/g,"\\'")}')"> ${o}</button>`
         ).join('');
@@ -9353,7 +9373,7 @@ const PM = (() => {
     _betOutcome = o;
     document.querySelectorAll('.pm-bet-out-btn').forEach(b=>b.classList.remove('selected'));
     const mkt = _markets.find(m=>m.id===_betMktId);
-    if(mkt && mkt.type==='race'){
+    if(mkt && mkt.outcomes && mkt.outcomes.length){
       const btn = document.getElementById('pm-bet-out-'+_safeId(o));
       if(btn) btn.classList.add('selected');
     } else {
@@ -9485,9 +9505,50 @@ const PM = (() => {
     _saveMarkets();
   }
 
+  function _makeShoeMultiMarket(desc, bandsArr, condition){
+    const rem = G.deck ? G.deck.filter(c => !c.cutCard && !(c.bonus && c.bonus.jester)) : [];
+    const tot = rem.length;
+    let bustP = 0.30, handsEst = 52;
+    if(tot > 0){
+      const smalls = rem.filter(c => !c.bonus && ['2','3','4','5','6'].includes(c.r)).length;
+      bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      handsEst = Math.max(10, Math.floor(tot / 6));
+    }
+    const probs = bandsArr.map(band => {
+      let p = 0;
+      for(let k=band.min; k<=Math.min(band.max, handsEst); k++) p += _binom(handsEst, k, bustP);
+      return Math.max(0.02, p);
+    });
+    const probSum = probs.reduce((a,b)=>a+b, 0);
+    const seedTotal = _seed('shoe') * bandsArr.length;
+    const pools = {}, housePools = {};
+    bandsArr.forEach((band, i) => {
+      const s = Math.max(1, Math.round(seedTotal * probs[i] / probSum));
+      pools[band.label] = s; housePools[band.label] = s;
+    });
+    return {
+      id: PM_PFX+'shoe_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
+      type:'shoe', desc, status:'open',
+      pools, housePools,
+      outcomes: bandsArr.map(b => b.label),
+      result: null, condition,
+      createdAt: Date.now(), settledAt: null,
+      createdStakeIdx: _stkIdx(),
+    };
+  }
+
   function _createShoeMarkets(){
-    _markets.push(_makeMarket('shoe', 'Dealer busts 4+ times this shoe?',
-      {type:'dealer_bust_threshold', params:{target:4}}));
+    const bustBands = [
+      {label:'Under 17', min:0,  max:16},
+      {label:'17-20',    min:17, max:20},
+      {label:'21-24',    min:21, max:24},
+      {label:'25+',      min:25, max:9999},
+    ];
+    _markets.push(_makeShoeMultiMarket(
+      'How many times will the dealer bust this shoe?',
+      bustBands,
+      {type:'dealer_bust_count', params:{bands: bustBands}}
+    ));
     _markets.push(_makeMarket('shoe', 'Natural Blackjack in the next 8 hands?',
       {type:'natural_bj', params:{hands:8}}));
     _markets.push(_makeMarket('shoe', '2+ ties (push) in the next 8 hands?',
@@ -9539,7 +9600,15 @@ const PM = (() => {
 
   // ── Event hooks ────────────────────────────────────────────────────────────
   function onShoeNew(){
-    _markets.filter(m => m.type==='shoe' && m.status==='open').forEach(m => settle(m.id,'NO'));
+    _markets.filter(m => m.type==='shoe' && m.status==='open').forEach(m => {
+      if(m.condition && m.condition.type === 'dealer_bust_count'){
+        const bands = m.condition.params && m.condition.params.bands;
+        const winner = bands && bands.find(b => _pmShoeBusts >= b.min && _pmShoeBusts <= (b.max||9999));
+        settle(m.id, winner ? winner.label : (bands ? bands[bands.length-1].label : '25+'));
+      } else {
+        settle(m.id, 'NO');
+      }
+    });
     _pmShoeHands = 0; _pmShoeBusts = 0; _pmShoeBJCount = 0;
     _pmShoeConsec = 0; _pmShoeMaxConsec = 0;
     _pmShoePushes = 0; _pmShoeLastBJ = false;
@@ -9774,6 +9843,8 @@ const PM = (() => {
         (m.condition && m.condition.params && m.condition.params.date)
       )
     ));
+    // Replace old single-threshold dealer bust markets with the new banded market
+    _markets = _markets.filter(m => !(m.type==='shoe' && m.condition && m.condition.type==='dealer_bust_threshold'));
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){
@@ -9782,6 +9853,20 @@ const PM = (() => {
       // Backfill any new market types added after these markets were first created
       const _existTypes = new Set(_openShoe.map(m=>m.condition&&m.condition.type).filter(Boolean));
       let _backfilled = false;
+      if(!_existTypes.has('dealer_bust_count')){
+        const bustBands = [
+          {label:'Under 17', min:0,  max:16},
+          {label:'17-20',    min:17, max:20},
+          {label:'21-24',    min:21, max:24},
+          {label:'25+',      min:25, max:9999},
+        ];
+        _markets.push(_makeShoeMultiMarket(
+          'How many times will the dealer bust this shoe?',
+          bustBands,
+          {type:'dealer_bust_count', params:{bands: bustBands}}
+        ));
+        _backfilled=true;
+      }
       if(!_existTypes.has('push_streak'))       { _markets.push(_makeMarket('shoe','2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8}})); _backfilled=true; }
       if(!_existTypes.has('player_hot_streak')) { _markets.push(_makeMarket('shoe','Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
       if(!_existTypes.has('consec_bj'))         { _markets.push(_makeMarket('shoe','Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }

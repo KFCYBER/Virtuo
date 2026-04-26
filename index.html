@@ -7422,6 +7422,7 @@ function closeResult(){
     const _sw=_shoeLog.filter(e=>e.pl>0).length, _sb=_shoeLog.filter(e=>e.bj).length;
     notif('⭐ +'+_shoeEarned+' points ('+_shoeHandCount+'h · '+_sw+'w · '+_sb+'bj)');
     _shoeLog = []; _shoeHandCount = 0;
+    if(typeof PM !== 'undefined') PM.onShoeEnd();
     G.deck=buildShoe();
     G.puOwned.clear();
     G.puPending.clear();
@@ -7440,7 +7441,7 @@ function closeResult(){
     G.puPending.clear();
     G.levCards=[]; G._levCardsPending=[]; // Jester cards expire at end of shoe
     buildPuPanel();
-    if(typeof PM !== 'undefined') setTimeout(()=>PM.onShoeNew(), 0);
+    if(typeof PM !== 'undefined'){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(), 0); }
     notif('New shoe — power-ups and jester cards reset');
     setTimeout(()=>_earlyShoePreview(), 800);
   }
@@ -9025,8 +9026,8 @@ function resetHand2State(){
 const PM = (() => {
   // Seed = table minimum × multiplier. Scales automatically across all stake levels.
   // One typical bet (1× min) moves odds from 50% to ~55.6% — feels like a real market.
-  const SEED_MULT_SEASON = 20;  // season markets: needs more bets to move significantly
-  const SEED_MULT_SHOE   = 8;   // shoe markets: more reactive, shorter duration
+  const SEED_MULT_SEASON = 5;   // season markets: smaller seed = less house liquidity to farm
+  const SEED_MULT_SHOE   = 2;   // shoe markets: minimal seed, odds driven by real bets
   const PM_PFX = 'kfc_pm_';
 
   let _markets = [];
@@ -9643,7 +9644,9 @@ const PM = (() => {
     const curIdx = _stkIdx();
     const mult = curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
     const adjPay = amt + profit * mult;
-    pEl.textContent = 'Payout if win: '+fmtKFC(Math.round(adjPay))+' (+'+fmtKFC(Math.round(adjPay-amt))+')';
+    const adjProfit = Math.round(adjPay - amt);
+    const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
+    pEl.textContent = (adjProfit >= 0 ? '+' : '') + fmtKFC(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '% return)';
     if(sEl) sEl.textContent = mult > 1 ? 'Stake factor ×'+fmt(mult)+' on profit (early bet bonus)' : '';
   }
 
@@ -9845,10 +9848,8 @@ const PM = (() => {
   }
 
   // ── Event hooks ────────────────────────────────────────────────────────────
-  function onShoeNew(){
-    // Save current balances as "previous shoe" for next shoe's market calibration
+  function onShoeEnd(){
     if(Object.keys(_currBalances).length){ _prevBalances = {..._currBalances}; _savePrevBal(_prevBalances); }
-
     _markets.filter(m => m.type==='shoe' && m.status==='open').forEach(m => {
       if(m.condition && m.condition.type === 'dealer_bust_range'){
         const {min, max} = m.condition.params;
@@ -9860,6 +9861,9 @@ const PM = (() => {
     _pmShoeHands = 0; _pmShoeBusts = 0; _pmShoeBJCount = 0;
     _pmShoeConsec = 0; _pmShoeMaxConsec = 0;
     _pmShoePushes = 0; _pmShoeLastBJ = false;
+  }
+
+  function onShoeNew(){
     _createShoeMarkets();
     render();
   }
@@ -10045,9 +10049,11 @@ const PM = (() => {
         // Live P&L + cashout for open race/season positions
         let cashoutHTML = '';
         if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
-          const totalPool  = Object.values(mkt.pools).reduce((a,v)=>a+v, 0);
-          const outPool    = mkt.pools[b.outcome] || 0;
-          const impliedVal = outPool > 0 ? Math.round((b.amount / outPool) * totalPool) : b.amount;
+          const pYES = Math.max(0, (mkt.pools.YES || 0) - (mkt.housePools.YES || 0));
+          const pNO  = Math.max(0, (mkt.pools.NO  || 0) - (mkt.housePools.NO  || 0));
+          const pOut = b.outcome === 'YES' ? pYES : pNO;
+          const pTot = pYES + pNO;
+          const impliedVal = pOut > 0 ? Math.round((b.amount / pOut) * pTot) : b.amount;
           const pl         = impliedVal - b.amount;
           const plCls      = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
           cashoutHTML = `<div class="pm-port-cashout">
@@ -10096,10 +10102,23 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
-    const totalPool = Object.values(mkt.pools).reduce((a,v)=>a+v, 0);
-    const outPool   = mkt.pools[outcome] || 0;
-    if(outPool <= 0){ notif('Cannot cash out'); return; }
-    const payout = Math.round((bet.amount / outPool) * totalPool);
+    const playerYES = Math.max(0, (mkt.pools.YES || 0) - (mkt.housePools.YES || 0));
+    const playerNO  = Math.max(0, (mkt.pools.NO  || 0) - (mkt.housePools.NO  || 0));
+    const playerOut = outcome === 'YES' ? playerYES : playerNO;
+    const playerTotal = playerYES + playerNO;
+    if(playerOut <= 0){
+      bet.payout = bet.amount;
+      mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
+      G.balance += bet.amount;
+      updateUI();
+      _saveBets(bets);
+      _saveMarkets();
+      notif('Cashed out at cost — no opposing bets yet');
+      _renderPortfolio();
+      render();
+      return;
+    }
+    const payout = Math.round((bet.amount / playerOut) * playerTotal);
     bet.payout   = payout;
     // Remove stake from pool (floor at house pool to keep liquidity)
     mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
@@ -10292,7 +10311,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
 })();
 
 </script>

@@ -2102,6 +2102,9 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-port-total { font-family: var(--mono); font-size: 10px; text-align: right; padding: 8px 10px; border-top: 1px solid var(--line2); }
 .pm-port-total .pos { color: var(--green); }
 .pm-port-total .neg { color: var(--red); }
+.pm-port-cashout { display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); gap:8px; }
+.pm-cashout-btn { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:var(--gold-lo); background:rgba(201,168,76,.08); border:1px solid rgba(201,168,76,.3); border-radius:2px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
+.pm-cashout-btn:hover { background:rgba(201,168,76,.18); color:var(--gold-hi); }
 .pm-odds-delta { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
 .pm-odds-delta.up   { color: var(--green); }
 .pm-odds-delta.down { color: var(--red); }
@@ -2878,6 +2881,17 @@ const POWERUPS = [
 ];
 
 const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
+
+// Peak balance per stake — used for downgrade guard (loaded once, persisted to LS)
+let _stakePeaks = (function(){ try{ return JSON.parse(localStorage.getItem('kfc_stake_peaks')||'{}'); }catch(e){ return {}; } })();
+function _saveStakePeaks(){ try{ localStorage.setItem('kfc_stake_peaks', JSON.stringify(_stakePeaks)); }catch(e){} }
+function _updateStakePeak(){
+  if(!G.stake || !(G.balance > 0)) return;
+  if(!_stakePeaks[G.stake] || G.balance > _stakePeaks[G.stake]){
+    _stakePeaks[G.stake] = G.balance;
+    _saveStakePeaks();
+  }
+}
 
 // Season 6 Bonus Cards
 // ── SEASON 3 BONUS CARDS ──────────────────────────────────────
@@ -5233,6 +5247,7 @@ function updateUI(){
     balEl.textContent=fmtKFC(cur);
   }
   G._prevBalance=cur;
+  _updateStakePeak();
   // Subtract 1 for the cut card which is still in the deck
   const rawLen=G.deck?G.deck.length:0;
   const hasCut=G.deck&&G.deck.some(c=>c.cutCard);
@@ -7535,8 +7550,21 @@ function buildStakeList(){
     el.className='stake-item'+(key===G.stake?' cur':'');
     el.innerHTML=`<div><div class="stake-name">${s.label}</div><div class="stake-info">Min ${fmtKFC(s.min)}</div></div><div class="stake-info">Max ${fmtKFC(s.max)}</div>`;
     const canAffordSt=G.balance>=s.min;
-    if(canAffordSt){
+    const curIdx=STAKE_ORDER.indexOf(G.stake||'low');
+    const thisIdx=STAKE_ORDER.indexOf(key);
+    const isDowngrade=thisIdx<curIdx;
+    const tooManySteps=isDowngrade&&(curIdx-thisIdx>1);
+    const peak=_stakePeaks[G.stake]||G.balance;
+    const belowHalfPeak=G.balance<=peak*0.5;
+    const downgradeBlocked=isDowngrade&&(!belowHalfPeak||tooManySteps);
+    if(canAffordSt && !downgradeBlocked){
       el.onclick=()=>{selectStake(key);};
+    } else if(tooManySteps){
+      el.style.opacity='0.35'; el.style.cursor='not-allowed';
+      el.title='Can only drop one stake level at a time';
+    } else if(isDowngrade && !belowHalfPeak){
+      el.style.opacity='0.35'; el.style.cursor='not-allowed';
+      el.title='Must drop below '+fmtKFC(Math.ceil(peak*0.5))+' (50% of your '+fmtKFC(peak)+' '+G.s.label+' peak)';
     } else {
       el.style.opacity='0.4'; el.style.cursor='not-allowed';
       el.title='Need '+fmt(s.min)+' KFC';
@@ -7548,6 +7576,23 @@ function buildStakeList(){
 function selectStake(key){
   if(G.phase!=='bet'){notif('Finish the current hand first');return;}
   const s=STAKES[key];
+  const curIdx = STAKE_ORDER.indexOf(G.stake||'low');
+  const newIdx = STAKE_ORDER.indexOf(key);
+
+  if(newIdx < curIdx){
+    // Only one step down at a time
+    if(curIdx - newIdx > 1){
+      notif('Can only drop one stake level at a time');
+      return;
+    }
+    // Must have lost >50% of peak balance at current stake
+    const peak = _stakePeaks[G.stake] || G.balance;
+    if(G.balance > peak * 0.5){
+      notif('Need to drop below '+fmtKFC(Math.ceil(peak*0.5))+' to leave '+G.s.label+' (50% of your '+fmtKFC(peak)+' peak)');
+      return;
+    }
+  }
+
   if(!confirm('Switch to '+s.label+' Stakes?\nMin bet: '+fmt(s.min)+' KFC\nAll power-ups will reset.')) return;
   G.stake=key; G.s=STAKES[key];
   G.puOwned.clear(); G.levCards=[]; G._levCardsPending=[];
@@ -9004,6 +9049,12 @@ const PM = (() => {
   function _loadSeasonHist(){ try{ return JSON.parse(localStorage.getItem(LS_SEASON_HIST)||'{}'); }catch(e){ return {}; } }
   function _saveSeasonHistLS(s){ try{ localStorage.setItem(LS_SEASON_HIST, JSON.stringify(s)); }catch(e){} }
 
+  // Season dates: creator-set start/end for time-remaining factor
+  let _seasonDates = {};
+  const LS_SEASON_DATES = 'kfc_pm_season_dates';
+  function _loadSeasonDates(){ try{ return JSON.parse(localStorage.getItem(LS_SEASON_DATES)||'{}'); }catch(e){ return {}; } }
+  function _saveSeasonDatesLS(s){ try{ localStorage.setItem(LS_SEASON_DATES, JSON.stringify(s)); }catch(e){} }
+
   // Per-shoe tracking
   let _pmShoeHands = 0;
   let _pmShoeBusts = 0;
@@ -9059,6 +9110,20 @@ const PM = (() => {
     return _sessionFactor(pName, currentBal);
   }
 
+  // Fraction of season remaining → suppresses YES odds as deadline approaches
+  // Returns 1.0 at season start, ~0.20 floor at season end
+  function _timeFactor(){
+    if(!_seasonDates.start || !_seasonDates.end) return 1.0;
+    const now   = Date.now();
+    const start = new Date(_seasonDates.start).getTime();
+    const end   = new Date(_seasonDates.end).getTime();
+    const total = end - start;
+    if(total <= 0) return 1.0;
+    const remaining = Math.max(0, end - now);
+    const frac = remaining / total;            // 1.0 at start → 0 at end
+    return Math.max(0.20, Math.min(1.0, Math.sqrt(frac)));
+  }
+
   // Parse "5M", "500K", "2B", or plain number string → integer
   function _parseKFC(s){
     if(!s) return 0;
@@ -9074,7 +9139,7 @@ const PM = (() => {
     const total = s * 2;
     const yesPool = yesBias != null ? Math.round(total * yesBias) : s;
     const noPool  = total - yesPool;
-    return {
+    const mkt = {
       id: PM_PFX + type + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,5),
       type, desc,
       status: 'open',
@@ -9084,6 +9149,27 @@ const PM = (() => {
       createdAt: Date.now(), settledAt: null,
       createdStakeIdx: _stkIdx(),
     };
+    _syncMarketToGAS(mkt);
+    return mkt;
+  }
+
+  function _syncMarketToGAS(mkt){
+    if(!G.url || !G.username) return;
+    const p = new URLSearchParams({
+      action: 'pmCreateMarket',
+      id: mkt.id, type: mkt.type, desc: mkt.desc,
+      poolYes: mkt.pools.YES, poolNo: mkt.pools.NO,
+      conditionJson: JSON.stringify(mkt.condition||null),
+      createdAt: mkt.createdAt, createdStakeIdx: mkt.createdStakeIdx,
+    });
+    fetch(G.url + '?' + p.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
+  }
+
+  // Whole-shoe markets (bust range, hot streak, consec BJ) lock once the shoe has started
+  function _isShoeWholeLock(mkt){
+    if(mkt.type !== 'shoe' || mkt.status !== 'open') return false;
+    const t = mkt.condition && mkt.condition.type;
+    return ['dealer_bust_range','player_hot_streak','consec_bj'].includes(t) && _pmShoeHands > 0;
   }
 
   function _pct(mkt, outcome){
@@ -9451,15 +9537,18 @@ const PM = (() => {
 
     const lbl    = mkt.type==='season' ? 'SEASON' : mkt.type==='race' ? 'RACE' : 'SHOE';
     const lblCls = isOpen ? '' : 'settled';
-    const dis    = (isOpen && !isSelfMarket) ? '' : 'disabled';
-    const yClick = (isOpen && !isSelfMarket) ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
-    const nClick = (isOpen && !isSelfMarket) ? `onclick="PM.openBetModal('${mkt.id}','NO')"` : '';
+    const wholeLocked = _isShoeWholeLock(mkt);
+    const canBet = isOpen && !isSelfMarket && !wholeLocked;
+    const dis    = canBet ? '' : 'disabled';
+    const yClick = canBet ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
+    const nClick = canBet ? `onclick="PM.openBetModal('${mkt.id}','NO')"` : '';
     const selfNote = isSelfMarket ? `<div class="pm-self-note">You can't bet on yourself</div>` : '';
+    const lockNote = wholeLocked ? `<div class="pm-self-note">Betting locked — shoe already in progress</div>` : '';
 
     return `<div class="pm-market">
       <div class="pm-market-label ${lblCls}">${isOpen?lbl:'SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
-      ${gameOddsHTML}${selfNote}
+      ${gameOddsHTML}${selfNote}${lockNote}
       <div class="pm-odds-row">
         <button class="pm-outcome-btn pm-yes${myY>0?' pm-user-bet':''}${isSelfMarket?' pm-self-bet':''}" ${yClick} ${dis}>
           <div class="pm-lbl">YES</div>
@@ -9480,6 +9569,7 @@ const PM = (() => {
   function openBetModal(mktId, defaultOutcome){
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); return; }
+    if(_isShoeWholeLock(mkt)){ notif('Betting locked — shoe already in progress'); return; }
     // Self-bet guard
     const me = (G.username||G.player||'').toLowerCase();
     if(me){
@@ -9573,7 +9663,7 @@ const PM = (() => {
     mkt.pools[_betOutcome] += amount;
 
     const bets = _loadBets();
-    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null });
+    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, mktDesc: mkt.desc, mktType: mkt.type });
     _saveBets(bets);
     _saveMarkets();
 
@@ -9644,10 +9734,10 @@ const PM = (() => {
           m.condition.params.date===today
         );
         if(alreadyExists) return;
-        // Base bias from proximity to target; season/session factor boosts hot players, lowers cold ones
+        // Base bias from proximity × season history factor × time remaining
         const ratio = Math.min(balance / amount, 0.99);
         const baseBias = 0.15 + 0.70 * ratio;
-        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance)));
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance) * _timeFactor()));
         _markets.push(_makeMarket('season',
           'Will '+pName+' reach '+fmtKFC(amount)+' this season?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
@@ -9740,10 +9830,10 @@ const PM = (() => {
           m.condition.params.player===pName
         );
         if(alreadyOpen) return;
-        // YES bias = balance share among competitors × season/session momentum factor
+        // YES bias = balance share × season history factor × time remaining
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
         const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
-        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0)));
+        const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0) * _timeFactor()));
         _markets.push(_makeMarket('race',
           'Will '+pName+' be first to reach '+fmtKFC(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
@@ -9947,18 +10037,33 @@ const PM = (() => {
     if(open.length){
       html += '<div class="pm-section-title">Open Positions</div>';
       html += open.map(b => {
-        const mkt  = _markets.find(m=>m.id===b.mktId);
-        const name = mkt ? mkt.desc : '(market not found)';
+        const mkt  = _markets.find(m => m.id === b.mktId);
+        const name = mkt ? mkt.desc : (b.mktDesc || '(market removed)');
         const pct  = mkt ? _pct(mkt, b.outcome) : 0;
-        const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE') : '';
+        const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE')
+                        : (b.mktType ? b.mktType.toUpperCase() : '');
+        // Live P&L + cashout for open race/season positions
+        let cashoutHTML = '';
+        if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
+          const totalPool  = Object.values(mkt.pools).reduce((a,v)=>a+v, 0);
+          const outPool    = mkt.pools[b.outcome] || 0;
+          const impliedVal = outPool > 0 ? Math.round((b.amount / outPool) * totalPool) : b.amount;
+          const pl         = impliedVal - b.amount;
+          const plCls      = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
+          cashoutHTML = `<div class="pm-port-cashout">
+            <span class="pm-port-pl ${plCls}">Now: ${fmtKFC(impliedVal)} (${pl>=0?'+':''}${fmtKFC(pl)})</span>
+            <button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${b.outcome}',${b.ts})">Cash Out</button>
+          </div>`;
+        }
         return `<div class="pm-portfolio-row">
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
             <span class="pm-port-amt">Staked ${fmtKFC(b.amount)}</span>
-            <span class="pm-port-odds">${pct}% implied</span>
-            ${tag?`<span class="pm-port-type">${tag}</span>`:''}
+            ${pct ? `<span class="pm-port-odds">${pct}% implied</span>` : ''}
+            ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
           </div>
+          ${cashoutHTML}
         </div>`;
       }).join('');
     }
@@ -9967,8 +10072,8 @@ const PM = (() => {
       closed.forEach(b=>{ totalPL += (b.payout||0) - b.amount; });
       html += `<div class="pm-section-title" style="margin-top:${open.length?14:0}px">History</div>`;
       html += closed.map(b => {
-        const mkt  = _markets.find(m=>m.id===b.mktId);
-        const name = mkt ? mkt.desc : '(settled market)';
+        const mkt  = _markets.find(m => m.id === b.mktId);
+        const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
         const pl   = (b.payout||0) - b.amount;
         return `<div class="pm-portfolio-row">
           <div class="pm-port-name">${name}</div>
@@ -9984,44 +10089,103 @@ const PM = (() => {
     el.innerHTML = html;
   }
 
+  function _cashOutBet(mktId, outcome, ts){
+    const bets = _loadBets();
+    const bet  = bets.find(b => b.mktId === mktId && b.outcome === outcome && b.ts === ts && b.payout === null);
+    if(!bet){ notif('Position not found'); return; }
+    const mkt = _markets.find(m => m.id === mktId);
+    if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
+    if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
+    const totalPool = Object.values(mkt.pools).reduce((a,v)=>a+v, 0);
+    const outPool   = mkt.pools[outcome] || 0;
+    if(outPool <= 0){ notif('Cannot cash out'); return; }
+    const payout = Math.round((bet.amount / outPool) * totalPool);
+    bet.payout   = payout;
+    // Remove stake from pool (floor at house pool to keep liquidity)
+    mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
+    G.balance += payout;
+    updateUI();
+    _saveBets(bets);
+    _saveMarkets();
+    const pl = payout - bet.amount;
+    notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtKFC(pl));
+    _renderPortfolio();
+    render();
+  }
+
   // ── Modal open/close ───────────────────────────────────────────────────────
   // ── Season History panel (creator-only) ────────────────────────────────────
   function _renderSeasonHistPanel(){
     const panel = document.getElementById('pm-pane-history');
     if(!panel || panel.style.display === 'none') return;
     if(!_isCreator()){ panel.innerHTML = '<div class="pm-empty">Access restricted</div>'; return; }
+
+    // Time factor status
+    const tf = _timeFactor();
+    const hasDates = _seasonDates.start && _seasonDates.end;
+    let timeStatus = '';
+    if(hasDates){
+      const daysLeft = Math.max(0, Math.round((new Date(_seasonDates.end).getTime() - Date.now()) / 86400000));
+      const pct = Math.round(tf * 100);
+      const col = tf > 0.6 ? 'var(--green)' : tf > 0.35 ? 'var(--gold)' : 'var(--red)';
+      timeStatus = `<div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;margin-top:6px;color:${col}">${daysLeft} days left — odds at ${pct}% of full-season strength</div>`;
+    }
+
+    // Player history rows
     const players = Object.keys(_currBalances).sort();
     const hasHist = Object.keys(_seasonHist).length > 0;
-    let inputRows = '';
-    if(players.length){
-      inputRows = players.map(p => {
-        const histVal = _seasonHist[p] ? fmtKFC(_seasonHist[p]) : '';
-        return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-          <span style="font-family:var(--mono);font-size:10px;color:var(--white);min-width:90px;text-transform:capitalize">${p}</span>
-          <input type="text" class="pm-hist-input" data-player="${p}"
-            placeholder="e.g. 5M" inputmode="text" value="${histVal}"
-            style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--white);outline:none">
-        </div>`;
-      }).join('');
-    } else {
-      inputRows = '<div class="pm-empty" style="margin-bottom:12px">No players loaded yet — start a game first</div>';
-    }
+    let inputRows = players.length
+      ? players.map(p => {
+          const histVal = _seasonHist[p] ? fmtKFC(_seasonHist[p]) : '';
+          return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+            <span style="font-family:var(--mono);font-size:10px;color:var(--white);min-width:90px;text-transform:capitalize">${p}</span>
+            <input type="text" class="pm-hist-input" data-player="${p}"
+              placeholder="e.g. 5M" inputmode="text" value="${histVal}"
+              style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--white);outline:none">
+          </div>`;
+        }).join('')
+      : '<div class="pm-empty" style="margin-bottom:12px">No players loaded yet — start a game first</div>';
+
+    const inputStyle = 'flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--white);outline:none';
+
     panel.innerHTML = `
-      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;line-height:1.6;margin-bottom:14px">
+      <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:2px;margin-bottom:8px">SEASON DATES</div>
+      <div style="display:flex;gap:8px;margin-bottom:6px">
+        <div style="flex:1">
+          <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">START</div>
+          <input type="date" id="pm-season-start" value="${_seasonDates.start||''}" style="${inputStyle}">
+        </div>
+        <div style="flex:1">
+          <div style="font-family:var(--mono);font-size:8px;color:var(--muted);letter-spacing:1px;margin-bottom:4px">END</div>
+          <input type="date" id="pm-season-end" value="${_seasonDates.end||''}" style="${inputStyle}">
+        </div>
+      </div>
+      ${timeStatus}
+      <div style="height:1px;background:var(--line);margin:14px 0"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:2px;margin-bottom:8px">LAST SEASON RESULTS</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;line-height:1.6;margin-bottom:12px">
         Enter each player's final balance from last season.<br>
         Last season's winner gets tighter YES odds — others get a boost.
       </div>
       ${inputRows}
-      <div style="display:flex;gap:8px;margin-top:4px">
-        <button class="btn-ghost" style="flex:1;padding:8px;font-size:9px;letter-spacing:1px" onclick="PM._clearSeasonHist()">CLEAR ALL</button>
-        <button class="btn-primary" style="flex:2;padding:8px;font-size:10px" onclick="PM._saveSeasonHist()">SAVE</button>
+      <div style="display:flex;gap:8px;margin-top:8px">
+        <button class="btn-ghost" style="flex:1;padding:8px;font-size:9px;letter-spacing:1px" onclick="PM._clearSeasonHist()">CLEAR</button>
+        <button class="btn-primary" style="flex:2;padding:8px;font-size:10px" onclick="PM._saveSeasonHist()">SAVE ALL</button>
       </div>
-      ${hasHist ? '<div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px;margin-top:10px;text-align:center">Season history active — '+Object.keys(_seasonHist).length+' player'+(Object.keys(_seasonHist).length!==1?'s':'')+' calibrated</div>' : ''}
+      ${hasHist ? '<div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px;margin-top:10px;text-align:center">'+Object.keys(_seasonHist).length+' player'+(Object.keys(_seasonHist).length!==1?'s':'')+' calibrated</div>' : ''}
     `;
   }
 
   function _saveSeasonHist(){
     if(!_isCreator()){ notif('Access restricted'); return; }
+    // Save season dates
+    const startEl = document.getElementById('pm-season-start');
+    const endEl   = document.getElementById('pm-season-end');
+    if(startEl && endEl && startEl.value && endEl.value){
+      _seasonDates = { start: startEl.value, end: endEl.value };
+      _saveSeasonDatesLS(_seasonDates);
+    }
+    // Save player history
     const inputs = document.querySelectorAll('.pm-hist-input');
     const hist = {};
     inputs.forEach(inp => {
@@ -10032,7 +10196,7 @@ const PM = (() => {
     _seasonHist = hist;
     _saveSeasonHistLS(_seasonHist);
     const count = Object.keys(hist).length;
-    notif('Season history saved — ' + count + ' player' + (count !== 1 ? 's' : ''));
+    notif('Saved — season dates & ' + count + ' player' + (count !== 1 ? 's' : ''));
     _renderSeasonHistPanel();
   }
 
@@ -10070,6 +10234,7 @@ const PM = (() => {
   function init(){
     _prevBalances = _loadPrevBal();
     _seasonHist   = _loadSeasonHist();
+    _seasonDates  = _loadSeasonDates();
     _loadMarkets();
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
     // Milestone markets with double-KFC description (pre-fix)
@@ -10080,12 +10245,10 @@ const PM = (() => {
     _markets = _markets.filter(m => !(
       m.type==='race' && m.condition && m.condition.params && m.condition.params.date
     ));
-    // Remove all old bust-related shoe markets (dealer_bust_threshold, dealer_bust_count, dealer_bust_range)
-    // so they are replaced fresh with calibrated odds
+    // Remove legacy bust market formats (pre-dealer_bust_range era — one-time migration)
     _markets = _markets.filter(m => !(m.type==='shoe' && m.condition && (
       m.condition.type==='dealer_bust_threshold' ||
-      m.condition.type==='dealer_bust_count' ||
-      m.condition.type==='dealer_bust_range'
+      m.condition.type==='dealer_bust_count'
     )));
     // Remove uncalibrated 50/50 shoe YES/NO markets (housePools equal, no player bets)
     const _savedBets = _loadBets();
@@ -10129,7 +10292,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, onCardDrawn, onHandEnd, onStakeReached, onShoeNew, onLeaderboardUpdate };
 })();
 
 </script>

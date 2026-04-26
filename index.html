@@ -862,15 +862,24 @@ body.pass-player #felt-toggle-btn { display:flex; }
 /* ─────────────────────────────────────────────
    NOTIFICATION
 ───────────────────────────────────────────── */
-#notif {
-  position: fixed; top: 50%; left: var(--announce-cx, 50%); transform: translate(-50%, -50%) scale(0.9);
-  z-index: 800; background: rgba(14,15,18,0.95); border: 1px solid var(--line2);
-  padding: 14px 28px; font-family: var(--sans); font-size: 13px; font-weight: 600; letter-spacing: 1.5px;
-  color: var(--white); text-transform: uppercase; opacity: 0;
-  transition: opacity .25s, left .35s ease; pointer-events: none; white-space: nowrap;
-  max-width: calc(100vw - 40px); text-align: center;
+#notif-stack {
+  position: fixed; top: 50%; left: var(--announce-cx, 50%); transform: translateX(-50%);
+  z-index: 800; pointer-events: none;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  max-width: calc(100vw - 40px);
+  /* anchor stack so first item sits at the vertical centre */
+  margin-top: -12px;
 }
-#notif.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+.notif-item {
+  background: rgba(14,15,18,0.95); border: 1px solid var(--line2);
+  padding: 11px 24px; font-family: var(--sans); font-size: 13px; font-weight: 600;
+  letter-spacing: 1.5px; color: var(--white); text-transform: uppercase;
+  white-space: nowrap; text-align: center;
+  opacity: 0; transform: scale(0.88);
+  transition: opacity .22s, transform .22s;
+}
+.notif-item.show { opacity: 1; transform: scale(1); }
+.notif-item.hide { opacity: 0; transform: scale(0.88); }
 
 /* ─────────────────────────────────────────────
    SETTINGS MODAL
@@ -1154,15 +1163,15 @@ body.pass-player #felt-toggle-btn { display:flex; }
   .log-detail { max-width: calc(100vw - 60px); }
 
   /* ── NOTIF ── */
-  #notif {
+  #notif-stack {
     max-width: calc(100vw - 24px);
+    left: 50% !important;
+  }
+  .notif-item {
     font-size: 11px;
-    left: 12px !important;
-    right: 12px !important;
-    transform: none !important;
     white-space: normal;
-    text-align: center;
-    padding: 10px 14px;
+    padding: 9px 14px;
+    max-width: calc(100vw - 24px);
   }
 
   /* ── SPLASH ANIMATIONS ── */
@@ -2840,8 +2849,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
   <div class="bt-desc" id="bt-desc"></div>
 </div>
 
-<!-- NOTIF -->
-<div id="notif"></div>
+<!-- NOTIF STACK -->
+<div id="notif-stack"></div>
 
 <!-- ══════════════════════════════════════════════
    GAME ENGINE
@@ -3432,48 +3441,25 @@ function initAudio(){
 }
 function sfx(name){ if(!G._audioReady){try{initAudio();}catch(e){}} if(SFX[name]) SFX[name](); }
 
-// Welcome sound — S6 variant B: descend → sweep → muffled deep bell
+// Welcome sound — clean ascending chime (three bell tones)
 function playWelcomeSound(){
   try{
     if(!G._audioReady) initAudio();
     const ctx2=window._kfcCtx;
     if(!ctx2) return;
     ctx2.resume().then(()=>{
-      const t=ctx2.currentTime+0.02;
+      const t=ctx2.currentTime+0.05;
       function mfw(m){return 440*Math.pow(2,(m-69)/12);}
-
-      // Phase 1: descending tone (door opening)
-      const od=ctx2.createOscillator(); od.type='sine';
-      od.frequency.setValueAtTime(mfw(72),t); od.frequency.exponentialRampToValueAtTime(mfw(52),t+0.28);
-      const gd=ctx2.createGain(); gd.gain.setValueAtTime(0,t); gd.gain.linearRampToValueAtTime(0.10,t+0.04);
-      gd.gain.exponentialRampToValueAtTime(0.0001,t+0.30);
-      od.connect(gd); gd.connect(ctx2.destination); od.start(t); od.stop(t+0.32);
-
-      // Phase 2: rising sweep
-      const or2=ctx2.createOscillator(); or2.type='sine';
-      or2.frequency.setValueAtTime(mfw(52),t+0.25); or2.frequency.exponentialRampToValueAtTime(mfw(72),t+0.70);
-      const slpf=ctx2.createBiquadFilter(); slpf.type='lowpass';
-      slpf.frequency.setValueAtTime(mfw(52)*2,t+0.25); slpf.frequency.exponentialRampToValueAtTime(mfw(72)*3,t+0.70);
-      const gr=ctx2.createGain(); gr.gain.setValueAtTime(0,t+0.25); gr.gain.linearRampToValueAtTime(0.13,t+0.45);
-      gr.gain.exponentialRampToValueAtTime(0.0001,t+0.72);
-      or2.connect(slpf); slpf.connect(gr); gr.connect(ctx2.destination); or2.start(t+0.25); or2.stop(t+0.75);
-      // Noise shimmer on sweep
-      const sr=ctx2.sampleRate, buf=ctx2.createBuffer(1,Math.floor(sr*0.5),sr), d=buf.getChannelData(0);
-      for(let i=0;i<d.length;i++) d[i]=(Math.random()*2-1)*(1-i/d.length);
-      const ns=ctx2.createBufferSource(); ns.buffer=buf;
-      const nhpf=ctx2.createBiquadFilter(); nhpf.type='highpass'; nhpf.frequency.value=3000;
-      const ng=ctx2.createGain(); ng.gain.setValueAtTime(0,t+0.25); ng.gain.linearRampToValueAtTime(0.018,t+0.40);
-      ng.gain.exponentialRampToValueAtTime(0.0001,t+0.72);
-      ns.connect(nhpf); nhpf.connect(ng); ng.connect(ctx2.destination); ns.start(t+0.25);
-
-      // Phase 3: muffled deep bell (LPF 600Hz — variant B)
-      [[60,0.68,0.26],[67,0.78,0.18]].forEach(([midi,dt,vol])=>{
-        [[1,vol],[2,vol*0.28],[3,vol*0.10]].forEach(([h,v])=>{
+      // Three ascending bell tones: E5 → B5 → E6
+      [[76,0.00,0.18],[83,0.16,0.15],[88,0.30,0.20]].forEach(([midi,dt,vol])=>{
+        [[1,vol],[2,vol*0.30],[3,vol*0.10]].forEach(([h,v])=>{
           const o=ctx2.createOscillator(); o.type='sine'; o.frequency.value=mfw(midi)*h;
-          const lpf=ctx2.createBiquadFilter(); lpf.type='lowpass'; lpf.frequency.value=600; lpf.Q.value=0.5;
-          const g=ctx2.createGain(); g.gain.setValueAtTime(0,t+dt); g.gain.linearRampToValueAtTime(v,t+dt+0.015);
-          g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.95-(h-1)*0.12);
-          o.connect(lpf); lpf.connect(g); g.connect(ctx2.destination); o.start(t+dt); o.stop(t+dt+1.0);
+          const g=ctx2.createGain();
+          g.gain.setValueAtTime(0,t+dt);
+          g.gain.linearRampToValueAtTime(v,t+dt+0.008);
+          g.gain.exponentialRampToValueAtTime(0.0001,t+dt+0.75-(h-1)*0.18);
+          o.connect(g); g.connect(ctx2.destination);
+          o.start(t+dt); o.stop(t+dt+0.8);
         });
       });
     });
@@ -6911,11 +6897,12 @@ function settle(reason){
   showResult(totalPLForDisplay,detail,G.balance);
   // Prediction market: notify of hand result
   if(typeof PM !== 'undefined'){
-    const _dbForPM   = isBust(G.dealer);
-    const _bjForPM   = reason==='player_bj';
-    const _wonForPM  = mainPL > 0;
-    const _pushForPM = mainPL === 0;
-    setTimeout(()=>PM.onHandEnd(_dbForPM, _bjForPM, _wonForPM, _pushForPM), 0);
+    const _dbForPM    = isBust(G.dealer);
+    const _anyBJForPM = _handResults.some(hr => isBJ(G.hands[hr.hi])); // BJ on any hand
+    const _wonForPM   = mainPL > 0;                                     // net blackjack P&L
+    const _pushForPM  = _handResults.some(hr => hr.w === 0);            // any hand pushed
+    const _extraHands = Math.max(0, _handResults.length - 1);           // hands beyond first
+    setTimeout(()=>PM.onHandEnd(_dbForPM, _anyBJForPM, _wonForPM, _pushForPM, _extraHands), 0);
   }
 }
 
@@ -8041,12 +8028,23 @@ function toggleAutoSameBet(on){
   localStorage.setItem('kfc_autobet',on?'1':'0');
 }
 
-// ── NOTIF ──────────────────────────────────────────────
-let nTimer;
+// ── NOTIF STACK ────────────────────────────────────────
 function notif(txt){
-  const el=document.getElementById('notif');
-  el.textContent=txt; el.classList.add('show');
-  clearTimeout(nTimer); nTimer=setTimeout(()=>el.classList.remove('show'),2400);
+  const stack = document.getElementById('notif-stack');
+  if(!stack) return;
+  const el = document.createElement('div');
+  el.className = 'notif-item';
+  el.textContent = txt;
+  stack.appendChild(el);
+  // Force reflow then show
+  void el.offsetWidth;
+  el.classList.add('show');
+  // Auto-dismiss
+  setTimeout(()=>{
+    el.classList.remove('show');
+    el.classList.add('hide');
+    setTimeout(()=>{ if(el.parentNode) el.parentNode.removeChild(el); }, 280);
+  }, 2400);
 }
 
 // ── SESSION P&L CHART ──────────────────────────────────────────
@@ -9844,8 +9842,8 @@ const PM = (() => {
     BUST_RANGES.forEach(r => {
       _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
     });
-    _markets.push(_yn('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8}}));
-    _markets.push(_yn('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8}}));
+    _markets.push(_yn('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8, startHand:0}}));
+    _markets.push(_yn('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8, startHand:0}}));
     _markets.push(_yn('Player wins 5 hands in a row this shoe?',   {type:'player_hot_streak', params:{streak:5}}));
     _markets.push(_yn('Two consecutive blackjacks this shoe?',     {type:'consec_bj',         params:{count:2}}));
     if(_markets.length > 80) _markets = _markets.slice(-80);
@@ -9926,8 +9924,8 @@ const PM = (() => {
     render();
   }
 
-  function onHandEnd(dealerBusted, playerBJ, playerWon, playerPush){
-    _pmShoeHands++;
+  function onHandEnd(dealerBusted, playerBJ, playerWon, playerPush, extraHands){
+    _pmShoeHands += 1 + (extraHands||0); // each played hand counts separately
     if(dealerBusted) _pmShoeBusts++;
     if(playerPush)   _pmShoePushes++;
     if(playerWon)    _pmShoeConsec++; else _pmShoeConsec=0;
@@ -9950,13 +9948,19 @@ const PM = (() => {
         if(handsLeft + _pmShoeBusts < min){ settle(m.id,'NO'); return; }
       }
       if(c.type === 'natural_bj'){
-        if(playerBJ){ settle(m.id,'YES'); return; }
-        if(_pmShoeHands >= (c.params.hands||8)) settle(m.id,'NO');
+        if(playerBJ){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        if(handsInWindow >= (c.params.hands||8)){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
       }
       if(c.type === 'push_streak'){
-        if(_pmShoePushes >= (c.params.count||2)){ settle(m.id,'YES'); return; }
-        const needed = (c.params.count||2) - _pmShoePushes;
-        if(handsLeft < needed) settle(m.id,'NO');
+        // Count pushes within this window only
+        const winPushes = (c.params._pushCount||0) + (playerPush ? 1 : 0);
+        if(!m._pushCount) m._pushCount = 0;
+        m._pushCount += (playerPush ? 1 : 0);
+        if(m._pushCount >= (c.params.count||2)){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        const needed = (c.params.count||2) - (m._pushCount||0);
+        if(handsInWindow >= (c.params.hands||8) || handsLeft < needed){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
       }
       if(c.type === 'player_hot_streak'){
         if(_pmShoeConsec >= (c.params.streak||5)){ settle(m.id,'YES'); return; }
@@ -9970,6 +9974,36 @@ const PM = (() => {
     });
 
     render();
+  }
+
+  let _windowRespawnPending = false;
+  function _scheduleWindowRespawn(){
+    if(_windowRespawnPending) return;
+    _windowRespawnPending = true;
+    setTimeout(()=>{ _windowRespawnPending = false; _respawnWindowMarkets(); }, 80);
+  }
+
+  function _respawnWindowMarkets(){
+    const deckLeft = G.deck ? G.deck.filter(x=>!x.cutCard).length : 0;
+    const handsLeft = Math.floor(deckLeft / 6);
+    if(handsLeft < 4) return; // not enough shoe left
+    let changed = false;
+    const hasNatBJ   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='natural_bj');
+    const hasPushStr = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='push_streak');
+    const winHands = Math.min(8, handsLeft);
+    if(!hasNatBJ){
+      const cond = {type:'natural_bj', params:{hands:winHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Natural Blackjack in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasPushStr){
+      const cond = {type:'push_streak', params:{count:2, hands:winHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', '2+ ties (push) in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(changed){ _saveMarkets(); render(); }
   }
 
   function onStakeReached(stakeKey){

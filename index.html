@@ -2191,9 +2191,14 @@ body.hand2-active #chip-strip .chip { position: relative; }
 }
 .mp-timer{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--gold-hi);}
 /* dealer area */
-.mp-dealer-wrap{text-align:center;margin-bottom:32px;width:100%;max-width:900px;}
+.mp-dealer-wrap{
+  text-align:center;margin-bottom:32px;width:100%;max-width:900px;
+  padding:20px;border-radius:12px;
+  background: radial-gradient(ellipse at 50% 40%, rgba(6,26,13,0.45) 0%, rgba(4,15,8,0.52) 55%, rgba(2,7,5,0.58) 100%);
+  border:1px solid rgba(201,168,76,0.15);
+}
 .mp-dealer-label{font-size:9px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:10px;}
-.mp-dealer-cards{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;}
+.mp-dealer-cards{display:flex;gap:6px;justify-content:center;flex-wrap:wrap;min-height:104px;align-items:center;}
 .mp-dealer-val{font-family:var(--mono);font-size:14px;color:var(--white);margin-top:10px;}
 /* player slots */
 .mp-players-row{
@@ -2201,7 +2206,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
   width:100%;max-width:900px;margin-bottom:28px;
 }
 .mp-player-slot{
-  flex:1;min-width:180px;max-width:260px;
+  flex:1;min-width:240px;max-width:320px;
   border:1px solid var(--line2);border-radius:10px;
   padding:16px;background:var(--bg1);
   transition:border-color .2s;
@@ -2210,7 +2215,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .mp-player-slot.my-slot{background:var(--bg2);}
 .mp-slot-name{font-size:12px;font-weight:700;margin-bottom:2px;}
 .mp-slot-bal{font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:10px;}
-.mp-slot-cards{display:flex;gap:4px;flex-wrap:wrap;min-height:36px;margin-bottom:8px;}
+.mp-slot-cards{display:flex;gap:6px;flex-wrap:wrap;min-height:104px;margin-bottom:8px;justify-content:center;}
 .mp-slot-val{font-family:var(--mono);font-size:12px;color:var(--white);margin-bottom:6px;}
 .mp-slot-status{font-size:9px;letter-spacing:2px;text-transform:uppercase;}
 .mp-slot-status.won{color:var(--green);}
@@ -3044,7 +3049,10 @@ body.hand2-active #chip-strip .chip { position: relative; }
     <!-- table list -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
       <div class="mp-section-title" style="margin-bottom:0">OPEN TABLES</div>
-      <button class="mp-mode-btn ghost" style="width:auto;padding:6px 14px;margin:0;font-size:9px;" onclick="MP.refreshLobby()">&#8635; Refresh</button>
+      <div style="display:flex;gap:8px;">
+        <button id="mp-master-purge" class="mp-mode-btn ghost" style="display:none;width:auto;padding:6px 14px;margin:0;font-size:9px;color:var(--red);border-color:var(--red);" onclick="MP._masterPurgeAll()">⚠ PURGE ALL</button>
+        <button class="mp-mode-btn ghost" style="width:auto;padding:6px 14px;margin:0;font-size:9px;" onclick="MP.refreshLobby()">&#8635; Refresh</button>
+      </div>
     </div>
     <div id="mp-tables-list"><div class="mp-empty">Loading tables…</div></div>
 
@@ -10709,13 +10717,21 @@ const MP = {
     inp.value = inp._raw ? inp._raw.toLocaleString('de-CH') : '';
   },
 
+  // Render a card using SP's exact card class + cardInner HTML so MP matches SP visually.
   _card(c) {
-    if (!c || c === '??') return '<span class="mp-c hidden">?</span>';
-    const rank = c.slice(0,-1);
+    if (!c || c === '??') {
+      return '<div class="card down"><div class="card-shimmer"></div></div>';
+    }
+    const rank = c.slice(0, -1);
     const suit = c.slice(-1);
     const sym  = {S:'♠',H:'♥',D:'♦',C:'♣'}[suit] || suit;
-    const red  = (suit==='H'||suit==='D') ? ' red' : '';
-    return `<span class="mp-c${red}">${rank}${sym}</span>`;
+    const colorClass = (suit==='H'||suit==='D') ? 'red' : 'black';
+    // Shape mirrors SP `cardInner({r, s})`: top rank+suit, big pip, rotated bottom rank.
+    const inner =
+      `<div class="top">${rank}<br><span style="font-size:11px">${sym}</span></div>` +
+      `<div class="pip">${sym}</div>` +
+      `<div class="bot">${rank}</div>`;
+    return `<div class="card ${colorClass} up">${inner}</div>`;
   },
 
   _handHtml(hand) {
@@ -10832,6 +10848,12 @@ const MP = {
     // Initialize stake dropdown for current category
     this._populateStakeDropdown('mp-create-stake', document.getElementById('mp-create-category')?.value || 'standard');
     this._onStakeChange();
+
+    // Master purge button — only visible for username "creator"
+    const purgeBtn = document.getElementById('mp-master-purge');
+    if (purgeBtn) purgeBtn.style.display =
+      ((G.username||'').toLowerCase() === 'creator') ? 'inline-block' : 'none';
+
     this.refreshLobby();
   },
 
@@ -10889,29 +10911,59 @@ const MP = {
     const canJoin    = t => t.playerCount < t.maxPlayers; // joins now allowed in any phase
     const bal = _pendingLogin?.balance || 0;
     const eligibleVIP = bal >= this._VIP_BAL_REQ;
+    const isMaster = (G.username||'').toLowerCase() === 'creator';
     container.innerHTML = tables.map(t => {
       const lockedVIP = t.category === 'vip' && !eligibleVIP;
       const open      = canJoin(t) && !lockedVIP;
       const playerStakes = (t.players||[]).map(p =>
         `${p.displayName}<span style="color:var(--muted);font-size:9px;letter-spacing:1px;"> · ${this._stakeLabel(p.stake||'?')}</span>`
       ).join(', ') || '—';
+      const masterBtn = isMaster
+        ? `<button class="mp-mode-btn ghost" style="width:auto;padding:5px 10px;margin:0 6px 0 0;font-size:8px;color:var(--red);border-color:var(--red);"
+             onclick="MP._masterDeleteTable('${t.id}','${t.name.replace(/'/g,"\\'")}')">✕ DELETE</button>` : '';
       return `<div class="mp-table-card" style="${open?'':'opacity:.55;cursor:default'}">
-        <div class="tc-name">${t.name}</div>
+        <div class="tc-name">${t.name}${isMaster?` <span style="color:var(--muted);font-size:8px;font-family:var(--mono);">[${t.id}]</span>`:''}</div>
         <div class="tc-stake">${this._categoryLabel(t.category)}</div>
         <div class="tc-players">${playerStakes}
           <br>${t.playerCount}/${t.maxPlayers} seated</div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;">
           <span class="tc-status" style="color:${open?'var(--green)':'var(--muted)'}">${phaseLabel(t.phase)}</span>
-          ${open
+          <div>${masterBtn}${open
             ? `<button class="mp-mode-btn primary" style="width:auto;padding:6px 16px;margin:0;font-size:9px;"
                 onclick="MP._startJoin('${t.id}','${t.name.replace(/'/g,"\\'")}','${t.category}')">JOIN</button>`
             : (lockedVIP
                 ? '<span style="font-size:9px;letter-spacing:1px;color:var(--gold-lo)">VIP LOCKED</span>'
                 : '<span style="font-size:9px;letter-spacing:1px;color:var(--muted)">FULL</span>')
-          }
+          }</div>
         </div>
       </div>`;
     }).join('');
+  },
+
+  async _masterDeleteTable(tableId, tableName) {
+    if (!confirm(`[CREATOR] Delete table "${tableName}" (${tableId})?\nThis kicks all seated players.`)) return;
+    try {
+      const r = await fetch(`${this._url}/mp/admin/delete`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: G.username, tableId }),
+      });
+      const d = await r.json();
+      if (d.ok) { notif(`Table ${tableId} deleted`); this.refreshLobby(); }
+      else notif(d.error||'Delete failed');
+    } catch(e) { notif('Network error'); }
+  },
+
+  async _masterPurgeAll() {
+    if (!confirm('[CREATOR] Purge ALL tables in KV?\nThis kicks every player from every table.')) return;
+    try {
+      const r = await fetch(`${this._url}/mp/admin/purge`, {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ username: G.username }),
+      });
+      const d = await r.json();
+      if (d.ok) { notif(`Purged ${d.purged} tables`); this.refreshLobby(); }
+      else notif(d.error||'Purge failed');
+    } catch(e) { notif('Network error'); }
   },
 
   _startJoin(tableId, tableName, category) {
@@ -11055,6 +11107,9 @@ const MP = {
   _enterGame(tableId, tableState) {
     this.tableId = tableId;
     this.state   = tableState;
+    // Record the buy-in (chips taken out of wallet) — needed for sessionPL on leave
+    const me = (tableState.players||[]).find(p => p.username === G.username);
+    this._buyIn = me?.balance ?? 0;
     document.getElementById('mp-lobby-overlay').style.display = 'none';
     const go = document.getElementById('mp-game-overlay');
     go.style.display = 'flex';
@@ -11088,13 +11143,29 @@ const MP = {
       );
       const d = await r.json();
       if (d.ok && d.table) {
+        const me = d.table.players.find(p => p.username === this._me);
+        // Cache last-seen balance BEFORE state replaces — used if we get kicked next poll
+        if (me) this._lastSeenBalance = me.balance;
         this.state = d.table;
+        // Detect AFK-kick — our slot vanished from the table or kicked flag set
+        if (!me || me.kicked) {
+          notif('Kicked for inactivity — syncing balance and returning to lobby');
+          this._stopPolling();
+          this._stopTimerTick();
+          await this._syncBalanceToSheets(me ? 'afk-kick' : 'removed');
+          this.tableId = null;
+          this.state   = null;
+          document.getElementById('mp-game-overlay').style.display = 'none';
+          this._openLobby();
+          return;
+        }
         this._render();
       } else if (r.status === 410 || d.error === 'Table closed' || d.error === 'Table not found') {
-        // Table was deleted or expired — bounce back to lobby
-        notif('Table closed — returning to lobby');
+        // Table was deleted or expired — sync, bounce back to lobby
+        notif('Table closed — syncing balance');
         this._stopPolling();
         this._stopTimerTick();
+        await this._syncBalanceToSheets('table-closed');
         this.tableId = null;
         this.state   = null;
         document.getElementById('mp-game-overlay').style.display = 'none';
@@ -11120,9 +11191,44 @@ const MP = {
     } catch(e) { notif('Network error'); }
   },
 
+  // Push final MP balance back to Google Sheets — same path SP cashout uses.
+  // sessionStart = the buy-in chips taken out of wallet at table create/join.
+  async _syncBalanceToSheets(reason) {
+    try {
+      const me = this._myPlayer;
+      const finalBal = me?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
+      const buyIn    = this._buyIn ?? 0;
+      const sessionPL = finalBal - buyIn;
+      // Reuse SP's attemptSync — same Apps Script endpoint, same payload shape
+      if (typeof attemptSync !== 'function') return false;
+      const payload = {
+        username: G.username || G.player,
+        player:   G.player   || G.username,
+        balance:  finalBal,
+        sessionPL,
+        buyIn,
+        date:     new Date().toISOString(),
+        stake:    `MP-${this.state?.category||'standard'} (${reason||'leave'})`,
+        pin:      G._cachedPin || '',
+      };
+      console.log('[MP] sync payload:', payload);
+      await attemptSync(payload);
+      // Mirror SP: refresh local mirrors of total bankroll
+      G._totalBalance = (G._totalBalance || buyIn) - buyIn + finalBal;
+      G.balance       = finalBal;
+      return true;
+    } catch (e) {
+      console.error('[MP] sync failed:', e);
+      notif('Sync failed — balance saved locally on next login retry');
+      return false;
+    }
+  },
+
   async leaveTable() {
     this._stopPolling();
     this._stopTimerTick();
+    // Sync final balance BEFORE telling worker we left (so we can still read our slot)
+    if (this.tableId && this.state) await this._syncBalanceToSheets('leave');
     if (this.tableId) await this._action('leave');
     this.tableId = null;
     this.state   = null;
@@ -11264,13 +11370,34 @@ const MP = {
     if (t.phase==='betting') {
       if (me.status==='betting') {
         const stakeMin = this._STAKE_MINS[me.stake] || 5;
+        const stakeDef = (typeof STAKES !== 'undefined' && STAKES[me.stake]) || null;
+        const chipsArr = stakeDef?.chips || [];
+        // Render SP-style chips that add to the live bet input
+        const chipsHtml = chipsArr.map(v => {
+          const lbl = v>=1e9?(v/1e9).toFixed(v%1e9===0?0:1)+'B'
+                     :v>=1e6?(v/1e6).toFixed(v%1e6===0?0:1)+'M'
+                     :v>=1e3?(v/1e3).toFixed(v%1e3===0?0:1)+'K':String(v);
+          // Reuse SP makeChipSVG by temporarily setting G.s/G.stake context
+          let svg = '';
+          try {
+            const _gs=G.s, _gst=G.stake;
+            G.s = stakeDef; G.stake = me.stake;
+            svg = (typeof makeChipSVG==='function') ? makeChipSVG(v, lbl) : `<span>${lbl}</span>`;
+            G.s = _gs; G.stake = _gst;
+          } catch(e) { svg = `<span>${lbl}</span>`; }
+          return `<button class="chip" data-val="${v}" onclick="MP._addChip(${v})" title="${this._fmt(v)} KFC" style="background:transparent;border:none;padding:2px;cursor:pointer;">${svg}</button>`;
+        }).join('');
         bar.innerHTML=`
-          <div class="mp-bet-row">
-            <input class="mp-bet-inp" id="mp-live-bet" type="text" inputmode="numeric"
-              placeholder="${this._fmt(stakeMin)}" oninput="MP._fmtBuyIn(this)">
-            <button class="mp-btn gold" onclick="MP._placeBet()">PLACE BET</button>
-          </div>
-          <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC &nbsp;·&nbsp; ${this._stakeLabel(me.stake||'')}</div>`;
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:100%;max-width:720px;">
+            <div style="display:flex;gap:6px;justify-content:center;flex-wrap:wrap;">${chipsHtml}</div>
+            <div class="mp-bet-row">
+              <button class="mp-btn ghost" onclick="MP._clearBet()" style="font-size:9px;padding:8px 12px;">CLEAR</button>
+              <input class="mp-bet-inp" id="mp-live-bet" type="text" inputmode="numeric"
+                placeholder="${this._fmt(stakeMin)}" oninput="MP._fmtBuyIn(this)">
+              <button class="mp-btn gold" onclick="MP._placeBet()">PLACE BET</button>
+            </div>
+            <div class="mp-wait-msg" id="mp-bet-hint">Min: ${this._fmt(stakeMin)} KFC &nbsp;·&nbsp; ${this._stakeLabel(me.stake||'')} &nbsp;·&nbsp; Balance: ${this._fmt(me.balance)}</div>
+          </div>`;
       } else if (me.status==='bet_placed') {
         bar.innerHTML='<span class="mp-wait-msg" style="color:var(--green)">✓ Bet placed — waiting for others…</span>';
       } else {
@@ -11302,11 +11429,11 @@ const MP = {
 
       bar.innerHTML=`
         ${onHand2?'<span class="mp-wait-msg" style="color:var(--gold)">Playing Hand 2</span>':''}
-        <button class="mp-btn gold" onclick="MP._action('hit'${onHand2?',{hand2:true}':''})">HIT</button>
-        <button class="mp-btn ghost" onclick="MP._action('stand'${onHand2?',{hand2:true}':''})">STAND</button>
-        ${canDouble?`<button class="mp-btn ghost" onclick="MP._action('double')">DOUBLE</button>`:''}
-        ${canSplit ?`<button class="mp-btn ghost" onclick="MP._action('split')">SPLIT</button>`:''}
-        <span class="mp-wait-msg">${hv>0?'Hand: '+hv:''}</span>`;
+        <button class="act stand"  onclick="MP._action('stand'${onHand2?',{hand2:true}':''})">Stand</button>
+        <button class="act hit"    onclick="MP._action('hit'${onHand2?',{hand2:true}':''})">Hit</button>
+        ${canDouble?`<button class="act double" onclick="MP._action('double')">Double</button>`:''}
+        ${canSplit ?`<button class="act split"  onclick="MP._action('split')">Split</button>`:''}
+        <span class="mp-wait-msg" style="margin-left:12px;">${hv>0?'Hand: '+hv:''}</span>`;
       return;
     }
 
@@ -11329,6 +11456,25 @@ const MP = {
     }
 
     bar.innerHTML='';
+  },
+
+  _addChip(v) {
+    const inp = document.getElementById('mp-live-bet');
+    if (!inp) return;
+    const me = this._myPlayer;
+    const cap = me?.balance ?? Infinity;
+    const cur = inp._raw || parseInt((inp.value||'').replace(/[^0-9]/g,''))||0;
+    const next = Math.min(cur + v, cap);
+    inp._raw = next;
+    inp.value = next.toLocaleString('de-CH');
+    if (typeof sfx === 'function') try { sfx('chip'); } catch(e) {}
+  },
+
+  _clearBet() {
+    const inp = document.getElementById('mp-live-bet');
+    if (!inp) return;
+    inp._raw = 0;
+    inp.value = '';
   },
 
   _placeBet() {

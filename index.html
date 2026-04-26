@@ -2037,18 +2037,23 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-market-desc { font-size: 11px; color: var(--white); letter-spacing: 0.3px; margin-bottom: 8px; line-height: 1.45; }
 .pm-odds-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 5px; }
 .pm-outcome-btn {
-  border: 1px solid var(--line2); background: var(--bg3); border-radius: 2px;
-  cursor: pointer; padding: 7px 4px; text-align: center;
+  border: 1.5px solid var(--line2); background: transparent; border-radius: 4px;
+  cursor: pointer; padding: 10px 6px; text-align: center;
   transition: border-color .15s, background .15s; font-family: var(--sans);
 }
-.pm-outcome-btn:hover:not(:disabled) { border-color: var(--gold-lo); background: var(--bg1); }
-.pm-outcome-btn:disabled { opacity: 0.45; cursor: default; }
-.pm-outcome-btn .pm-lbl { color: var(--muted); font-size: 8px; letter-spacing: 1px; text-transform: uppercase; }
-.pm-outcome-btn .pm-pct { font-size: 15px; font-weight: 700; }
+.pm-outcome-btn:disabled { opacity: 0.4; cursor: default; }
+.pm-outcome-btn .pm-lbl { font-size: 8px; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 3px; }
+.pm-outcome-btn .pm-pct { font-size: 17px; font-weight: 800; }
 .pm-outcome-btn .pm-pool { color: var(--muted2); font-size: 8px; font-family: var(--mono); }
-.pm-outcome-btn.pm-yes .pm-pct { color: var(--green); }
-.pm-outcome-btn.pm-no  .pm-pct { color: var(--red); }
-.pm-outcome-btn.pm-user-bet { border-color: var(--gold-lo); }
+.pm-outcome-btn.pm-yes { background: rgba(0,200,90,.10); border-color: rgba(0,200,90,.35); }
+.pm-outcome-btn.pm-yes:hover:not(:disabled) { background: rgba(0,200,90,.20); border-color: rgba(0,200,90,.65); }
+.pm-outcome-btn.pm-yes .pm-lbl { color: rgba(0,200,90,.75); }
+.pm-outcome-btn.pm-yes .pm-pct { color: #00c85a; }
+.pm-outcome-btn.pm-no  { background: rgba(255,55,75,.08); border-color: rgba(255,55,75,.30); }
+.pm-outcome-btn.pm-no:hover:not(:disabled)  { background: rgba(255,55,75,.18); border-color: rgba(255,55,75,.60); }
+.pm-outcome-btn.pm-no  .pm-lbl { color: rgba(255,55,75,.75); }
+.pm-outcome-btn.pm-no  .pm-pct { color: #ff3745; }
+.pm-outcome-btn.pm-user-bet { box-shadow: 0 0 0 1px var(--gold-lo) inset; }
 .pm-outcome-btn.pm-self-bet { opacity: 0.35; cursor: not-allowed; }
 .pm-self-note { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 5px; }
 .pm-game-prob { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 5px; }
@@ -2070,6 +2075,15 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-player-group .pm-market { margin-bottom: 0; }
 .pm-race-grid { display: grid; gap: 6px; margin-bottom: 5px; }
 .pm-race-opt { height: auto; padding: 8px 4px; }
+.pm-bust-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 5px; }
+.pm-bust-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 3px; cursor: pointer; transition: background .12s; }
+.pm-bust-row:hover { background: rgba(255,255,255,.05); }
+.pm-bust-row.active-band { background: rgba(255,200,60,.07); }
+.pm-bust-range { font-family: var(--mono); font-size: 9px; color: var(--white); min-width: 52px; }
+.pm-bust-bar-wrap { flex: 1; height: 4px; background: rgba(255,255,255,.08); border-radius: 2px; overflow: hidden; }
+.pm-bust-bar-fill { height: 100%; background: var(--gold-lo); border-radius: 2px; transition: width .4s; }
+.pm-bust-pct { font-family: var(--mono); font-size: 9px; color: var(--gold-hi); min-width: 28px; text-align: right; }
+.pm-bust-live { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
 .pm-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 0; gap: 2px; }
 .pm-tab { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 8px 18px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; text-transform: uppercase; }
 .pm-tab:hover { color: var(--white); }
@@ -9011,8 +9025,8 @@ const PM = (() => {
     return stakeMin * (type === 'season' ? SEED_MULT_SEASON : SEED_MULT_SHOE);
   }
 
-  function _makeMarket(type, desc, condition, yesBias){
-    const s = _seed(type);
+  function _makeMarket(type, desc, condition, yesBias, seedType){
+    const s = _seed(seedType || type);
     const total = s * 2;
     const yesPool = yesBias != null ? Math.round(total * yesBias) : s;
     const noPool  = total - yesPool;
@@ -9133,14 +9147,7 @@ const PM = (() => {
     const shoeEl   = document.getElementById('pm-shoe-list');
     const portPane = document.getElementById('pm-pane-portfolio');
 
-    if(raceEl){
-      const allRace = [
-        ..._markets.filter(m => m.type==='race' && m.status==='open'),
-        ..._markets.filter(m => m.type==='race' && m.status==='settled').slice(-2),
-      ];
-      raceEl.innerHTML = allRace.map(_renderMkt).join('');
-      if(raceSect) raceSect.style.display = allRace.length ? '' : 'none';
-    }
+    if(raceEl) _renderRaceSection(raceEl, raceSect);
     if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
       const d = [
@@ -9150,6 +9157,90 @@ const PM = (() => {
       shoeEl.innerHTML = d.length ? d.map(_renderMkt).join('') : '<div class="pm-empty">No shoe markets</div>';
     }
     if(portPane && portPane.style.display !== 'none') _renderPortfolio();
+  }
+
+  function _renderRaceSection(raceEl, raceSect){
+    const all = [
+      ..._markets.filter(m => m.type==='race' && m.status==='open'),
+      ..._markets.filter(m => m.type==='race' && m.status==='settled').slice(-4),
+    ];
+    if(!all.length){ if(raceSect) raceSect.style.display = 'none'; return; }
+    if(raceSect) raceSect.style.display = '';
+    // Group by milestone amount
+    const groups = {};
+    all.forEach(m => {
+      const amt = m.condition && m.condition.params && m.condition.params.amount;
+      if(!amt) return;
+      if(!groups[amt]) groups[amt] = [];
+      groups[amt].push(m);
+    });
+    raceEl.innerHTML = Object.entries(groups)
+      .sort(([a],[b]) => Number(a)-Number(b))
+      .map(([amount, mkts]) => {
+        const key = 'race_'+amount;
+        const fmtAmt = fmtKFC(Number(amount));
+        const openCount = mkts.filter(m=>m.status==='open').length;
+        const settled = mkts.length - openCount;
+        const countTxt = openCount+' open'+(settled?', '+settled+' settled':'');
+        const expanded = _expandedGroups.has(key);
+        return `<div class="pm-player-group">
+          <button class="pm-player-toggle" onclick="PM._togglePlayerGroup('${key}')">
+            <span class="pm-ptog-name">Race to ${fmtAmt}</span>
+            <span class="pm-ptog-count">${countTxt}</span>
+            <span class="pm-ptog-chevron${expanded?'':' closed'}" id="pm-pc-${key}">▾</span>
+          </button>
+          <div class="pm-player-markets${expanded?'':' collapsed'}" id="pm-pm-${key}">
+            ${mkts.map(_renderMkt).join('')}
+          </div>
+        </div>`;
+      }).join('');
+  }
+
+  function _renderBustMkt(mkt){
+    const isOpen = mkt.status === 'open';
+    const myBets = _loadBets().filter(b => b.mktId === mkt.id);
+    const outcomes = mkt.outcomes || Object.keys(mkt.pools);
+
+    let settledHTML = '';
+    if(!isOpen){
+      const spend = myBets.reduce((a,b)=>a+b.amount,0);
+      const pay   = myBets.reduce((a,b)=>a+(b.payout||0),0);
+      if(spend > 0){
+        const pl = pay-spend;
+        settledHTML = `<div class="pm-settled-result ${pl>0?'win':pl<0?'loss':'push'}">Result: ${mkt.result||'—'} — You: ${pl>=0?'+':''}${fmtKFC(pl)}</div>`;
+      } else {
+        settledHTML = `<div class="pm-settled-result push">Settled: ${mkt.result||'—'}</div>`;
+      }
+    }
+
+    const myBetHTML = myBets.length
+      ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtKFC(b.amount)).join(' / ')}</div>`
+      : '';
+
+    const liveHTML = isOpen
+      ? `<div class="pm-bust-live">Live: ${_pmShoeBusts} bust${_pmShoeBusts===1?'':'s'} so far this shoe</div>`
+      : '';
+
+    const rowsHTML = outcomes.map(o => {
+      const pct = _pct(mkt, o);
+      const myO = myBets.filter(b=>b.outcome===o).reduce((a,b)=>a+b.amount,0);
+      const esc = o.replace(/'/g,"\\'");
+      const click = isOpen ? `onclick="PM.openBetModal('${mkt.id}','${esc}')"` : '';
+      const isResult = !isOpen && mkt.result === o;
+      return `<div class="pm-bust-row${isResult?' active-band':''}" ${click}>
+        <div class="pm-bust-range">${o}${myO>0?' ✓':''}</div>
+        <div class="pm-bust-bar-wrap"><div class="pm-bust-bar-fill" style="width:${pct}%"></div></div>
+        <div class="pm-bust-pct">${pct}%</div>
+      </div>`;
+    }).join('');
+
+    return `<div class="pm-market">
+      <div class="pm-market-label${isOpen?'':' settled'}">${isOpen?'SHOE':'SETTLED'}</div>
+      <div class="pm-market-desc">${mkt.desc}</div>
+      ${liveHTML}
+      <div class="pm-bust-list">${rowsHTML}</div>
+      ${myBetHTML}${settledHTML}
+    </div>`;
   }
 
   function _renderRaceMkt(mkt){
@@ -9255,7 +9346,8 @@ const PM = (() => {
   }
 
   function _renderMkt(mkt){
-    if(mkt.type === 'race' || (mkt.outcomes && mkt.outcomes.length)) return _renderRaceMkt(mkt);
+    if(mkt.condition && mkt.condition.type === 'dealer_bust_count') return _renderBustMkt(mkt);
+    if(mkt.outcomes && mkt.outcomes.length) return _renderRaceMkt(mkt);
     const myBets = _loadBets().filter(b => b.mktId === mkt.id);
     const myY = myBets.filter(b => b.outcome==='YES').reduce((a,b)=>a+b.amount,0);
     const myN = myBets.filter(b => b.outcome==='NO').reduce((a,b)=>a+b.amount,0);
@@ -9264,7 +9356,7 @@ const PM = (() => {
 
     // Self-bet guard for milestone markets
     const me = (G.username||G.player||'').toLowerCase();
-    const isSelfMarket = me && mkt.type==='season' &&
+    const isSelfMarket = me && (mkt.type==='season' || mkt.type==='race') &&
       mkt.condition && mkt.condition.params && mkt.condition.params.player &&
       mkt.condition.params.player.toLowerCase() === me;
 
@@ -9295,7 +9387,7 @@ const PM = (() => {
       myBetHTML = `<div class="pm-my-bet">Your bets: ${parts.join(' / ')}</div>`;
     }
 
-    const lbl    = mkt.type==='season' ? 'SEASON' : 'SHOE';
+    const lbl    = mkt.type==='season' ? 'SEASON' : mkt.type==='race' ? 'RACE' : 'SHOE';
     const lblCls = isOpen ? '' : 'settled';
     const dis    = (isOpen && !isSelfMarket) ? '' : 'disabled';
     const yClick = (isOpen && !isSelfMarket) ? `onclick="PM.openBetModal('${mkt.id}','YES')"` : '';
@@ -9329,10 +9421,8 @@ const PM = (() => {
     // Self-bet guard
     const me = (G.username||G.player||'').toLowerCase();
     if(me){
-      if(mkt.type==='race' && defaultOutcome && defaultOutcome.toLowerCase() === me){
-        notif("You can't bet on yourself"); return;
-      }
-      if(mkt.type==='season' && mkt.condition && mkt.condition.params && mkt.condition.params.player &&
+      if((mkt.type==='race' || mkt.type==='season') &&
+         mkt.condition && mkt.condition.params && mkt.condition.params.player &&
          mkt.condition.params.player.toLowerCase() === me){
         notif("You can't bet on yourself"); return;
       }
@@ -9539,9 +9629,12 @@ const PM = (() => {
 
   function _createShoeMarkets(){
     const bustBands = [
-      {label:'Under 17', min:0,  max:16},
-      {label:'17-20',    min:17, max:20},
-      {label:'21-24',    min:21, max:24},
+      {label:'Under 10', min:0,  max:9},
+      {label:'10-12',    min:10, max:12},
+      {label:'13-15',    min:13, max:15},
+      {label:'16-18',    min:16, max:18},
+      {label:'19-21',    min:19, max:21},
+      {label:'22-24',    min:22, max:24},
       {label:'25+',      min:25, max:9999},
     ];
     _markets.push(_makeShoeMultiMarket(
@@ -9549,14 +9642,11 @@ const PM = (() => {
       bustBands,
       {type:'dealer_bust_count', params:{bands: bustBands}}
     ));
-    _markets.push(_makeMarket('shoe', 'Natural Blackjack in the next 8 hands?',
-      {type:'natural_bj', params:{hands:8}}));
-    _markets.push(_makeMarket('shoe', '2+ ties (push) in the next 8 hands?',
-      {type:'push_streak', params:{count:2, hands:8}}));
-    _markets.push(_makeMarket('shoe', 'Player wins 5 hands in a row this shoe?',
-      {type:'player_hot_streak', params:{streak:5}}));
-    _markets.push(_makeMarket('shoe', 'Two consecutive blackjacks this shoe?',
-      {type:'consec_bj', params:{count:2}}));
+    const _shoeYN = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
+    _markets.push(_shoeYN('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8}}));
+    _markets.push(_shoeYN('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8}}));
+    _markets.push(_shoeYN('Player wins 5 hands in a row this shoe?',   {type:'player_hot_streak', params:{streak:5}}));
+    _markets.push(_shoeYN('Two consecutive blackjacks this shoe?',     {type:'consec_bj',         params:{count:2}}));
     if(_markets.length > 60) _markets = _markets.slice(-60);
     _saveMarkets();
   }
@@ -9580,20 +9670,25 @@ const PM = (() => {
     MILESTONE_AMOUNTS.forEach(amount => {
       const eligible = players.filter(p => (p.balance||0) < amount && (p.username||p.name));
       if(eligible.length < 2) return;
-      // Only skip if an OPEN race for this amount already exists (settled ones can reopen)
-      const alreadyOpen = _markets.some(m =>
-        m.type==='race' && m.status==='open' &&
-        m.condition && m.condition.type==='bankroll_race' &&
-        m.condition.params && m.condition.params.amount===amount
-      );
-      if(alreadyOpen) return;
-      const names = eligible.map(p=>p.username||p.name).filter(Boolean);
-      if(names.length < 2) return;
-      _markets.push(_makeRaceMarket(
-        'Who reaches '+fmtKFC(amount)+' first?',
-        names,  // no Nobody option — race stays open until someone wins
-        {type:'bankroll_race', params:{amount}}
-      ));
+      const eligTotal = eligible.reduce((s,p)=>s+(p.balance||0), 0);
+      eligible.forEach(p => {
+        const pName = p.username||p.name; if(!pName) return;
+        const alreadyOpen = _markets.some(m =>
+          m.type==='race' && m.status==='open' &&
+          m.condition && m.condition.type==='bankroll_race_player' &&
+          m.condition.params && m.condition.params.amount===amount &&
+          m.condition.params.player===pName
+        );
+        if(alreadyOpen) return;
+        // Seed YES bias proportional to player's share of total eligible balance
+        const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
+        const yesBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
+        _markets.push(_makeMarket('race',
+          'Will '+pName+' be first to reach '+fmtKFC(amount)+'?',
+          {type:'bankroll_race_player', params:{amount, player:pName}},
+          yesBias, 'season'
+        ));
+      });
     });
     _saveMarkets();
   }
@@ -9710,15 +9805,24 @@ const PM = (() => {
       ).forEach(m => { if(balance>=m.condition.params.amount) settle(m.id,'YES'); });
     });
 
-    // Settle race markets — whoever crossed their milestone first
+    // Settle race markets — first player to cross the milestone wins; all others lose
     players.forEach(p => {
       const pName = p.username||p.name||''; if(!pName) return;
       const balance = p.balance||0;
-      _markets.filter(m =>
-        m.type==='race' && m.status==='open' &&
-        m.condition && m.condition.type==='bankroll_race' &&
-        m.condition.params && balance>=m.condition.params.amount
-      ).forEach(m => { if(m.outcomes&&m.outcomes.includes(pName)) settle(m.id,pName); });
+      MILESTONE_AMOUNTS.forEach(amount => {
+        if(balance < amount) return;
+        const openForAmount = _markets.filter(m =>
+          m.type==='race' && m.status==='open' &&
+          m.condition && m.condition.type==='bankroll_race_player' &&
+          m.condition.params && m.condition.params.amount===amount
+        );
+        if(!openForAmount.length) return;
+        const myRace = openForAmount.find(m => m.condition.params.player===pName);
+        if(myRace){
+          settle(myRace.id, 'YES');
+          openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));
+        }
+      });
     });
 
     _saveMarkets();
@@ -9836,15 +9940,24 @@ const PM = (() => {
   function init(){
     _loadMarkets();
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
-    // Clean up stale race markets from before the no-Nobody / no-expiry rework
+    // Milestone markets with double-KFC description (pre-fix): remove so they regenerate cleanly
+    _markets = _markets.filter(m => !(m.type==='season' && m.desc && m.desc.includes('KFC KFC')));
+    // Remove old multi-outcome race markets (pre-redesign: had outcomes array, bankroll_race type)
+    _markets = _markets.filter(m => !(m.type==='race' && m.outcomes && m.outcomes.length &&
+      m.condition && m.condition.type==='bankroll_race'));
+    // Also clean stale race markets from before the no-Nobody / no-expiry rework
     _markets = _markets.filter(m => !(
       m.type==='race' && (
         (m.outcomes && m.outcomes.includes('Nobody today')) ||
         (m.condition && m.condition.params && m.condition.params.date)
       )
     ));
-    // Replace old single-threshold dealer bust markets with the new banded market
-    _markets = _markets.filter(m => !(m.type==='shoe' && m.condition && m.condition.type==='dealer_bust_threshold'));
+    // Replace old single-threshold dealer bust markets; also remove bust markets with old band set
+    _markets = _markets.filter(m => !(m.type==='shoe' && m.condition && (
+      m.condition.type==='dealer_bust_threshold' ||
+      (m.condition.type==='dealer_bust_count' &&
+       m.condition.params && m.condition.params.bands && m.condition.params.bands.length < 7)
+    )));
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){
@@ -9855,9 +9968,12 @@ const PM = (() => {
       let _backfilled = false;
       if(!_existTypes.has('dealer_bust_count')){
         const bustBands = [
-          {label:'Under 17', min:0,  max:16},
-          {label:'17-20',    min:17, max:20},
-          {label:'21-24',    min:21, max:24},
+          {label:'Under 10', min:0,  max:9},
+          {label:'10-12',    min:10, max:12},
+          {label:'13-15',    min:13, max:15},
+          {label:'16-18',    min:16, max:18},
+          {label:'19-21',    min:19, max:21},
+          {label:'22-24',    min:22, max:24},
           {label:'25+',      min:25, max:9999},
         ];
         _markets.push(_makeShoeMultiMarket(
@@ -9867,9 +9983,10 @@ const PM = (() => {
         ));
         _backfilled=true;
       }
-      if(!_existTypes.has('push_streak'))       { _markets.push(_makeMarket('shoe','2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8}})); _backfilled=true; }
-      if(!_existTypes.has('player_hot_streak')) { _markets.push(_makeMarket('shoe','Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
-      if(!_existTypes.has('consec_bj'))         { _markets.push(_makeMarket('shoe','Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
+      const _bf = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
+      if(!_existTypes.has('push_streak'))       { _markets.push(_bf('2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8}})); _backfilled=true; }
+      if(!_existTypes.has('player_hot_streak')) { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
+      if(!_existTypes.has('consec_bj'))         { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
       if(_backfilled) _saveMarkets();
     }
     render();

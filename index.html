@@ -3101,6 +3101,9 @@ body.hand2-active #chip-strip .chip { position: relative; }
   <!-- players row (rendered dynamically) -->
   <div class="mp-players-row" id="mp-players-row"></div>
 
+  <!-- power-up bar (rendered dynamically, shown in betting/waiting) -->
+  <div id="mp-pu-bar" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:6px 0;max-width:720px;width:100%;min-height:0;"></div>
+
   <!-- action bar (fixed bottom) -->
   <div class="mp-action-bar" id="mp-action-bar">
     <span class="mp-wait-msg" id="mp-action-msg">Waiting…</span>
@@ -10783,10 +10786,10 @@ const MP = {
   },
 
   _outcomeClass(o) {
-    return {win:'won',blackjack:'won',bust:'lost',lose:'lost',push:'pushed'}[o]||'';
+    return {win:'won',blackjack:'won',bust:'lost',lose:'lost',push:'pushed',surrender:'pushed'}[o]||'';
   },
   _outcomeLabel(o) {
-    return {win:'WIN',blackjack:'BLACKJACK',bust:'BUST',lose:'LOSE',push:'PUSH'}[o]||o||'';
+    return {win:'WIN',blackjack:'BLACKJACK',bust:'BUST',lose:'LOSE',push:'PUSH',surrender:'SURRENDER'}[o]||o||'';
   },
 
   // ── login flow hooks ─────────────────────────────────────
@@ -11272,7 +11275,60 @@ const MP = {
     }
 
     // action bar — always runs
+    try { this._renderPuBar(t); } catch(e) {}
     try { this._renderActions(t); } catch(e) {}
+  },
+
+  _renderPuBar(t) {
+    const bar = document.getElementById('mp-pu-bar');
+    if (!bar) return;
+    const me = this._myPlayer;
+    // Only show in phases where buying is allowed
+    const canBuy = t.phase === 'betting' || t.phase === 'waiting';
+    if (!me || (!canBuy && !(me.powerups?.length))) { bar.innerHTML = ''; return; }
+
+    const POWERUP_DEFS = [
+      { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10+', ratio:5, minStake:'mid' },
+      { id:'net',    label:'Safety Net',       sub:'22 → push',               ratio:4, minStake:'mid' },
+      { id:'seeker', label:'Seven-Seeker',     sub:'+2× Crazy 7s',            ratio:4, minStake:'high' },
+      { id:'guard',  label:'BJ Guard',         sub:'Dealer BJ → push',        ratio:3, minStake:'legendary' },
+      { id:'novak',  label:'BJ Novak',         sub:'Blackjack pays 2:1',      ratio:3, minStake:'legendary' },
+    ];
+    const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
+    const myStakeIdx = STAKE_ORDER.indexOf(me.stake);
+    const ownedSet = new Set(me.powerups || []);
+    const atMax = ownedSet.size >= 2;
+
+    bar.innerHTML = POWERUP_DEFS.map(pu => {
+      const owned   = ownedSet.has(pu.id);
+      const minIdx  = STAKE_ORDER.indexOf(pu.minStake);
+      const locked  = myStakeIdx < minIdx;
+      const cost    = (this._STAKE_MINS[me.stake] || 5) * pu.ratio;
+      const canAfford = me.balance >= cost;
+
+      if (owned) {
+        return `<div style="display:flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid rgba(201,168,76,.4);border-radius:2px;background:rgba(201,168,76,.07);">
+          <span style="font-family:var(--sans);font-size:9px;font-weight:700;letter-spacing:1px;color:var(--gold)">${pu.label}</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--gold-lo);margin-left:2px;">✓ ACTIVE</span>
+        </div>`;
+      }
+      if (!canBuy) return ''; // outside buying window, only show owned
+      if (locked) {
+        return `<div style="padding:4px 10px;border:1px solid var(--line);border-radius:2px;opacity:.4;">
+          <span style="font-family:var(--sans);font-size:9px;letter-spacing:1px;color:var(--muted)">${pu.label}</span>
+          <span style="font-family:var(--mono);font-size:8px;color:var(--muted);margin-left:4px;">🔒</span>
+        </div>`;
+      }
+      const dim = atMax || !canAfford;
+      return `<button onclick="MP._buyPowerup('${pu.id}')" ${dim?'disabled':''} title="${pu.sub}"
+        style="padding:4px 10px;border:1px solid var(--line2);border-radius:2px;background:transparent;color:var(--white);cursor:pointer;font-family:var(--sans);font-size:9px;letter-spacing:1px;opacity:${dim?.4:1};">
+        ${pu.label} <span style="font-family:var(--mono);font-size:8px;color:var(--muted);">${this._fmt(cost)}</span>
+      </button>`;
+    }).join('');
+  },
+
+  _buyPowerup(puId) {
+    this._action('buyPowerup', { puId });
   },
 
   _renderPlayers(t) {
@@ -11445,10 +11501,12 @@ const MP = {
       const onHand2 = me._onHand2 && me.hand2?.length >= 2 && !me._hand2Done;
       const hand    = onHand2 ? me.hand2 : me.hand;
       const hv      = this._hv(hand);
-      const canDouble = !onHand2 && me.hand.length===2 && me.balance>=me.bet;
-      const canSplit  = !onHand2 && !me.hasSplit && me.hand.length===2
+      const canDouble   = !onHand2 && me.hand.length===2 && me.balance>=me.bet;
+      const canSplit    = !onHand2 && !me.hasSplit && me.hand.length===2
         && me.hand[0].slice(0,-1)===me.hand[1].slice(0,-1)
         && me.balance>=me.bet;
+      const dUpVal      = t.dealerHand?.[0] ? this._hv([t.dealerHand[0]]) : 0;
+      const canSurrender = !onHand2 && me.hand.length===2 && me.powerups?.includes('sally') && dUpVal >= 10;
 
       bar.innerHTML=`
         ${onHand2?'<span class="mp-wait-msg" style="color:var(--gold)">Playing Hand 2</span>':''}
@@ -11456,6 +11514,7 @@ const MP = {
         <button class="act hit"    onclick="MP._action('hit'${onHand2?',{hand2:true}':''})">Hit</button>
         ${canDouble?`<button class="act double" onclick="MP._action('double')">Double</button>`:''}
         ${canSplit ?`<button class="act split"  onclick="MP._action('split')">Split</button>`:''}
+        ${canSurrender?`<button class="act" style="background:rgba(248,81,73,.15);border-color:var(--red);color:var(--red);" onclick="MP._action('surrender')">Surrender</button>`:''}
         <span class="mp-wait-msg" style="margin-left:12px;">${hv>0?'Hand: '+hv:''}</span>`;
       return;
     }

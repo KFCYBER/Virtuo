@@ -9476,7 +9476,7 @@ const PM = (() => {
         const ratio = Math.min(balance / amount, 0.99);
         const yesBias = 0.15 + 0.70 * ratio;
         _markets.push(_makeMarket('season',
-          'Will '+pName+' reach '+fmtKFC(amount)+' KFC this season?',
+          'Will '+pName+' reach '+fmtKFC(amount)+' this season?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
           yesBias
         ));
@@ -9683,6 +9683,7 @@ const PM = (() => {
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); }
           } else if(sm.status==='open' && local.status==='open'){
             local.pools = sm.pools;
+            if(sm.outcomes) local.outcomes = sm.outcomes;
           }
         });
         _saveMarkets();
@@ -9766,6 +9767,13 @@ const PM = (() => {
   function init(){
     _loadMarkets();
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
+    // Clean up stale race markets from before the no-Nobody / no-expiry rework
+    _markets = _markets.filter(m => !(
+      m.type==='race' && (
+        (m.outcomes && m.outcomes.includes('Nobody today')) ||
+        (m.condition && m.condition.params && m.condition.params.date)
+      )
+    ));
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){

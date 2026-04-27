@@ -11776,8 +11776,8 @@ const MP = {
     if (modal) modal.style.display = 'none';
     this._stopPolling();
     this._stopTimerTick();
-    if (this.tableId && this.state) await this._syncBalanceToSheets('leave');
-    if (this.tableId) await this._action('leave');
+    if (this.tableId && this.state) this._syncBalanceToSheets('leave'); // fire-and-forget — GAS is slow
+    if (this.tableId) await this._action('leave'); // still await — fast KV op, removes seat
     this.tableId = null;
     this.state   = null;
     document.getElementById('mp-game-overlay').style.display='none';
@@ -12287,8 +12287,7 @@ const MP = {
   _updateTimer() {
     const t    = this.state;
     const el   = document.getElementById('mp-go-timer');
-    if (!el) return;
-    if (!t) { el.textContent=''; return; }
+    if (!t) { if (el) el.textContent=''; return; }
 
     let deadline = null;
     if (t.phase==='betting')   deadline = t.bettingDeadline;
@@ -12296,10 +12295,22 @@ const MP = {
     if (t.phase==='playing')   deadline = t.turnDeadline;
     if (t.phase==='result')    deadline = t.turnDeadline;
 
-    if (!deadline) { el.textContent=''; return; }
-    const secs = Math.max(0, Math.ceil((deadline - Date.now()) / 1000));
-    el.textContent = secs > 0 ? `${secs}s` : '';
-    el.style.color = secs <= 10 ? 'var(--red)' : 'var(--gold-hi)';
+    const secs = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : null;
+    const timerTxt = secs !== null && secs > 0 ? `${secs}s` : '';
+    if (el) { el.textContent = timerTxt; el.style.color = secs <= 10 ? 'var(--red)' : 'var(--gold-hi)'; }
+
+    // Mirror countdown into the visible remote-strip turn label
+    const tt = document.getElementById('mp-remote-turn');
+    if (tt && timerTxt) {
+      // Preserve turn text prefix, just append the countdown
+      const base = tt.dataset.baseText || tt.textContent.replace(/\s*\d+s$/, '');
+      tt.dataset.baseText = base;
+      tt.textContent = base ? `${base}  ${timerTxt}` : timerTxt;
+      tt.style.color = secs <= 10 ? 'var(--red)' : '';
+    } else if (tt && !timerTxt) {
+      tt.dataset.baseText = '';
+      tt.style.color = '';
+    }
   },
 
   // ── Quick bet ─────────────────────────────────────────────────
@@ -12615,17 +12626,43 @@ function _mpSyncServerToSp(t) {
   }
   G.cur = me._onHand2 ? 1 : 0;
 
-  // 4) Bet mirrored from server
-  G.mainBet = me.bet || 0;
-  if (me.bet2) G.mainBet2 = me.bet2;
+  // 4) Bet mirrored from server — only overwrite local chips once a bet is committed
+  if (me.bet > 0) G.mainBet = me.bet;
+  if (me.bet2 > 0) G.mainBet2 = me.bet2;
 
-  // 5) Phase mapping
+  // 5) Phase mapping + SP msg-strip context hint
   if (t.phase === 'waiting' || t.phase === 'betting') {
     G.phase = 'bet';
     mpPhaseToSpBody('betting');
+    try {
+      const _ms = document.getElementById('msg-strip');
+      if (_ms) {
+        if (t.phase === 'waiting' && me.isHost) {
+          _ms.className = ''; _ms.textContent = 'PLACE A BET — then press DEAL to start';
+        } else if (t.phase === 'betting' && me.status === 'betting') {
+          _ms.className = ''; _ms.textContent = 'PLACE YOUR BET — then press DEAL';
+        } else if (me.status === 'bet_placed') {
+          _ms.className = ''; _ms.textContent = 'Bet placed — waiting for other players…';
+        } else if (me.status === 'sitting_out') {
+          _ms.className = ''; _ms.textContent = 'Sitting out this round…';
+        }
+      }
+    } catch(e) {}
   } else if (t.phase === 'playing' || t.phase === 'dealer') {
     G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
     mpPhaseToSpBody('playing');
+    try {
+      const myTurnNow = t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username;
+      const _ms = document.getElementById('msg-strip');
+      if (_ms && myTurnNow && _ms.textContent !== 'YOUR TURN') {
+        _ms.className = 'bj'; _ms.textContent = 'YOUR TURN';
+      } else if (_ms && !myTurnNow && t.phase === 'playing') {
+        const cur = t.players[t.currentTurnIdx];
+        _ms.className = ''; _ms.textContent = `Waiting for ${cur?.displayName || cur?.username || 'player'}…`;
+      } else if (_ms && t.phase === 'dealer') {
+        _ms.className = ''; _ms.textContent = 'Dealer is playing…';
+      }
+    } catch(e) {}
   } else if (t.phase === 'result') {
     G.phase = 'done';
     mpPhaseToSpBody('done');
@@ -12636,13 +12673,36 @@ function _mpSyncServerToSp(t) {
   try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
 
+  // 6b) Result phase: show SP msg-strip outcome once per round
+  if (t.phase === 'result' && me.status === 'done' && me.result) {
+    const _rKey = `${t.roundNum}_${me.result}`;
+    if (MP._lastSpResultKey !== _rKey) {
+      MP._lastSpResultKey = _rKey;
+      const pay = me.payout || 0;
+      const sign = pay > 0 ? '+' : '';
+      const _MSG = {
+        blackjack:  ['BLACKJACK!','bj'],
+        win:        [`YOU WIN  ${sign}${fmtKFC(pay)}`,'win'],
+        push:       ['PUSH','push'],
+        bust:       ['BUST','lose'],
+        lose:       [`DEALER WINS  ${fmtKFC(pay)}`,'lose'],
+        dealer_bj:  ['DEALER BLACKJACK','lose'],
+        surrender:  ['SURRENDER','lose'],
+      };
+      const [txt, cls] = _MSG[me.result] || [`${me.result.toUpperCase()}`,''];
+      try { if (typeof msg === 'function') msg(txt, cls); } catch(e) {}
+    }
+  }
+  // Reset per-round result key when a new betting phase begins
+  if (t.phase === 'betting' || t.phase === 'waiting') MP._lastSpResultKey = null;
+
   // 7) Turn lock: disable SP action buttons unless it's our turn
   const myTurn = (t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username);
   ['btn-hit','btn-stand','btn-double','btn-split','btn-deal-top','btn-deal'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
-    if (t.phase === 'betting') {
-      // During betting, deal/place-bet buttons are gated by min bet only
+    if (t.phase === 'betting' || t.phase === 'waiting') {
+      // During betting/waiting, deal button is gated by min bet; other action buttons locked
       if (id === 'btn-deal-top' || id === 'btn-deal') {
         el.disabled = (G.mainBet < (G.s?.min||0)) || me.status === 'bet_placed' || me.status === 'sitting_out';
       } else {
@@ -12670,9 +12730,13 @@ function _mpRenderRemoteSeats(t, me) {
     const tn = document.getElementById('mp-remote-table');
     const tt = document.getElementById('mp-remote-turn');
     if (tn) tn.textContent = `${t.name||''} · ${(t.category||'').toUpperCase()} · ${(t.phase||'').toUpperCase()}`;
-    if (tt) tt.textContent = (t.phase==='playing' && turn)
-      ? (turn.username === G.username ? '★ YOUR TURN' : `Waiting for ${turn.displayName||turn.username}…`)
-      : '';
+    if (tt) {
+      const baseTurnTxt = (t.phase==='playing' && turn)
+        ? (turn.username === G.username ? '★ YOUR TURN' : `Waiting for ${turn.displayName||turn.username}…`)
+        : '';
+      tt.textContent = baseTurnTxt;
+      tt.dataset.baseText = baseTurnTxt; // reset base so timer appends cleanly
+    }
   }
   wrap.innerHTML = others.map(p => {
     const cardsHtml = (p.hand||[]).map(c => {
@@ -12721,24 +12785,30 @@ function _mpRenderRemoteSeats(t, me) {
 
   // deal() — in MP, the bet is "placed" via worker. Server then deals server-side.
   wrap('deal', function() {
-    if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Bet below minimum'); return; }
-    // Send side bets first (if any), then the main bet
-    const sb = G.sideBets || {};
-    const sbPromises = Object.entries(sb).filter(([_,v])=>v>0).map(([name,amt])=>
-      MP._action('sideBet', { name, amount: amt })
-    );
-    Promise.all(sbPromises).then(() => MP._action('bet', { amount: G.mainBet }));
+    if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Place a bet first (min ' + fmtKFC(G.s?.min||0) + ')'); return; }
+    const betAmt = G.mainBet; // capture before any poll can reset it
+    const sideBets = {};
+    Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
+    const t = MP.state;
+    if (t?.phase === 'waiting') {
+      // Table not yet started — auto-start then bet
+      const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
+      if (!isHost) { notif('Waiting for host to start…'); return; }
+      MP._action('start').then(() => setTimeout(() => MP._action('bet', { amount: betAmt, sideBets }), 200));
+      return;
+    }
+    MP._action('bet', { amount: betAmt, sideBets });
   });
 
-  wrap('hit',          () => MP._action('hit'));
-  wrap('hitGuard',     () => MP._action('hit'));
-  wrap('stand',        () => MP._action('stand'));
+  wrap('hit',          () => MP._action('hit',    G.cur===1 ? {hand2:true} : {}));
+  wrap('hitGuard',     () => MP._action('hit',    G.cur===1 ? {hand2:true} : {}));
+  wrap('stand',        () => MP._action('stand',  G.cur===1 ? {hand2:true} : {}));
   wrap('dblGuard',     () => MP._action('double'));
   wrap('doubleDown',   () => MP._action('double'));
   wrap('split',        () => MP._action('split'));
   wrap('surrender',    () => MP._action('surrender'));
-  wrap('takeInsurance',    () => MP._action('insurance', { take:true }));
-  wrap('declineInsurance', () => MP._action('insurance', { take:false }));
+  wrap('takeInsurance',    () => MP._action('takeInsurance'));
+  wrap('declineInsurance', () => MP._action('declineInsurance'));
 
   // cycleSB: SP cycles through stake values locally; in MP we still cycle locally
   // (G.sideBets) and only send the side-bet to worker on deal(). Leave un-wrapped.

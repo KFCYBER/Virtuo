@@ -113,6 +113,34 @@ select option { background: var(--bg2); }
    APP SHELL
 ───────────────────────────────────────────── */
 #app { display: none; flex-direction: column; min-height: 100vh; position: relative; z-index: 1; }
+/* MP-mode guard: if body has mp-active class, force #app to show even if some
+   init step failed mid-way. Belt-and-braces against the black-screen bug. */
+body.mp-active #app { display: flex !important; flex-direction: column !important; }
+body.mp-active #login { display: none !important; }
+body.mp-active #mp-mode-select,
+body.mp-active #mp-lobby-overlay,
+body.mp-active #mp-game-overlay { display: none !important; }
+#mp-remote-strip {
+  position: sticky; top: 0; z-index: 20;
+  background: var(--bg1); border-bottom: 1px solid var(--line);
+  padding: 8px 14px; display: flex; flex-direction: column; gap: 6px;
+}
+#mp-remote-info { display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; }
+#mp-remote-seats { display:flex; gap:10px; flex-wrap:wrap; }
+.mp-remote-seat {
+  border:1px solid var(--line2); border-radius:6px; padding:6px 10px;
+  background:var(--bg2); min-width:140px; font-size:10px;
+}
+.mp-remote-seat.active-turn { border-color: var(--gold); box-shadow: 0 0 8px rgba(201,168,76,.25); }
+.mp-remote-seat .rs-name { font-weight:700; font-size:11px; }
+.mp-remote-seat .rs-bal  { font-family:var(--mono); color:var(--muted); font-size:9px; }
+.mp-remote-seat .rs-cards { display:flex; gap:3px; margin-top:4px; }
+.mp-remote-seat .rs-mini-c {
+  display:inline-block; min-width:18px; padding:2px 4px; border-radius:2px;
+  background:#FAF8F2; color:#111; font-family:var(--mono); font-size:9px; text-align:center;
+}
+.mp-remote-seat .rs-mini-c.red { color:#B52020; }
+.mp-remote-seat .rs-mini-c.hidden { background:#0A1828; color:#5A8AB8; }
 
 /* ─────────────────────────────────────────────
    TOP BAR
@@ -11377,9 +11405,15 @@ const MP = {
 
   // ── game ──────────────────────────────────────────────────
   _enterGame(tableId, tableState) {
+    console.log('[MP] _enterGame called', { tableId, tableState });
     this.tableId = tableId;
     this.state   = tableState;
     const me = (tableState.players||[]).find(p => p.username === G.username);
+    if (!me) {
+      console.error('[MP] enterGame: my username not found in players', G.username, tableState.players);
+      notif('Seat not found in table — cannot enter');
+      return;
+    }
     this._buyIn       = me?.balance ?? 0;
     this._sessionHigh = me?.balance ?? 0;
     this._mpChartPts  = [0];
@@ -11387,44 +11421,59 @@ const MP = {
     this._lastBet     = 0;
 
     // ── MP-IN-SP MODE ──────────────────────────────────────────────
-    // Use the full SP UI for the local player. Other seats render as
-    // compact remote-seat tiles in a strip overlaid above the SP table.
-    G.mpMode    = true;
-    G.mpTableId = tableId;
-    G.stake     = me?.stake || 'low';
-    G.s         = (typeof STAKES !== 'undefined') ? STAKES[G.stake] : null;
-    G.balance   = me?.balance ?? 0;
-    G.sessionStart = me?.balance ?? 0;
-    G._totalBalance = (_pendingLogin?.totalBalance) || (_pendingLogin?.balance) || G.balance;
-    G._sessionActive = true;
-    G.cashedOut  = false;
-    G._atCashout = false;
-    G.phase      = 'bet';
+    G.mpMode      = true;
+    G.mpTableId   = tableId;
+    G.stake       = me?.stake || 'low';
+    G.s           = (typeof STAKES !== 'undefined' && STAKES[G.stake]) || (STAKES?.low) || null;
+    if (!G.s) console.warn('[MP] STAKES not loaded — chips will not render');
+    G.player      = G.player || _pendingLogin?.player || G.username || 'Player';
+    G._totalBalance = (_pendingLogin?.totalBalance) || (_pendingLogin?.balance) || (me?.balance ?? 0);
+    G._cachedPin = G._cachedPin || _pendingLogin?.pin || '';
+    G.cashedOut   = false;
+    G._atCashout  = false;
+    G.phase       = 'bet';
 
-    // Hide the MP-only overlays — SP UI takes over.
-    document.getElementById('mp-lobby-overlay').style.display    = 'none';
-    document.getElementById('mp-mode-select').style.display      = 'none';
-    document.getElementById('mp-game-overlay').style.display     = 'none';
-    document.getElementById('login').style.display               = 'none';
+    // Hide ALL MP overlays — SP UI takes over.
+    try {
+      document.getElementById('mp-lobby-overlay').style.display = 'none';
+      document.getElementById('mp-mode-select').style.display   = 'none';
+      document.getElementById('mp-game-overlay').style.display  = 'none';
+    } catch(e) { console.error('[MP] hide overlays:', e); }
 
-    // Show SP UI
-    const app = document.getElementById('app');
-    if (app) app.style.display = '';
-    document.body.classList.remove('betting');
-    document.body.classList.add('betting'); // SP starts in betting phase
+    // Use SP's proper entry point. If it errors mid-way, finish the show manually
+    // so we never leave the user staring at a black screen.
+    let openErr = null;
+    try {
+      if (typeof openApp === 'function') {
+        openApp(G.player, me?.balance ?? 0);
+      } else throw new Error('openApp not defined');
+    } catch(e) {
+      openErr = e;
+      console.error('[MP] openApp threw — falling back to manual show:', e);
+    }
 
-    // Build SP chips/UI for the chosen stake
-    try { if (typeof buildChips === 'function') buildChips(); } catch(e) {}
-    try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
-    try { if (typeof _applyFelt === 'function') _applyFelt(); } catch(e) {}
-    try { if (typeof _updatePointsBadge === 'function') _updatePointsBadge(G._pts, false); } catch(e) {}
+    // Defensive: ensure SP UI is visible regardless of openApp result
+    try {
+      // mp-active class forces #app visible via CSS even if openApp didn't finish
+      document.body.classList.add('mp-active');
+      document.body.classList.remove('playing');
+      document.body.classList.add('betting');
+      const loginEl = document.getElementById('login');
+      if (loginEl) loginEl.style.display = 'none';
+      const app = document.getElementById('app');
+      if (app) { app.style.display = 'flex'; app.style.flexDirection = 'column'; }
+    } catch(e) { console.error('[MP] manual show:', e); }
 
-    // Inject remote-seats strip + turn indicator + leave-MP button into SP UI
-    this._mountMpStrip();
+    if (openErr) {
+      notif('Some UI init failed (' + openErr.message + ') — basic UI shown. Check console.');
+    }
 
-    this._render();
+    // Inject remote-seats strip above the SP table
+    try { this._mountMpStrip(); } catch(e) { console.error('[MP] mount strip:', e); }
+    try { this._render(); } catch(e) { console.error('[MP] initial render:', e); }
     this._startPolling();
     this._startTimerTick();
+    console.log('[MP] _enterGame finished — SP UI should be visible');
   },
 
   // ── Remote-seats strip — shown above the SP table when in MP ──────

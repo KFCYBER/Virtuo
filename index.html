@@ -2178,21 +2178,64 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .mp-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:20px 0;}
 .mp-create-form{border:1px solid var(--line2);border-radius:8px;padding:20px;background:var(--bg2);margin-bottom:24px;}
 /* game overlay */
-#mp-game-overlay{display:none;flex-direction:column;align-items:center;justify-content:flex-start;padding:24px 16px 100px;}
+/* ── MP GAME OVERLAY LAYOUT ────────────────────── */
+#mp-game-overlay{display:none;flex-direction:column;align-items:stretch;background:var(--bg);min-height:100vh;}
+/* topbar row — full width, mirrors SP #topbar */
 .mp-go-topbar{
-  width:100%;max-width:900px;
-  display:flex;align-items:center;justify-content:space-between;
-  border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:28px;
+  display:grid;grid-template-columns:1fr auto 1fr;align-items:center;
+  height:56px;padding:0 20px;gap:16px;
+  border-bottom:1px solid var(--line);background:var(--bg1);
+  position:sticky;top:0;z-index:200;flex-shrink:0;
 }
+.mp-go-topbar-left{display:flex;align-items:center;gap:10px;}
+.mp-go-topbar-center{display:flex;align-items:center;gap:8px;justify-content:center;}
+.mp-go-topbar-right{display:flex;align-items:center;gap:8px;justify-content:flex-end;}
 .mp-go-topbar .mp-table-name{font-size:11px;letter-spacing:4px;color:var(--gold);text-transform:uppercase;}
-.mp-phase-badge{
-  font-family:var(--mono);font-size:10px;letter-spacing:2px;
-  color:var(--muted);text-transform:uppercase;
-}
+.mp-phase-badge{font-family:var(--mono);font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;}
 .mp-timer{font-family:var(--mono);font-size:13px;font-weight:600;color:var(--gold-hi);}
+/* tb- style elements inside mp topbar — mirror SP topbar */
+.mp-tb-player{font-family:var(--sans);font-size:13px;font-weight:700;color:var(--white);}
+.mp-tb-balance{font-family:var(--mono);font-size:13px;font-weight:500;color:var(--gold-hi);}
+.mp-tb-stake{font-family:var(--sans);font-size:8px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:2px 6px;border:1px solid var(--line2);border-radius:2px;color:var(--muted);}
+#mp-session-timer{font-family:var(--mono);font-size:11px;color:var(--muted2);letter-spacing:1px;padding:3px 8px;border:1px solid var(--line);border-radius:2px;display:none;}
+#mp-session-timer.warn{color:var(--gold-lo);border-color:rgba(201,168,76,0.3);}
+/* inner two-column layout — mirrors #main */
+#mp-main{
+  flex:1;display:grid;
+  grid-template-columns:1fr 280px;
+  max-width:1440px;width:100%;margin:0 auto;
+  padding:16px 16px 120px;gap:16px;
+  align-items:start;
+}
+/* left column — mirrors #table-area */
+#mp-table-area{
+  display:flex;flex-direction:column;gap:0;
+  background:transparent;
+  border-right:1px solid var(--line);
+  padding:8px 24px 8px;
+  position:sticky;top:72px;
+  height:calc(100vh - 72px);
+  overflow-x:clip;overflow-y:auto;
+  scrollbar-width:none;
+  border-radius:8px 0 0 8px;
+}
+#mp-table-area::-webkit-scrollbar{display:none;}
+/* right sidebar — identical to #sidebar */
+#mp-sidebar{
+  display:flex;flex-direction:column;gap:16px;
+  max-height:calc(100vh - 88px);
+  overflow-y:auto;overflow-x:hidden;
+  scrollbar-width:thin;scrollbar-color:var(--line2) transparent;
+  position:sticky;top:72px;
+}
+#mp-sidebar::-webkit-scrollbar{width:4px;}
+#mp-sidebar::-webkit-scrollbar-track{background:transparent;}
+#mp-sidebar::-webkit-scrollbar-thumb{background:var(--line2);border-radius:2px;}
+/* collapsed sidebar */
+#mp-sidebar.collapsed{width:0!important;min-width:0!important;padding:0!important;overflow:hidden!important;opacity:0;pointer-events:none;}
 /* dealer area */
 .mp-dealer-wrap{
-  text-align:center;margin-bottom:32px;width:100%;max-width:900px;
+  text-align:center;margin-bottom:24px;width:100%;
   padding:20px;border-radius:12px;
   background: radial-gradient(ellipse at 50% 40%, rgba(6,26,13,0.45) 0%, rgba(4,15,8,0.52) 55%, rgba(2,7,5,0.58) 100%);
   border:1px solid rgba(201,168,76,0.15);
@@ -2203,7 +2246,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 /* player slots */
 .mp-players-row{
   display:flex;gap:14px;justify-content:center;flex-wrap:wrap;
-  width:100%;max-width:900px;margin-bottom:28px;
+  width:100%;margin-bottom:20px;
 }
 .mp-player-slot{
   flex:1;min-width:240px;max-width:320px;
@@ -2271,6 +2314,21 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .mp-payout-badge.win{background:rgba(63,185,80,.15);color:var(--green);}
 .mp-payout-badge.lose{background:rgba(248,81,73,.15);color:var(--red);}
 .mp-payout-badge.push{background:rgba(110,118,129,.15);color:var(--muted);}
+/* MP sidebar — bet panel mirrors */
+#mp-sb-quick-bet-row{display:flex;gap:4px;margin-top:6px;}
+#mp-sb-auto-same-bet-row{display:flex;align-items:center;justify-content:space-between;padding:6px 0 2px;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;}
+#mp-sb-auto-same-bet{position:relative;width:30px;height:16px;cursor:pointer;-webkit-appearance:none;appearance:none;background:var(--bg3);border:1px solid var(--line2);border-radius:8px;transition:background .2s,border-color .2s;flex-shrink:0;}
+#mp-sb-auto-same-bet:checked{background:var(--gold-lo);border-color:var(--gold);}
+#mp-sb-auto-same-bet::after{content:'';position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:var(--muted2);transition:transform .2s,background .2s;}
+#mp-sb-auto-same-bet:checked::after{transform:translateX(14px);background:var(--gold-hi);}
+#mp-sb-bet-input-row{display:flex;gap:6px;margin-top:8px;align-items:center;}
+#mp-sb-bet-input{flex:1;background:var(--bg2);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:13px;padding:7px 10px;border-radius:var(--radius);outline:none;transition:border-color .15s;min-width:0;}
+#mp-sb-bet-input:focus{border-color:var(--gold-lo);}
+#mp-sb-bet-btn{padding:7px 12px;background:var(--bg3);border:1px solid var(--line2);color:var(--muted2);font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;border-radius:var(--radius);transition:all .15s;white-space:nowrap;flex-shrink:0;}
+#mp-sb-bet-btn:hover{border-color:var(--gold-lo);color:var(--gold-hi);}
+#mp-panel-pu .item-btn{width:100%;box-sizing:border-box;}
+#mp-panel-pu{padding-bottom:8px;}
+#mp-lb-updated{font-family:var(--mono);font-size:8px;color:var(--muted);padding:4px 0;}
 </style>
 </head>
 <body class="betting">
@@ -3078,46 +3136,173 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: GAME OVERLAY
 ══════════════════════════════════════════════ -->
-<div id="mp-game-overlay" style="display:none;position:fixed;inset:0;z-index:1110;background:var(--bg);overflow-y:auto;flex-direction:column;align-items:center;padding:24px 16px 110px;">
-  <!-- top bar -->
+<div id="mp-game-overlay" style="display:none;position:fixed;inset:0;z-index:1110;background:var(--bg);overflow:hidden;flex-direction:column;">
+
+  <!-- topbar: 3 columns, mirrors SP #topbar -->
   <div class="mp-go-topbar">
-    <div>
+    <div class="mp-go-topbar-left">
       <div class="mp-table-name" id="mp-go-tablename">TABLE</div>
       <div class="mp-phase-badge" id="mp-go-phase">WAITING</div>
-    </div>
-    <div style="display:flex;align-items:center;gap:12px;">
       <div class="mp-timer" id="mp-go-timer"></div>
-      <button class="btn-ghost" onclick="toggleMusicPanel()" style="font-size:13px;padding:5px 8px;border-radius:2px;" title="Music">♪</button>
-      <button class="mp-mode-btn ghost" style="width:auto;padding:7px 16px;margin:0;font-size:9px;" onclick="MP.leaveTable()">&#9660; LEAVE</button>
+    </div>
+    <div class="mp-go-topbar-center">
+      <div class="mp-tb-player" id="mp-tb-name">—</div>
+      <span id="mp-pass-badge" title="21 Club Pass" style="display:none;font-size:14px;cursor:default;">👑</span>
+      <div class="mp-tb-balance" id="mp-tb-bal">0 KFC</div>
+      <div class="mp-tb-stake" id="mp-tb-stake">LOW</div>
+      <span id="mp-tb-points" title="Loyalty points" style="font-family:var(--mono);font-size:11px;color:var(--gold-lo);cursor:default;white-space:nowrap;">⭐ 0</span>
+      <span id="mp-streak-badge"></span>
+    </div>
+    <div class="mp-go-topbar-right">
+      <span id="mp-session-timer" title="Session duration">00:00</span>
+      <button class="btn-ghost" id="mp-btn-share" onclick="MP._mpShareHand()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Share last hand">↗</button>
+      <button class="btn-ghost" onclick="toggleMusicPanel()" style="font-size:13px;padding:6px 10px;" title="Music">♪</button>
+      <button class="btn-ghost" onclick="MP._toggleMpSidebar()" style="font-size:11px;padding:6px 10px;" title="Toggle sidebar">⊞</button>
+      <button class="btn-ghost" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;" title="Toggle table colour">🎨</button>
+      <button class="btn-ghost" onclick="MP._showTopUpMp()" style="font-size:11px;padding:6px 10px;border-color:rgba(63,185,80,0.4);color:var(--green);" id="mp-btn-topup">Top Up</button>
+      <button class="btn-ghost" onclick="MP.leaveTable()" style="font-size:9px;padding:6px 10px;letter-spacing:2px;">▼ LEAVE</button>
     </div>
   </div>
 
-  <!-- dealer -->
-  <div class="mp-dealer-wrap">
-    <div class="mp-dealer-label">DEALER</div>
-    <div class="mp-dealer-cards" id="mp-dealer-cards"></div>
-    <div class="mp-dealer-val" id="mp-dealer-val"></div>
-  </div>
+  <!-- two-column main, mirrors SP #main -->
+  <div id="mp-main">
 
-  <!-- players row (rendered dynamically) -->
-  <div class="mp-players-row" id="mp-players-row"></div>
+    <!-- left: table area, mirrors SP #table-area -->
+    <div id="mp-table-area">
 
-  <!-- power-up bar (rendered dynamically, shown in betting/waiting) -->
-  <div id="mp-pu-bar" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;padding:6px 0;max-width:720px;width:100%;min-height:0;"></div>
+      <!-- dealer -->
+      <div class="mp-dealer-wrap">
+        <div class="mp-dealer-label">DEALER</div>
+        <div class="mp-dealer-cards" id="mp-dealer-cards"></div>
+        <div class="mp-dealer-val" id="mp-dealer-val"></div>
+      </div>
 
-  <!-- session P/L chart bar -->
-  <div id="mp-chart-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;width:100%;max-width:720px;margin-top:4px;">
-    <span style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;white-space:nowrap;">Session</span>
-    <div id="mp-chart-canvas-wrap" style="flex:1;height:36px;position:relative;">
-      <canvas id="mp-chart-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
-    </div>
-    <span id="mp-chart-label" style="font-family:var(--mono);font-size:11px;font-weight:600;min-width:70px;text-align:right;"></span>
-  </div>
+      <!-- players row (rendered dynamically) -->
+      <div class="mp-players-row" id="mp-players-row"></div>
+
+      <!-- power-up bar (rendered dynamically) -->
+      <div id="mp-pu-bar" style="display:flex;flex-wrap:wrap;gap:6px;padding:6px 0;min-height:0;"></div>
+
+      <!-- session P/L chart bar -->
+      <div id="mp-chart-bar" style="display:none;align-items:center;gap:10px;padding:8px 12px;background:var(--bg2);border:1px solid var(--line);border-radius:4px;width:100%;margin-top:4px;">
+        <span style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;white-space:nowrap;">Session</span>
+        <div id="mp-chart-canvas-wrap" style="flex:1;height:36px;position:relative;">
+          <canvas id="mp-chart-canvas" style="position:absolute;inset:0;width:100%;height:100%;"></canvas>
+        </div>
+        <span id="mp-chart-label" style="font-family:var(--mono);font-size:11px;font-weight:600;min-width:70px;text-align:right;"></span>
+      </div>
+
+    </div><!-- #mp-table-area -->
+
+    <!-- right: sidebar (7 panels), mirrors SP #sidebar -->
+    <div id="mp-sidebar">
+
+      <!-- 1. BET -->
+      <div class="panel">
+        <div class="panel-title">Bet <span id="mp-sb-bet-total-tag" style="color:var(--gold-hi);font-family:var(--mono)"></span></div>
+        <div class="chip-row" id="mp-sb-chip-row"></div>
+        <div id="mp-sb-quick-bet-row" style="display:none;">
+          <button class="quick-bet-btn" onclick="MP._mpQuickBet('min')">Min</button>
+          <button class="quick-bet-btn" onclick="MP._mpQuickBet('half')">½ Max</button>
+          <button class="quick-bet-btn" onclick="MP._mpQuickBet('max')">Max</button>
+        </div>
+        <div id="mp-sb-bet-input-row" style="display:none;">
+          <input type="text" id="mp-sb-bet-input" placeholder="Custom amount…" inputmode="numeric" autocomplete="off"
+            oninput="MP._mpSbFmtBet(this)" onkeydown="if(event.key==='Enter')MP._mpSbApplyBetInput()">
+          <button id="mp-sb-bet-btn" onclick="MP._mpSbApplyBetInput()">Bet</button>
+        </div>
+        <div id="mp-sb-auto-same-bet-row" style="display:none;">
+          <span>Auto same bet</span>
+          <input type="checkbox" id="mp-sb-auto-same-bet" onchange="MP._toggleAutobet(this.checked)">
+        </div>
+        <div id="mp-sb-bet-lines"></div>
+      </div>
+
+      <!-- 2. SIDE BETS -->
+      <div class="panel">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between">Side Bets <button class="info-btn" onclick="openModal('sb-info-modal')">ⓘ</button></div>
+        <div id="mp-sb-side-bets"></div>
+      </div>
+
+      <!-- 3. ENHANCEMENTS -->
+      <div class="panel">
+        <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="MP._toggleMpEnhancements()">
+          <span style="display:flex;align-items:center;gap:8px">Enhancements <button class="info-btn" onclick="event.stopPropagation();openModal('pu-info-modal')" style="pointer-events:auto">ⓘ</button></span>
+          <span id="mp-enh-toggle-icon" style="font-size:11px;color:var(--muted);letter-spacing:1px;font-family:var(--mono);transition:transform .2s">▼</span>
+        </div>
+        <div id="mp-enh-wrap" style="overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:1000px;opacity:1">
+          <div class="tab-row">
+            <button class="tab on" id="mp-tab-lev" onclick="MP._switchMpTab('lev')">Leverage</button>
+            <button class="tab"    id="mp-tab-pu"  onclick="MP._switchMpTab('pu')">Power-Ups</button>
+          </div>
+          <div id="mp-panel-lev"></div>
+          <div id="mp-panel-pu" style="display:none"></div>
+        </div>
+      </div>
+
+      <!-- 4. LEADERBOARD -->
+      <div class="panel">
+        <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="MP._toggleMpLeaderboard()">
+          League Table
+          <span style="display:flex;align-items:center;gap:6px">
+            <button class="btn-ghost" onclick="event.stopPropagation();MP._refreshMpLeaderboard()" title="Refresh" style="font-size:10px;padding:2px 7px">↺</button>
+            <span id="mp-lb-toggle-icon" style="font-size:11px;color:var(--muted);letter-spacing:1px;font-family:var(--mono);transition:transform .2s">▼</span>
+          </span>
+        </div>
+        <div id="mp-lb-wrap" style="overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:400px;opacity:1">
+          <div id="mp-lb-content" style="font-family:var(--mono);font-size:9px;color:var(--muted);padding:4px 0">Loading...</div>
+          <div id="mp-lb-updated"></div>
+        </div>
+      </div>
+
+      <!-- 5. SESSION STATS -->
+      <div class="panel">
+        <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="MP._toggleMpStats()">
+          Session Stats
+          <span id="mp-stats-toggle-icon" style="font-size:11px;color:var(--muted);letter-spacing:1px;font-family:var(--mono);transition:transform .2s">▼</span>
+        </div>
+        <div id="mp-stats-wrap" style="overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:400px;opacity:1">
+          <div id="mp-stats-content" style="padding:6px 0"></div>
+        </div>
+      </div>
+
+      <!-- 6. LOG -->
+      <div class="panel">
+        <div class="panel-title" style="cursor:pointer;user-select:none;display:flex;align-items:center;justify-content:space-between" onclick="MP._toggleMpLog()">
+          Session Log
+          <span id="mp-log-toggle-icon" style="font-size:11px;color:var(--muted);letter-spacing:1px;font-family:var(--mono);transition:transform .2s">▼</span>
+        </div>
+        <div id="mp-log-wrap" style="overflow:hidden;transition:max-height .3s ease,opacity .3s ease;max-height:600px;opacity:1">
+          <div id="mp-log"></div>
+        </div>
+      </div>
+
+      <!-- 7. CONTROLS -->
+      <div class="panel">
+        <div class="panel-title" style="display:flex;align-items:center;justify-content:space-between">
+          Controls
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;font-weight:400;text-transform:none">
+            <input type="checkbox" id="mp-strategy-toggle" onchange="MP._toggleMpStrategy(this.checked)" style="accent-color:var(--gold);width:12px;height:12px">
+            Strategy hints
+          </label>
+        </div>
+        <div class="kbd-row"><span class="kbd-desc">Place bet / Next hand</span><span class="kbd-key">Space</span></div>
+        <div class="kbd-row"><span class="kbd-desc">Hit</span><span class="kbd-key">H</span></div>
+        <div class="kbd-row"><span class="kbd-desc">Stand</span><span class="kbd-key">S</span></div>
+        <div class="kbd-row"><span class="kbd-desc">Double</span><span class="kbd-key">D</span></div>
+        <div class="kbd-row"><span class="kbd-desc">Split</span><span class="kbd-key">P</span></div>
+        <div class="kbd-row"><span class="kbd-desc">Clear bet</span><span class="kbd-key">Esc</span></div>
+      </div>
+
+    </div><!-- #mp-sidebar -->
+
+  </div><!-- #mp-main -->
 
   <!-- action bar (fixed bottom) -->
   <div class="mp-action-bar" id="mp-action-bar">
     <span class="mp-wait-msg" id="mp-action-msg">Waiting…</span>
   </div>
+
 </div>
 
 <!-- MP LEAVE CONFIRMATION MODAL -->
@@ -11194,21 +11379,69 @@ const MP = {
   _enterGame(tableId, tableState) {
     this.tableId = tableId;
     this.state   = tableState;
-    // Record the buy-in (chips taken out of wallet) — needed for sessionPL on leave
     const me = (tableState.players||[]).find(p => p.username === G.username);
-    this._buyIn      = me?.balance ?? 0;
-    this._sessionHigh= me?.balance ?? 0;
-    this._mpChartPts = [0];
-    this._mpLog      = [];
-    this._lastBet    = 0;
-    document.getElementById('mp-lobby-overlay').style.display = 'none';
-    const go = document.getElementById('mp-game-overlay');
-    go.style.display = 'flex';
-    try { if (typeof _updatePointsBadge === 'function') _updatePointsBadge(G._pts, false); } catch(e) {}
+    this._buyIn       = me?.balance ?? 0;
+    this._sessionHigh = me?.balance ?? 0;
+    this._mpChartPts  = [0];
+    this._mpLog       = [];
+    this._lastBet     = 0;
+
+    // ── MP-IN-SP MODE ──────────────────────────────────────────────
+    // Use the full SP UI for the local player. Other seats render as
+    // compact remote-seat tiles in a strip overlaid above the SP table.
+    G.mpMode    = true;
+    G.mpTableId = tableId;
+    G.stake     = me?.stake || 'low';
+    G.s         = (typeof STAKES !== 'undefined') ? STAKES[G.stake] : null;
+    G.balance   = me?.balance ?? 0;
+    G.sessionStart = me?.balance ?? 0;
+    G._totalBalance = (_pendingLogin?.totalBalance) || (_pendingLogin?.balance) || G.balance;
+    G._sessionActive = true;
+    G.cashedOut  = false;
+    G._atCashout = false;
+    G.phase      = 'bet';
+
+    // Hide the MP-only overlays — SP UI takes over.
+    document.getElementById('mp-lobby-overlay').style.display    = 'none';
+    document.getElementById('mp-mode-select').style.display      = 'none';
+    document.getElementById('mp-game-overlay').style.display     = 'none';
+    document.getElementById('login').style.display               = 'none';
+
+    // Show SP UI
+    const app = document.getElementById('app');
+    if (app) app.style.display = '';
+    document.body.classList.remove('betting');
+    document.body.classList.add('betting'); // SP starts in betting phase
+
+    // Build SP chips/UI for the chosen stake
+    try { if (typeof buildChips === 'function') buildChips(); } catch(e) {}
+    try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
     try { if (typeof _applyFelt === 'function') _applyFelt(); } catch(e) {}
+    try { if (typeof _updatePointsBadge === 'function') _updatePointsBadge(G._pts, false); } catch(e) {}
+
+    // Inject remote-seats strip + turn indicator + leave-MP button into SP UI
+    this._mountMpStrip();
+
     this._render();
     this._startPolling();
     this._startTimerTick();
+  },
+
+  // ── Remote-seats strip — shown above the SP table when in MP ──────
+  _mountMpStrip() {
+    if (document.getElementById('mp-remote-strip')) return;
+    const wrap = document.createElement('div');
+    wrap.id = 'mp-remote-strip';
+    wrap.innerHTML = `
+      <div id="mp-remote-info">
+        <span id="mp-remote-table"></span>
+        <span id="mp-remote-turn"></span>
+        <button class="mp-mode-btn ghost" style="width:auto;padding:5px 12px;margin:0;font-size:9px;" onclick="MP.leaveTable()">▼ LEAVE TABLE</button>
+      </div>
+      <div id="mp-remote-seats"></div>
+    `;
+    const main = document.getElementById('main') || document.body;
+    main.insertBefore(wrap, main.firstChild);
   },
 
   _startPolling() {
@@ -11459,6 +11692,8 @@ const MP = {
     // action bar — always runs
     try { this._renderPuBar(t); } catch(e) {}
     try { this._renderActions(t); } catch(e) {}
+    // sidebar — mirrors SP sidebar
+    try { this._renderMpSidebar(t); } catch(e) {}
   },
 
   _renderPuBar(t) {

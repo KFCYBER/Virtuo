@@ -12638,6 +12638,12 @@ function _mpSyncServerToSp(t) {
   const me = (t.players||[]).find(p => p.username === G.username);
   if (!me) return;
 
+  // 0) Ensure G.s is always valid — openApp may have run with wrong/null stake
+  if (!G.s || G.stake !== (me.stake || G.stake)) {
+    G.stake = me.stake || G.stake || 'low';
+    G.s = (typeof STAKES !== 'undefined' && STAKES[G.stake]) || STAKES?.low || null;
+  }
+
   // 1) Balance
   G.balance = me.balance ?? G.balance;
 
@@ -12710,7 +12716,7 @@ function _mpSyncServerToSp(t) {
 
   // 6) Repaint SP UI — full re-render is safest given format conversions
   try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
-  try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
+  try { if (G.s && typeof updateUI === 'function') updateUI(); } catch(e) {}
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
   try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
 
@@ -12839,22 +12845,49 @@ function _mpRenderRemoteSeats(t, me) {
     };
   };
 
-  // deal() — in MP, sends bet to worker. Server deals server-side.
+  // deal() — in MP: start round (if host+waiting) then place bet.
   wrap('deal', function() {
-    if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Place a bet first (min ' + fmtKFC(G.s?.min||0) + ')'); return; }
-    const betAmt = G.mainBet; // capture before poll can reset it
-    MP._lastBet = betAmt; // track for auto-same-bet next round
-    const sideBets = {};
-    Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
+    // Guard: must be connected to a live table
+    if (!MP.tableId) { notif('Not connected to a table'); return; }
     const t = MP.state;
-    if (t?.phase === 'waiting') {
-      const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
-      if (!isHost) { notif('Waiting for host to start…'); return; }
-      // start transitions all players to betting, then bet places our wager
-      MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
+    if (!t) { notif('Waiting for table state…'); return; }
+
+    // Guard: bet must meet stake minimum
+    const min = G.s?.min || 0;
+    if (!G.mainBet || G.mainBet < min) {
+      notif(min ? 'Place a bet first — minimum ' + fmtKFC(min) : 'Place a bet first');
       return;
     }
-    MP._action('bet', { amount: betAmt, sideBets });
+
+    const betAmt  = G.mainBet; // capture now — poll may reset G.mainBet later
+    MP._lastBet   = betAmt;    // used by auto-same-bet on the next round
+    const sideBets = {};
+    Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
+
+    if (t.phase === 'waiting') {
+      const me = (t.players||[]).find(p => p.username === G.username);
+      if (!me?.isHost) { notif('Waiting for the host to start the round…'); return; }
+      // Host presses Deal while table is waiting: start betting phase, then place bet.
+      // The .then() only sends bet if start succeeded (phase changed to betting).
+      MP._action('start').then(() => {
+        if (MP.state?.phase === 'betting') {
+          MP._action('bet', { amount: betAmt, sideBets });
+        }
+        // If phase is still 'waiting' after start, an error notif was already shown by _action.
+      });
+      return;
+    }
+
+    if (t.phase === 'betting') {
+      const me = (t.players||[]).find(p => p.username === G.username);
+      if (me?.status === 'bet_placed')  { notif('Bet already placed — waiting for other players…'); return; }
+      if (me?.status === 'sitting_out') { notif('Sitting out this round'); return; }
+      MP._action('bet', { amount: betAmt, sideBets });
+      return;
+    }
+
+    // Any other phase: game is in progress
+    notif('Round already in progress — wait for the next hand');
   });
 
   wrap('hit',          () => MP._action('hit',    G.cur===1 ? {hand2:true} : {}));

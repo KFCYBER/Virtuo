@@ -3110,6 +3110,18 @@ body.hand2-active #chip-strip .chip { position: relative; }
   </div>
 </div>
 
+<!-- MP LEAVE CONFIRMATION MODAL -->
+<div class="overlay" id="mp-leave-modal" style="display:none;z-index:1200;">
+  <div class="modal" style="max-width:340px;padding:28px 24px;">
+    <div style="font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:18px;">Leave Table?</div>
+    <div id="mp-leave-summary" style="font-family:var(--mono);font-size:11px;line-height:1.7;margin-bottom:16px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn-primary" onclick="MP._doLeave()">Cash Out &amp; Leave</button>
+      <button class="btn-ghost" onclick="MP._cancelLeave()">Stay &amp; Play More</button>
+    </div>
+  </div>
+</div>
+
 <!-- BONUS TOAST -->
 <div id="bonus-toast">
   <div class="bt-name" id="bt-name"></div>
@@ -11052,6 +11064,7 @@ const MP = {
           tableName:    name,
           balance:      buyIn,
           totalBalance: bal,
+          hasPass:     !!(G._clubPass),
         }),
       });
       const text = await r.text();
@@ -11109,6 +11122,7 @@ const MP = {
           stake,
           balance:      buyIn,
           totalBalance: bal,
+          hasPass:     !!(G._clubPass),
         }),
       });
       const d = await r.json();
@@ -11165,6 +11179,20 @@ const MP = {
         // Cache last-seen balance BEFORE state replaces — used if we get kicked next poll
         if (me) this._lastSeenBalance = me.balance;
         this.state = d.table;
+        // Per-round sync: fire once when a result round completes (roundNum changes)
+        if (d.table.phase === 'result' && me?.status === 'done') {
+          const rn = d.table.roundNum;
+          if (rn !== this._lastSyncedRound) {
+            this._lastSyncedRound = rn;
+            // Earn loyalty pts
+            if (me.ptsEarned > 0 && typeof _addPoints === 'function') {
+              try { _addPoints(me.ptsEarned); } catch(e) {}
+            }
+            // Debounced GAS sync after each round
+            clearTimeout(this._roundSyncTimer);
+            this._roundSyncTimer = setTimeout(() => this._syncBalanceToSheets('round'), 3000);
+          }
+        }
         // Detect AFK-kick — our slot vanished from the table or kicked flag set
         if (!me || me.kicked) {
           notif('Kicked for inactivity — syncing balance and returning to lobby');
@@ -11242,16 +11270,58 @@ const MP = {
     }
   },
 
-  async leaveTable() {
+  leaveTable() {
+    // Show leave confirmation with session summary and tax preview
+    const me = this._myPlayer;
+    const finalBal  = me?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
+    const buyIn     = this._buyIn ?? 0;
+    const sessionPL = finalBal - buyIn;
+    const stake     = me?.stake || this._myStake || 'low';
+    const taxRate   = (typeof STAKES !== 'undefined' && STAKES[stake]) ? STAKES[stake].tax : 0.04;
+    const totalBal  = (G._totalBalance || 0) - buyIn + finalBal;
+    const taxEst    = Math.floor(totalBal * taxRate);
+    const plSign    = sessionPL >= 0 ? '+' : '';
+    const plColor   = sessionPL > 0 ? 'var(--green)' : sessionPL < 0 ? 'var(--red)' : 'var(--muted)';
+    const nextTax   = (typeof _nextTaxDate === 'function') ? _nextTaxDate() : '25th';
+
+    const summaryEl = document.getElementById('mp-leave-summary');
+    if (summaryEl) summaryEl.innerHTML = `
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="color:var(--muted2)">Buy-in</span>
+        <span>${this._fmt(buyIn)} KFC</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="color:var(--muted2)">Cash-out</span>
+        <span>${this._fmt(finalBal)} KFC</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:8px;margin-top:4px;">
+        <span style="color:var(--muted2)">Session P/L</span>
+        <span style="color:${plColor};font-weight:700;">${plSign}${this._fmt(sessionPL)} KFC</span>
+      </div>
+      ${totalBal > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;">
+        <span style="color:var(--muted)">Dealer tax est. (${nextTax})</span>
+        <span style="color:var(--muted);">${Math.round(taxRate*100)}% = −${this._fmt(taxEst)}</span>
+      </div>` : ''}`;
+
+    const modal = document.getElementById('mp-leave-modal');
+    if (modal) modal.style.display = 'flex';
+  },
+
+  _cancelLeave() {
+    const modal = document.getElementById('mp-leave-modal');
+    if (modal) modal.style.display = 'none';
+  },
+
+  async _doLeave() {
+    const modal = document.getElementById('mp-leave-modal');
+    if (modal) modal.style.display = 'none';
     this._stopPolling();
     this._stopTimerTick();
-    // Sync final balance BEFORE telling worker we left (so we can still read our slot)
     if (this.tableId && this.state) await this._syncBalanceToSheets('leave');
     if (this.tableId) await this._action('leave');
     this.tableId = null;
     this.state   = null;
     document.getElementById('mp-game-overlay').style.display='none';
-    // Hard reload — cleanest way to fully reset state and return to fresh login
     window.location.reload();
   },
 
@@ -11283,6 +11353,10 @@ const MP = {
 
     // Bonus card toast — fires once when a new bonus card appears in our hand
     try { this._checkBonusToast(t); } catch(e) {}
+    // Audio cues on result transitions
+    try { this._fireSfx(t); } catch(e) {}
+    // Balance cap notification
+    try { this._checkBalanceCap(t); } catch(e) {}
 
     // players — isolated so any error here doesn't block the action bar
     try { this._renderPlayers(t); } catch(e) {
@@ -11350,6 +11424,39 @@ const MP = {
 
   _buyPowerup(puId) {
     this._action('buyPowerup', { puId });
+  },
+
+  // ── Audio / cap ───────────────────────────────────────────────
+  _fireSfx(t) {
+    const me = this._myPlayer;
+    if (!me) return;
+    // Reset sfx tracking between rounds
+    if (t.phase === 'betting' || t.phase === 'waiting') {
+      this._lastSfxResult = null;
+      return;
+    }
+    if (t.phase !== 'result' || !me.result) return;
+    if (me.result === this._lastSfxResult) return;
+    this._lastSfxResult = me.result;
+    try {
+      if (me.result === 'blackjack')              sfx('bj');
+      else if (me.result === 'win')               sfx('win');
+      else if (me.result === 'push')              sfx('push');
+      else if (me.result === 'bust')              sfx('bust');
+      else if (me.result === 'lose')              sfx('lose');
+      else if (me.result === 'dealer_bj')         sfx('dealer_bj');
+    } catch(e) {}
+  },
+
+  _checkBalanceCap(t) {
+    const me = this._myPlayer;
+    if (!me) return;
+    if (me.balance >= 50_000_000_000 && !this._capNotified) {
+      this._capNotified = true;
+      if (typeof notif === 'function') notif('50B balance cap reached — cash out to continue');
+    } else if (me.balance < 50_000_000_000) {
+      this._capNotified = false;
+    }
   },
 
   _takeInsurance()    { this._action('takeInsurance'); },

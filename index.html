@@ -11634,9 +11634,7 @@ const MP = {
                 }
               } catch(e) {}
             }
-            // Debounced GAS sync after each round
-            clearTimeout(this._roundSyncTimer);
-            this._roundSyncTimer = setTimeout(() => this._syncBalanceToSheets('round'), 3000);
+            // GAS sync intentionally skipped per-round — only fires on leave/kick
           }
         }
         // Auto-same-bet: pre-fill bet on new betting phase
@@ -11660,7 +11658,9 @@ const MP = {
           await this._syncBalanceToSheets(me ? 'afk-kick' : 'removed');
           this.tableId = null;
           this.state   = null;
-          document.getElementById('mp-game-overlay').style.display = 'none';
+          document.body.classList.remove('mp-active');
+          G.mpMode = false;
+          try { this._clearMpSnap(); } catch(e) {}
           this._openLobby();
           return;
         }
@@ -11673,7 +11673,9 @@ const MP = {
         await this._syncBalanceToSheets('table-closed');
         this.tableId = null;
         this.state   = null;
-        document.getElementById('mp-game-overlay').style.display = 'none';
+        document.body.classList.remove('mp-active');
+        G.mpMode = false;
+        try { this._clearMpSnap(); } catch(e) {}
         this._openLobby();
       }
     } catch(e) { /* network hiccup — keep going */ }
@@ -11780,7 +11782,8 @@ const MP = {
     if (this.tableId) await this._action('leave'); // still await — fast KV op, removes seat
     this.tableId = null;
     this.state   = null;
-    document.getElementById('mp-game-overlay').style.display='none';
+    G.mpMode = false;
+    this._clearMpSnap(); // clear before reload so boot doesn't attempt a resume
     window.location.reload();
   },
 
@@ -12648,7 +12651,11 @@ function _mpSyncServerToSp(t) {
         }
       }
     } catch(e) {}
-  } else if (t.phase === 'playing' || t.phase === 'dealer') {
+  } else if (t.phase === 'playing' || t.phase === 'dealer' || t.phase === 'insurance') {
+    // Transition from bet/result → playing: clear old cards so renderAll repaints from scratch
+    if (G.phase === 'bet' || G.phase === 'done') {
+      try { if (typeof resetCards === 'function') resetCards(); } catch(e) {}
+    }
     G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
     mpPhaseToSpBody('playing');
     try {
@@ -12794,7 +12801,7 @@ function _mpRenderRemoteSeats(t, me) {
       // Table not yet started — auto-start then bet
       const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
       if (!isHost) { notif('Waiting for host to start…'); return; }
-      MP._action('start').then(() => setTimeout(() => MP._action('bet', { amount: betAmt, sideBets }), 200));
+      MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
       return;
     }
     MP._action('bet', { amount: betAmt, sideBets });
@@ -12839,22 +12846,23 @@ function _mpRenderRemoteSeats(t, me) {
   window.restoreSession = function(lastUser) {
     if (!_mpAttempted) {
       _mpAttempted = true;
-      // Synchronously check if a snap exists; if yes, kick off async resume
-      // and return true so SP skips its restore. If no snap, fall through.
       try {
         const raw = localStorage.getItem('kfc_mp_snap');
         if (raw) {
-          // Async resume — fire and forget. The user sees "Resuming…" notif then table loads.
+          // Hide login immediately — async resume will call _enterGame → openApp
+          const lg = document.getElementById('login');
+          if (lg) lg.style.display = 'none';
           MP._tryResumeFromSnap().then(ok => {
             if (!ok) {
-              // MP resume failed — fall back to SP restore
-              const fallback = _orig_restore(lastUser);
-              if (fallback) {
-                try { openApp(G.player, G.balance); } catch(e) {}
-              }
+              // MP resume failed — player was in MP, so just return to clean login.
+              // Never auto-restore an SP session when a snap existed: that causes
+              // wrong-mode logging and confuses the player.
+              localStorage.removeItem('kfc_mp_snap');
+              const lg2 = document.getElementById('login');
+              if (lg2) lg2.style.display = 'flex';
             }
           });
-          return true; // tell SP boot to wait
+          return false; // prevent SP's openApp('', 0) from firing synchronously
         }
       } catch(e) { console.error('[MP] restore hook:', e); }
     }

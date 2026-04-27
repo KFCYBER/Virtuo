@@ -11460,6 +11460,13 @@ const MP = {
       console.error('[MP] openApp threw — falling back to manual show:', e);
     }
 
+    // Force session tracking to MP buy-in regardless of any prior SP session state.
+    // openApp only sets G.sessionStart when !G._sessionActive, so a returning SP player
+    // would otherwise inherit their old sessionStart as the MP baseline.
+    G.sessionStart    = this._buyIn;
+    G._sessionActive  = true;
+    G.log             = [];
+
     // Defensive: ensure SP UI is visible regardless of openApp result
     try {
       // mp-active class forces #app visible via CSS even if openApp didn't finish
@@ -11621,6 +11628,8 @@ const MP = {
             const cumulPL  = (this._mpChartPts[this._mpChartPts.length - 1] || 0) + roundPL;
             this._mpChartPts.push(cumulPL);
             this._mpLog.push({ pl: roundPL, bal: me.balance, result: me.result });
+            // Mirror into G.log so SP's cashout stats/chart work correctly in MP
+            G.log.push({ detail: me.result || 'played', pl: roundPL, bal: me.balance });
             try { this._updateMpChart(); } catch(e) {}
             // Personal best flash
             if (me.balance > this._sessionHigh) {
@@ -11637,14 +11646,16 @@ const MP = {
             // GAS sync intentionally skipped per-round — only fires on leave/kick
           }
         }
-        // Auto-same-bet: pre-fill bet on new betting phase
+        // Auto-same-bet: pre-fill G.mainBet on new betting phase so SP chips reflect last bet
         if (d.table.phase === 'betting' && this._lastPhaseForAutobet !== 'betting') {
-          if (_autoSameBet && this._lastBet > 0) {
+          if (typeof _autoSameBet !== 'undefined' && _autoSameBet && this._lastBet > 0) {
+            const _prevBet = this._lastBet;
             setTimeout(() => {
-              const inp = document.getElementById('mp-live-bet');
-              if (inp && me?.status === 'betting') {
-                inp._raw = this._lastBet;
-                inp.value = this._lastBet.toLocaleString('de-CH');
+              const p = MP.state?.players?.find(q => q.username === G.username);
+              if (p?.status === 'betting' && _prevBet >= (G.s?.min || 0)) {
+                G.mainBet = _prevBet;
+                try { if (typeof updateBetPanel === 'function') updateBetPanel(); } catch(e) {}
+                try { if (typeof buildChips === 'function') buildChips(); } catch(e) {}
               }
             }, 80);
           }
@@ -12820,14 +12831,21 @@ function _mpRenderRemoteSeats(t, me) {
   wrap('deal', function() {
     if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Place a bet first (min ' + fmtKFC(G.s?.min||0) + ')'); return; }
     const betAmt = G.mainBet; // capture before poll can reset it
+    MP._lastBet = betAmt; // track for auto-same-bet next round
     const sideBets = {};
     Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
     const t = MP.state;
     if (t?.phase === 'waiting') {
-      // Host only — startAndBet is atomic: one KV write eliminates the race condition
       const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
       if (!isHost) { notif('Waiting for host to start…'); return; }
-      MP._action('startAndBet', { amount: betAmt, sideBets });
+      // Prefer atomic startAndBet (one KV write). If the deployed worker doesn't know
+      // this action yet (silent ok + unchanged state), fall back to the two-step start→bet.
+      MP._action('startAndBet', { amount: betAmt, sideBets }).then(() => {
+        if (MP.state?.phase === 'waiting') {
+          // Server didn't recognise startAndBet — fall back to deployed actions
+          MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
+        }
+      });
       return;
     }
     MP._action('bet', { amount: betAmt, sideBets });
@@ -12857,6 +12875,14 @@ function _mpRenderRemoteSeats(t, me) {
     if (myPts < ptsCost) { notif('Not enough loyalty points (need ⭐' + ptsCost + ')'); return; }
     try { if (typeof _spendPoints === 'function') _spendPoints(ptsCost); } catch(e) {}
     MP._action('grantPowerup', { puId: pu.id });
+  });
+
+  // confirmCashout: in MP, use leaveTable() instead of SP's own sync/clearSession flow.
+  // SP's flow would orphan the server seat; leaveTable() removes the slot and syncs balance.
+  wrap('confirmCashout', async function() {
+    try { if (typeof closeModal === 'function') closeModal('cashout-modal'); } catch(e) {}
+    G._atCashout = false;
+    await MP.leaveTable();
   });
 
   // cycleSB: SP cycles through stake values locally; in MP we still cycle locally

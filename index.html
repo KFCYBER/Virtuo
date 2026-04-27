@@ -11460,6 +11460,11 @@ const MP = {
       console.error('[MP] openApp threw — falling back to manual show:', e);
     }
 
+    // Load loyalty points from login data if available (covers fresh MP entry without prior SP session)
+    if (typeof _loadPtsFromLogin === 'function' && _pendingLogin?.loyaltyPoints != null) {
+      try { _loadPtsFromLogin(_pendingLogin.loyaltyPoints); } catch(e) {}
+    }
+
     // Force session tracking to MP buy-in regardless of any prior SP session state.
     // openApp only sets G.sessionStart when !G._sessionActive, so a returning SP player
     // would otherwise inherit their old sessionStart as the MP baseline.
@@ -11548,6 +11553,13 @@ const MP = {
       // Surface a resuming notice + jump straight back into the table
       try { notif('Resuming multiplayer table…'); } catch(e) {}
       _pendingLogin = _pendingLogin || { balance: me.balance, totalBalance: snap.totalBalance };
+      // Restore points from localStorage (best available without a sheet round-trip)
+      if (typeof _ptsKey === 'function' && typeof _setPoints === 'function') {
+        try {
+          const localPts = parseInt(localStorage.getItem(_ptsKey(snap.username))||'0', 10);
+          if (localPts > 0) _setPoints(snap.username, localPts);
+        } catch(e) {}
+      }
       this._buyIn = snap.buyIn || me.balance;
       this._enterGame(snap.tableId, d.table);
       return true;
@@ -12838,14 +12850,8 @@ function _mpRenderRemoteSeats(t, me) {
     if (t?.phase === 'waiting') {
       const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
       if (!isHost) { notif('Waiting for host to start…'); return; }
-      // Prefer atomic startAndBet (one KV write). If the deployed worker doesn't know
-      // this action yet (silent ok + unchanged state), fall back to the two-step start→bet.
-      MP._action('startAndBet', { amount: betAmt, sideBets }).then(() => {
-        if (MP.state?.phase === 'waiting') {
-          // Server didn't recognise startAndBet — fall back to deployed actions
-          MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
-        }
-      });
+      // start transitions all players to betting, then bet places our wager
+      MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
       return;
     }
     MP._action('bet', { amount: betAmt, sideBets });

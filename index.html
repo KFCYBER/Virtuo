@@ -121,11 +121,19 @@ body.mp-active #mp-mode-select,
 body.mp-active #mp-lobby-overlay,
 body.mp-active #mp-game-overlay { display: none !important; }
 #mp-remote-strip {
-  position: sticky; top: 0; z-index: 20;
-  background: var(--bg1); border-bottom: 1px solid var(--line);
-  padding: 8px 14px; display: flex; flex-direction: column; gap: 6px;
+  width: 100%;
+  background: linear-gradient(180deg, rgba(20,19,19,0.95) 0%, rgba(17,18,20,0.85) 100%);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 14px;
+  margin: 0 0 12px;
+  display: flex; flex-direction: column; gap: 8px;
+  box-sizing: border-box;
+  flex-shrink: 0;
 }
-#mp-remote-info { display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; }
+/* Only show when MP active — keeps SP layout untouched */
+body:not(.mp-active) #mp-remote-strip { display: none !important; }
+#mp-remote-info { display:flex; align-items:center; gap:14px; flex-wrap:wrap; font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; min-height:24px; }
 #mp-remote-seats { display:flex; gap:10px; flex-wrap:wrap; }
 .mp-remote-seat {
   border:1px solid var(--line2); border-radius:6px; padding:6px 10px;
@@ -11473,10 +11481,77 @@ const MP = {
     try { this._render(); } catch(e) { console.error('[MP] initial render:', e); }
     this._startPolling();
     this._startTimerTick();
+
+    // ── Persist MP context for reload-resume ──
+    try {
+      localStorage.setItem('kfc_mp_snap', JSON.stringify({
+        tableId,
+        username:    G.username || G.player,
+        player:      G.player,
+        cachedPin:   G._cachedPin || '',
+        url:         G.url || '',
+        totalBalance: G._totalBalance || 0,
+        buyIn:       this._buyIn,
+        ts:          Date.now(),
+      }));
+    } catch(e) { console.error('[MP] save snap:', e); }
+
     console.log('[MP] _enterGame finished — SP UI should be visible');
   },
 
-  // ── Remote-seats strip — shown above the SP table when in MP ──────
+  _clearMpSnap() {
+    try { localStorage.removeItem('kfc_mp_snap'); } catch(e) {}
+  },
+
+  // Called from boot — returns true if MP session restored, false otherwise.
+  // If true, caller MUST skip SP's restoreSession path.
+  async _tryResumeFromSnap() {
+    let snap;
+    try {
+      const raw = localStorage.getItem('kfc_mp_snap');
+      if (!raw) return false;
+      snap = JSON.parse(raw);
+      if (!snap || !snap.tableId || !snap.username) {
+        localStorage.removeItem('kfc_mp_snap'); return false;
+      }
+      // Stale check — 12h
+      if (Date.now() - (snap.ts||0) > 12*60*60*1000) {
+        localStorage.removeItem('kfc_mp_snap'); return false;
+      }
+    } catch(e) { return false; }
+
+    // Hydrate enough G state to make the worker call
+    G.username     = snap.username;
+    G.player       = snap.player || snap.username;
+    G._cachedPin   = snap.cachedPin || '';
+    G.url          = snap.url || G.url;
+    G._totalBalance= snap.totalBalance || 0;
+
+    const baseUrl = (G.url || 'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/, '');
+    try {
+      const r = await fetch(
+        `${baseUrl}/mp/tables/${snap.tableId}/state?username=${encodeURIComponent(snap.username)}`,
+        { cache:'no-store' }
+      );
+      if (!r.ok) { localStorage.removeItem('kfc_mp_snap'); return false; }
+      const d = await r.json();
+      if (!d.ok || !d.table) { localStorage.removeItem('kfc_mp_snap'); return false; }
+      const me = (d.table.players||[]).find(p => p.username === snap.username);
+      if (!me) { localStorage.removeItem('kfc_mp_snap'); return false; }
+      // Surface a resuming notice + jump straight back into the table
+      try { notif('Resuming multiplayer table…'); } catch(e) {}
+      _pendingLogin = _pendingLogin || { balance: me.balance, totalBalance: snap.totalBalance };
+      this._buyIn = snap.buyIn || me.balance;
+      this._enterGame(snap.tableId, d.table);
+      return true;
+    } catch(e) {
+      console.error('[MP] resume failed:', e);
+      return false;
+    }
+  },
+
+  // ── Remote-seats strip — shown ABOVE the dealer area inside #table-area
+  // Inserting into #main breaks SP's CSS grid; #table-area is the safe column.
   _mountMpStrip() {
     if (document.getElementById('mp-remote-strip')) return;
     const wrap = document.createElement('div');
@@ -11484,13 +11559,23 @@ const MP = {
     wrap.innerHTML = `
       <div id="mp-remote-info">
         <span id="mp-remote-table"></span>
-        <span id="mp-remote-turn"></span>
+        <span id="mp-remote-turn" style="flex:1;"></span>
         <button class="mp-mode-btn ghost" style="width:auto;padding:5px 12px;margin:0;font-size:9px;" onclick="MP.leaveTable()">▼ LEAVE TABLE</button>
       </div>
       <div id="mp-remote-seats"></div>
     `;
-    const main = document.getElementById('main') || document.body;
-    main.insertBefore(wrap, main.firstChild);
+    const tableArea = document.getElementById('table-area');
+    if (tableArea) {
+      tableArea.insertBefore(wrap, tableArea.firstChild);
+    } else {
+      // Fallback only if SP UI is not present yet
+      (document.body).appendChild(wrap);
+    }
+  },
+
+  _unmountMpStrip() {
+    const w = document.getElementById('mp-remote-strip');
+    if (w && w.parentNode) w.parentNode.removeChild(w);
   },
 
   _startPolling() {
@@ -12480,6 +12565,250 @@ const MP = {
     notif(`Power-up purchased! (${cost} pts spent)`);
   },
 };
+
+// ════════════════════════════════════════════════════════════════
+//  MP ↔ SP WIRING LAYER
+//  When G.mpMode is true, SP action functions are intercepted and
+//  dispatched to the MP worker instead of mutating local state.
+//  Server is authoritative for cards, dealer hand, and outcomes.
+// ════════════════════════════════════════════════════════════════
+
+// ─── Card format converter: server "AH","10S","??" → SP {r,s} ───
+const _MP_SUIT_MAP = { S:'♠', H:'♥', D:'♦', C:'♣' };
+function mpToSpCard(c) {
+  if (!c) return null;
+  if (c === '??') return { r:'?', s:'?', _hidden:true };
+  if (typeof c === 'object') return c; // already SP-shaped (bonus card)
+  const rank = c.slice(0, -1);
+  const suit = c.slice(-1);
+  return { r: rank, s: _MP_SUIT_MAP[suit] || suit };
+}
+
+// ─── Map server phase to SP body class ───
+function mpPhaseToSpBody(serverPhase) {
+  document.body.classList.remove('betting','playing','dealer','done','result');
+  // SP CSS only really cares about "betting" vs not
+  if (serverPhase === 'waiting' || serverPhase === 'betting') {
+    document.body.classList.add('betting');
+  } else {
+    // playing | dealer | result — show playing zone
+  }
+}
+
+// ─── Sync server state into G + repaint SP UI ───
+function _mpSyncServerToSp(t) {
+  if (!G.mpMode || !t) return;
+  const me = (t.players||[]).find(p => p.username === G.username);
+  if (!me) return;
+
+  // 1) Balance
+  G.balance = me.balance ?? G.balance;
+
+  // 2) Dealer hand (server-authoritative)
+  G.dealer = (t.dealerHand||[]).map(mpToSpCard).filter(Boolean);
+  G.holeRevealed = !t.dealerHidden;
+
+  // 3) My hand(s)
+  G.hands = [ (me.hand||[]).map(mpToSpCard).filter(Boolean) ];
+  if (me.hand2 && me.hand2.length) {
+    G.hands.push(me.hand2.map(mpToSpCard).filter(Boolean));
+  }
+  G.cur = me._onHand2 ? 1 : 0;
+
+  // 4) Bet mirrored from server
+  G.mainBet = me.bet || 0;
+  if (me.bet2) G.mainBet2 = me.bet2;
+
+  // 5) Phase mapping
+  if (t.phase === 'waiting' || t.phase === 'betting') {
+    G.phase = 'bet';
+    mpPhaseToSpBody('betting');
+  } else if (t.phase === 'playing' || t.phase === 'dealer') {
+    G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
+    mpPhaseToSpBody('playing');
+  } else if (t.phase === 'result') {
+    G.phase = 'done';
+    mpPhaseToSpBody('done');
+  }
+
+  // 6) Repaint SP UI — full re-render is safest given format conversions
+  try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
+  try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
+  try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
+
+  // 7) Turn lock: disable SP action buttons unless it's our turn
+  const myTurn = (t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username);
+  ['btn-hit','btn-stand','btn-double','btn-split','btn-deal-top','btn-deal'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (t.phase === 'betting') {
+      // During betting, deal/place-bet buttons are gated by min bet only
+      if (id === 'btn-deal-top' || id === 'btn-deal') {
+        el.disabled = (G.mainBet < (G.s?.min||0)) || me.status === 'bet_placed' || me.status === 'sitting_out';
+      } else {
+        el.disabled = true;
+      }
+    } else if (t.phase === 'playing') {
+      el.disabled = !myTurn || me.status !== 'playing';
+    } else {
+      el.disabled = true;
+    }
+  });
+
+  // 8) Render remote seats strip
+  _mpRenderRemoteSeats(t, me);
+}
+
+// ─── Remote seats strip (other players) ───
+function _mpRenderRemoteSeats(t, me) {
+  const wrap = document.getElementById('mp-remote-seats');
+  const info = document.getElementById('mp-remote-info');
+  if (!wrap) return;
+  const others = (t.players||[]).filter(p => p.username !== G.username);
+  if (info) {
+    const turn = t.players[t.currentTurnIdx];
+    const tn = document.getElementById('mp-remote-table');
+    const tt = document.getElementById('mp-remote-turn');
+    if (tn) tn.textContent = `${t.name||''} · ${(t.category||'').toUpperCase()} · ${(t.phase||'').toUpperCase()}`;
+    if (tt) tt.textContent = (t.phase==='playing' && turn)
+      ? (turn.username === G.username ? '★ YOUR TURN' : `Waiting for ${turn.displayName||turn.username}…`)
+      : '';
+  }
+  wrap.innerHTML = others.map(p => {
+    const cardsHtml = (p.hand||[]).map(c => {
+      if (c === '??' || (c && c._hidden)) return '<span class="rs-mini-c hidden">?</span>';
+      const r = (typeof c === 'string') ? c.slice(0,-1) : c.r;
+      const su= (typeof c === 'string') ? c.slice(-1)  : Object.keys(_MP_SUIT_MAP).find(k=>_MP_SUIT_MAP[k]===c.s) || 'S';
+      const isRed = (su==='H'||su==='D');
+      const sym = _MP_SUIT_MAP[su] || su;
+      return `<span class="rs-mini-c${isRed?' red':''}">${r}${sym}</span>`;
+    }).join('');
+    const bet = p.bet ? ` · Bet: ${p.bet.toLocaleString('de-CH')}` : '';
+    const status = p.status==='blackjack'?' · BJ':p.status==='busted'?' · BUST':p.status==='stood'?' · STOOD':p.status==='bet_placed'?' · ✓':'';
+    const isTurn = t.phase==='playing' && t.players[t.currentTurnIdx]?.username === p.username;
+    return `<div class="mp-remote-seat${isTurn?' active-turn':''}">
+      <div class="rs-name">${p.displayName||p.username}${p.isHost?' <span style="color:var(--gold-lo);font-size:8px;">[HOST]</span>':''}</div>
+      <div class="rs-bal">${(p.balance||0).toLocaleString('de-CH')} KFC${bet}${status}</div>
+      <div class="rs-cards">${cardsHtml || '<span style="color:var(--muted);font-size:9px;">—</span>'}</div>
+    </div>`;
+  }).join('') || '<span style="color:var(--muted);font-size:9px;">— solo —</span>';
+}
+
+// ─── Hook MP poll: after every state update, sync to SP ───
+(function _hookMpPoll() {
+  if (!window.MP) return;
+  const _orig_render = MP._render.bind(MP);
+  MP._render = function() {
+    _orig_render();
+    try { _mpSyncServerToSp(this.state); } catch(e) { console.error('[MP] sync to SP:', e); }
+  };
+})();
+
+// ─── Action interceptors: route SP buttons to MP worker when mpMode ───
+(function _wrapSpActions() {
+  const wrap = (name, mpHandler) => {
+    const orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function(...args) {
+      if (G.mpMode) {
+        try { return mpHandler.apply(this, args); }
+        catch(e) { console.error('[MP] action ' + name + ' failed:', e); notif('Action failed'); }
+        return;
+      }
+      return orig.apply(this, args);
+    };
+  };
+
+  // deal() — in MP, the bet is "placed" via worker. Server then deals server-side.
+  wrap('deal', function() {
+    if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Bet below minimum'); return; }
+    // Send side bets first (if any), then the main bet
+    const sb = G.sideBets || {};
+    const sbPromises = Object.entries(sb).filter(([_,v])=>v>0).map(([name,amt])=>
+      MP._action('sideBet', { name, amount: amt })
+    );
+    Promise.all(sbPromises).then(() => MP._action('bet', { amount: G.mainBet }));
+  });
+
+  wrap('hit',          () => MP._action('hit'));
+  wrap('hitGuard',     () => MP._action('hit'));
+  wrap('stand',        () => MP._action('stand'));
+  wrap('dblGuard',     () => MP._action('double'));
+  wrap('doubleDown',   () => MP._action('double'));
+  wrap('split',        () => MP._action('split'));
+  wrap('surrender',    () => MP._action('surrender'));
+  wrap('takeInsurance',    () => MP._action('insurance', { take:true }));
+  wrap('declineInsurance', () => MP._action('insurance', { take:false }));
+
+  // cycleSB: SP cycles through stake values locally; in MP we still cycle locally
+  // (G.sideBets) and only send the side-bet to worker on deal(). Leave un-wrapped.
+})();
+
+// ─── leaveTable hook: also clear mp-active body class + clear snap ───
+(function _hookLeave() {
+  if (!window.MP) return;
+  const _orig_leave = MP.leaveTable.bind(MP);
+  MP.leaveTable = async function() {
+    document.body.classList.remove('mp-active');
+    G.mpMode = false;
+    try { MP._unmountMpStrip(); } catch(e) {}
+    try { MP._clearMpSnap(); } catch(e) {}
+    return _orig_leave();
+  };
+})();
+
+// ─── Reload-resume: intercept SP's restoreSession on boot ───
+// SP's restoreSession() runs inside the existing DOMContentLoaded handler.
+// We wrap it: on first call, check for an MP snap first. If MP resume
+// succeeds, return true so SP thinks "session restored" and skips its own
+// openApp call. If no MP snap or resume fails, fall through to original SP.
+(function _hookRestoreSession() {
+  if (typeof restoreSession !== 'function') return;
+  const _orig_restore = window.restoreSession;
+  let _mpAttempted = false;
+  window.restoreSession = function(lastUser) {
+    if (!_mpAttempted) {
+      _mpAttempted = true;
+      // Synchronously check if a snap exists; if yes, kick off async resume
+      // and return true so SP skips its restore. If no snap, fall through.
+      try {
+        const raw = localStorage.getItem('kfc_mp_snap');
+        if (raw) {
+          // Async resume — fire and forget. The user sees "Resuming…" notif then table loads.
+          MP._tryResumeFromSnap().then(ok => {
+            if (!ok) {
+              // MP resume failed — fall back to SP restore
+              const fallback = _orig_restore(lastUser);
+              if (fallback) {
+                try { openApp(G.player, G.balance); } catch(e) {}
+              }
+            }
+          });
+          return true; // tell SP boot to wait
+        }
+      } catch(e) { console.error('[MP] restore hook:', e); }
+    }
+    return _orig_restore(lastUser);
+  };
+})();
+
+// ─── Reload guard: warn before unload when MP active ───
+window.addEventListener('beforeunload', (e) => {
+  if (G.mpMode && MP.tableId) {
+    e.preventDefault();
+    e.returnValue = '';
+    // Snap is already saved on _enterGame and updated on each poll;
+    // here we just bump the timestamp so it's fresh.
+    try {
+      const raw = localStorage.getItem('kfc_mp_snap');
+      if (raw) {
+        const snap = JSON.parse(raw);
+        snap.ts = Date.now();
+        localStorage.setItem('kfc_mp_snap', JSON.stringify(snap));
+      }
+    } catch(err) {}
+  }
+});
 </script>
 
 <!-- ALL-IN SPLASH -->

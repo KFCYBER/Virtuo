@@ -12641,13 +12641,18 @@ function _mpSyncServerToSp(t) {
       const _ms = document.getElementById('msg-strip');
       if (_ms) {
         if (t.phase === 'waiting' && me.isHost) {
-          _ms.className = ''; _ms.textContent = 'PLACE A BET — then press DEAL to start';
+          const _others = (t.players||[]).filter(p => p.username !== G.username).length;
+          _ms.className = ''; _ms.textContent = _others
+            ? `PLACE A BET — DEAL to start with ${_others + 1} player${_others > 1 ? 's' : ''}, or wait for more`
+            : 'PLACE A BET — DEAL to play solo, or wait for others to join';
+        } else if (t.phase === 'waiting' && !me.isHost) {
+          _ms.className = ''; _ms.textContent = 'Waiting for the host to start the round…';
         } else if (t.phase === 'betting' && me.status === 'betting') {
           _ms.className = ''; _ms.textContent = 'PLACE YOUR BET — then press DEAL';
         } else if (me.status === 'bet_placed') {
           _ms.className = ''; _ms.textContent = 'Bet placed — waiting for other players…';
         } else if (me.status === 'sitting_out') {
-          _ms.className = ''; _ms.textContent = 'Sitting out this round…';
+          _ms.className = ''; _ms.textContent = 'Sitting out this round — next hand you\'re in';
         }
       }
     } catch(e) {}
@@ -12675,10 +12680,16 @@ function _mpSyncServerToSp(t) {
     mpPhaseToSpBody('done');
   }
 
+  // 5b) Sync server power-ups into G.puOwned so SP's buildPuPanel renders correctly
+  if (Array.isArray(me.powerups)) {
+    G.puOwned = new Set(me.powerups);
+  }
+
   // 6) Repaint SP UI — full re-render is safest given format conversions
   try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
   try { if (typeof updateUI === 'function') updateUI(); } catch(e) {}
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
+  try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
 
   // 6b) Result phase: show SP msg-strip outcome once per round
   if (t.phase === 'result' && me.status === 'done' && me.result) {
@@ -12702,6 +12713,21 @@ function _mpSyncServerToSp(t) {
   }
   // Reset per-round result key when a new betting phase begins
   if (t.phase === 'betting' || t.phase === 'waiting') MP._lastSpResultKey = null;
+
+  // 6c) Insurance: open SP modal once when we enter insurance phase; close when it ends
+  if (t.phase === 'insurance' && !me.insuranceDecided) {
+    const _insKey = `ins_${t.roundNum}`;
+    if (MP._lastInsuranceKey !== _insKey) {
+      MP._lastInsuranceKey = _insKey;
+      // Mirror SP exactly: offerInsurance() reads G.mainBet (already synced) for the cost display
+      try { if (typeof offerInsurance === 'function') offerInsurance(); } catch(e) {}
+    }
+  } else if (t.phase !== 'insurance') {
+    try {
+      const _im = document.getElementById('insurance-modal');
+      if (_im && _im.classList.contains('open')) closeModal('insurance-modal');
+    } catch(e) {}
+  }
 
   // 7) Turn lock: disable SP action buttons unless it's our turn
   const myTurn = (t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username);
@@ -12790,18 +12816,18 @@ function _mpRenderRemoteSeats(t, me) {
     };
   };
 
-  // deal() — in MP, the bet is "placed" via worker. Server then deals server-side.
+  // deal() — in MP, sends bet to worker. Server deals server-side.
   wrap('deal', function() {
     if (!G.mainBet || G.mainBet < (G.s?.min||0)) { notif('Place a bet first (min ' + fmtKFC(G.s?.min||0) + ')'); return; }
-    const betAmt = G.mainBet; // capture before any poll can reset it
+    const betAmt = G.mainBet; // capture before poll can reset it
     const sideBets = {};
     Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
     const t = MP.state;
     if (t?.phase === 'waiting') {
-      // Table not yet started — auto-start then bet
+      // Host only — startAndBet is atomic: one KV write eliminates the race condition
       const isHost = t.players?.find(p=>p.username===G.username)?.isHost;
       if (!isHost) { notif('Waiting for host to start…'); return; }
-      MP._action('start').then(() => MP._action('bet', { amount: betAmt, sideBets }));
+      MP._action('startAndBet', { amount: betAmt, sideBets });
       return;
     }
     MP._action('bet', { amount: betAmt, sideBets });
@@ -12816,6 +12842,22 @@ function _mpRenderRemoteSeats(t, me) {
   wrap('surrender',    () => MP._action('surrender'));
   wrap('takeInsurance',    () => MP._action('takeInsurance'));
   wrap('declineInsurance', () => MP._action('declineInsurance'));
+
+  // Power-up purchase: route to worker instead of local G.balance deduction
+  wrap('buyPu', function(pu) {
+    if (!pu) return;
+    MP._action('buyPowerup', { puId: pu.id });
+    // State (balance + powerups) syncs back on next _render() poll response
+  });
+
+  wrap('buyPuWithPoints', function(pu, ptsCost) {
+    if (!pu) return;
+    // Points are local-only — validate and deduct here, grant PU on server
+    const myPts = typeof _getPoints === 'function' ? _getPoints(G.username||G.player) : (G._pts||0);
+    if (myPts < ptsCost) { notif('Not enough loyalty points (need ⭐' + ptsCost + ')'); return; }
+    try { if (typeof _spendPoints === 'function') _spendPoints(ptsCost); } catch(e) {}
+    MP._action('grantPowerup', { puId: pu.id });
+  });
 
   // cycleSB: SP cycles through stake values locally; in MP we still cycle locally
   // (G.sideBets) and only send the side-bet to worker on deal(). Leave un-wrapped.

@@ -2437,7 +2437,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
       <div class="badge" id="sync-badge">LOCAL</div>
       <button class="btn-ghost" onclick="showTopUp()" style="border-color:rgba(63,185,80,0.4);color:var(--green)" id="btn-topup">Top Up</button>
-      <button class="btn-ghost" onclick="showCashout()">Cash Out</button>
+      <button class="btn-ghost" onclick="showCashout()">Leave Table</button>
     </div>
   </div>
 
@@ -3011,7 +3011,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- CASHOUT -->
 <div class="overlay" id="cashout-modal">
   <div class="modal" style="min-width:300px">
-    <div style="font-size:11px;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:20px">Cash Out</div>
+    <div style="font-size:11px;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:20px">Leave Table</div>
     <div id="co-pl" style="font-family:var(--mono);font-size:36px;font-weight:500;margin-bottom:4px"></div>
     <div id="co-bal" style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:8px"></div>
     <div id="co-tax-preview"></div>
@@ -3027,18 +3027,18 @@ body.hand2-active #chip-strip .chip { position: relative; }
     <div id="co-actions-pre" style="display:flex;gap:8px;flex-direction:column">
       <div style="display:flex;gap:8px">
         <button class="btn-primary" style="flex:1" onclick="confirmCashout()">Confirm & Sync</button>
-        <button class="btn-ghost" onclick="if(G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else{G._atCashout=false;closeModal('cashout-modal');}">Stay</button>
+        <button class="btn-ghost" onclick="if(!G.mpMode&&G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else{G._atCashout=false;closeModal('cashout-modal');}">Stay</button>
       </div>
-      <!-- Top Up option: shown when balance is low/zero -->
+      <!-- Top Up option: shown when balance is low/zero — SP only -->
       <button id="co-topup-btn" class="btn-ghost" style="width:100%;border-color:rgba(63,185,80,0.5);color:var(--green);display:none" onclick="closeModal('cashout-modal');showTopUp()">⊕ Top Up & Continue</button>
-      <button class="btn-ghost" style="width:100%;margin-top:4px;border-color:rgba(248,81,73,0.4);color:var(--red)" onclick="doLogout(G.balance<=0);closeModal('cashout-modal')">Leave Table</button>
+      <button class="btn-ghost" style="width:100%;margin-top:4px;border-color:rgba(248,81,73,0.4);color:var(--red)" onclick="if(G.mpMode){G._atCashout=false;closeModal('cashout-modal');}else{doLogout(G.balance<=0);closeModal('cashout-modal');}">Leave Without Syncing</button>
     </div>
     <!-- Post-confirm buttons (shown after sync) -->
     <div id="co-actions-post" style="display:none;flex-direction:column;gap:8px">
       <div id="co-confirmed-badge" style="font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:1px;text-align:center;padding:8px 0">✓ Synced — ready to leave</div>
       <button id="co-retry-btn" class="btn-primary" style="width:100%;display:none;background:var(--red);border-color:var(--red)">↺ Retry Sync</button>
       <button id="co-leave-btn" class="btn-primary" style="width:100%" onclick="doLogout(G.balance<=0);closeModal('cashout-modal')">Leave Table</button>
-      <button id="co-stay-btn" class="btn-ghost" style="width:100%" onclick="if(G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else{G._atCashout=false;closeModal('cashout-modal');}">Stay &amp; Play More</button>
+      <button id="co-stay-btn" class="btn-ghost" style="width:100%" onclick="if(!G.mpMode&&G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else if(!G.mpMode){G._atCashout=false;closeModal('cashout-modal');}else{notif('Return to lobby to play more');}">Stay &amp; Play More</button>
     </div>
   </div>
 </div>
@@ -5285,19 +5285,26 @@ async function _expireStaleSession(snap){
 // Save session to localStorage when window/tab is closed
 // NOTE: We do NOT sync to Google Sheets here — sheet writes only happen on explicit cashout.
 // This prevents every page reload from creating a new session log entry.
-window.addEventListener('beforeunload', (e)=>{
-  // Only act when mid-session (hand has been dealt, not cashed out, not at cashout screen)
-  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
-    saveSession(); // persist to localStorage only — restores on return
-    e.preventDefault(); // trigger browser leave confirmation
-    e.returnValue = ''; // required for Chrome
+window.addEventListener('beforeunload', ()=>{
+  // SP only — MP handles its own unload via the MP beforeunload handler below
+  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
+    saveSession();
+    // Mark snap for auto-sync on next open — no restore, no browser confirm
+    try{
+      const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+      if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
+    }catch(e){}
   }
 });
 
 // pagehide fires on mobile when page is hidden/navigated away (more reliable than beforeunload)
 window.addEventListener('pagehide', ()=>{
-  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
-    saveSession(); // localStorage only, no sheet write
+  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
+    saveSession();
+    try{
+      const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+      if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
+    }catch(e){}
   }
 });
 
@@ -5308,8 +5315,7 @@ function _installBackTrap(){
   window.addEventListener('popstate', function _popHandler(evt){
     // Re-push so the next back press also fires popstate
     history.pushState({kfc:1}, '');
-    if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
-      // Show cashout modal instead of letting them leave
+    if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
       notif('Cash out before leaving the table!');
       saveSession();
       if(G.phase==='bet') showCashout();
@@ -5348,71 +5354,32 @@ window.onload=()=>{
   G._shoeTotal=G.deck.length-1;
   SB_NAMES.forEach(n=>G.sideBets[n]=0); updateSBCircles&&updateSBCircles();
   buildStakeList();
-  // Try to restore a previous session — only if it belongs to the last user on this browser
-  const _lastUser = (localStorage.getItem('kfc_last_user')||'').toLowerCase();
-  // Check for cashout-in-progress snap (reload during cashout screen)
+  // Auto-sync: if any session snap exists from a previous page close, sync it to the sheet
+  // immediately and discard — then always show the login screen (no session restore).
   try{
-    const coSnap=localStorage.getItem('kfc_cashout_snap');
-    if(coSnap){
-      const cs=JSON.parse(coSnap);
-      const csUser=(cs.username||cs.player||'').toLowerCase();
-      // Only restore if it's the same user who last logged in on this browser
-      if(cs&&cs.player&&(Date.now()-cs.ts)<30*60*1000&&(!_lastUser||csUser===_lastUser)){
-        G.player=cs.player; G.username=cs.username||'';
-        G.balance=cs.balance; G.sessionStart=cs.sessionStart;
-        G._totalBalance=cs.totalBalance||cs.balance;
-        G.stake=cs.stake||'low'; G.s=STAKES[G.stake]||STAKES.low;
-        G.log=cs.log||[];
-        G._clubPass=cs.clubPass||false;
-        G._sessionActive=true; G.cashedOut=false; G._atCashout=false;
-        // Restore top-up cap references from cashout snap
-        G._walletBalAtLogin = cs.walletBalAtLogin !== undefined ? cs.walletBalAtLogin : (cs.totalBalance||cs.balance);
-        G._originalSessionStart = cs.originalSessionStart !== undefined ? cs.originalSessionStart : cs.sessionStart;
-        G._topUpTotal = cs.topUpTotal||0;
-        if(cs.chartPts){ _chartPts.length=0; cs.chartPts.forEach(p=>_chartPts.push(p)); }
-        openApp(G.player, G.balance);
-        notif('Cashout restored — please confirm below');
-        // Re-fetch clubPass and points from sheet in background in case snap is stale
-        if(G.url && G.username && G._cachedPin){
-          sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(G.username)+'&pin='+encodeURIComponent(G._cachedPin))
-            .then(d=>{ if(d.auth){ G._clubPass=!!d.clubPass; _loadPtsFromLogin(d.loyaltyPoints||0); _updatePointsBadge(G._pts,false); updateBetPanel(); } }).catch(()=>{});
-        }
-        setTimeout(()=>showCashout(), 600);
-        return;
-      } else {
-        localStorage.removeItem('kfc_cashout_snap');
-      }
+    const _autoSnap=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+    const _coSnap=localStorage.getItem('kfc_cashout_snap');
+    if(_autoSnap && _autoSnap.player){
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem('kfc_cashout_snap');
+      _expireStaleSession(_autoSnap); // fire-and-forget GAS sync
+    } else if(_coSnap){
+      // Orphaned cashout snap with no session snap — discard
+      localStorage.removeItem('kfc_cashout_snap');
     }
   }catch(e){}
-  // Try to restore a previous session — only for the last user who logged in on this browser
-  if(restoreSession(_lastUser)){
-    // Session found — skip login, go straight to table
-    openApp(G.player, G.balance);
-    notif('Session restored — welcome back, '+G.player);
-    _afterRestoreChart();
 
-    // Silently re-fetch balance from sheet to catch any changes since last close
-    if(G.url && G.username && G._cachedPin){
-      sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(G.username)+'&pin='+encodeURIComponent(G._cachedPin))
-        .then(d=>{
-          if(d.auth && typeof d.balance==='number'){
-            const prevTotal=G._totalBalance;
-            G._totalBalance=d.balance;
-            // Always refresh clubPass and loyalty points from the live sheet response
-            G._clubPass = !!d.clubPass;
-            _loadPtsFromLogin(d.loyaltyPoints||0);
-            _updatePointsBadge(G._pts, false);
-            _updatePassUI(); // re-evaluate badge, chip glow, hot/cold
-            if(G.phase==='bet' && d.balance!==prevTotal){
-              notif('Wallet synced — '+fmtKFC(d.balance));
-            }
-          }
-        })
-        .catch(()=>{});
+  // Legacy path kept as comment — session restore removed intentionally.
+  // On reload, players are always kicked and auto-synced, then must log in again.
+  // This prevents lingering open sessions and pending un-synced balances.
+  if(false){
+    const _lastUser = (localStorage.getItem('kfc_last_user')||'').toLowerCase();
+    if(false){
+        return;
+      }
     }
-  } else {
-    setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
   }
+  setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
 };
 
 function buildPinRows(){
@@ -5439,30 +5406,6 @@ async function doLogin(){
         G.username=username;
         G._cachedPin=pin;
         G._clubPass = !!d.clubPass; // read 21 Club pass status from sheet
-        // Check localStorage for a live session belonging to this player
-        // This handles reloads and multi-device: if they have a saved session, restore it
-        try{
-          const raw=localStorage.getItem(SESSION_KEY);
-          if(raw){
-            const snap=JSON.parse(raw);
-            const samePlayer=(snap.username===username||snap.player===d.playerName||snap.player===username);
-            const fresh=(Date.now()-snap.ts)<4*60*60*1000;
-            if(snap&&samePlayer&&fresh&&!snap.cashedOut&&snap.sessionActive){
-              // Restore the saved session directly — skip stake selection
-              G._cachedPin=pin;
-              if(restoreSession(username.toLowerCase())){
-                G._clubPass = !!d.clubPass; // re-apply live value — snap may be stale
-                // Re-load points from sheet — sheet is always authoritative
-                _loadPtsFromLogin(d.loyaltyPoints||0);
-                localStorage.setItem('kfc_last_user', username.toLowerCase());
-                openApp(G.player, G.balance);
-                notif('Session restored — welcome back, '+G.player);
-                _afterRestoreChart();
-                return;
-              }
-            }
-          }
-        }catch(e){}
         _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0};
         // Clear any session belonging to a different player on this device
         try{
@@ -5495,24 +5438,6 @@ async function doLogin(){
   err.textContent='';
   G.username=username;
   G._cachedPin=pin; // cache for re-auth
-  // Check for a saved local session for this player
-  try{
-    const raw=localStorage.getItem(SESSION_KEY);
-    if(raw){
-      const snap=JSON.parse(raw);
-      const samePlayer=(snap.username===username||snap.player===username);
-      const fresh=(Date.now()-snap.ts)<4*60*60*1000;
-      if(snap&&samePlayer&&fresh&&!snap.cashedOut&&snap.sessionActive){
-        if(restoreSession(username.toLowerCase())){
-          localStorage.setItem('kfc_last_user', username.toLowerCase());
-          openApp(G.player, G.balance);
-          notif('Session restored — welcome back, '+G.player);
-          _afterRestoreChart();
-          return;
-        }
-      }
-    }
-  }catch(e){}
   const localBal=parseFloat(localStorage.getItem('kfc_bal_'+username)||'0');
   _pendingLogin={name:username,balance:localBal}; // G.player set only in openApp
   document.getElementById('login-step1').style.display='none';
@@ -8148,7 +8073,7 @@ function selectStake(key){
 // ── CASHOUT ──────────────────────────────────────────────
 function showCashout(){
   const rm=document.getElementById('result-modal');
-  if(G.phase!=='bet'&&!(rm&&rm.classList.contains('open'))){notif('Finish the current hand first');return;}
+  if(!G.mpMode && G.phase!=='bet'&&!(rm&&rm.classList.contains('open'))){notif('Finish the current hand first');return;}
   if(rm&&rm.classList.contains('open')) closeResult();
   G._atCashout=true;  // block beforeunload from re-saving mid-cashout
   // DON'T clearSession() here — keep it alive so reload can restore stats
@@ -8183,13 +8108,16 @@ function showCashout(){
   // Reset to pre-confirm state
   document.getElementById('co-actions-pre').style.display='flex';
   document.getElementById('co-actions-post').style.display='none';
-  // Show Top Up option when balance is zero or too low to continue
+  // Top Up and "stay" only available in SP
   const coTopUpBtn=document.getElementById('co-topup-btn');
   if(coTopUpBtn){
-    const canTopUp = G.balance<BALANCE_CAP && (G.balance<=0 || G.balance<G.s.min);
+    const canTopUp = !G.mpMode && G.balance<BALANCE_CAP && (G.balance<=0 || G.balance<G.s.min);
     coTopUpBtn.style.display = canTopUp ? 'block' : 'none';
     coTopUpBtn.textContent = G.balance<=0 ? '⊕ Top Up & Continue (balance depleted)' : '⊕ Top Up & Continue';
   }
+  // In MP, reset co-leave-btn to use _doLeaveCleanup (confirmCashout wrap will override dynamically on sync)
+  const coLeaveBtn=document.getElementById('co-leave-btn');
+  if(coLeaveBtn && G.mpMode){ coLeaveBtn.textContent='Return to Lobby'; coLeaveBtn.onclick=()=>{ try{closeModal('cashout-modal');}catch(e){} G._atCashout=false; MP._doLeaveCleanup(); }; }
   openModal('cashout-modal');
   // Draw P&L chart and stats
   setTimeout(()=>{ drawSessionChart(); renderSessionStats(); },100);
@@ -8259,6 +8187,8 @@ async function sheetGet(url){
 }
 
 async function confirmCashout(){
+  if(G._syncInProgress){ notif('Already syncing — please wait'); return; }
+  G._syncInProgress=true;
   G.cashedOut=true;
   // Award loyalty points for partial shoe played before cashing out — fires exactly once
   if(_shoeHandCount > 0){
@@ -8318,6 +8248,7 @@ async function confirmCashout(){
       localStorage.setItem('kfc_bal_'+(G.username||G.player), G.balance);
       clearSyncQueue();
       clearSession(); localStorage.removeItem('kfc_cashout_snap'); // safe to wipe now
+      G._syncInProgress=false;
       setSyncBadge('','LOCAL');
       badge.textContent='✓ Saved locally — ready to leave';
       badge.style.color='var(--green)';
@@ -8332,6 +8263,7 @@ async function confirmCashout(){
       await attemptSync(payload);
       clearSyncQueue();
       clearSession(); localStorage.removeItem('kfc_cashout_snap'); // safe to wipe now
+      G._syncInProgress=false;
       setSyncBadge('live','SYNCED');
       badge.textContent='✓ Synced — chips returned to wallet';
       badge.style.color='var(--green)';
@@ -8343,6 +8275,7 @@ async function confirmCashout(){
       setTimeout(()=>_fetchLeaderboard(true), 1500);
     }catch(e){
       // Failed — store in queue, lock leave, show retry
+      G._syncInProgress=false;
       storeSyncQueue(payload);
       localStorage.setItem('kfc_bal_'+(G.username||G.player), G.balance);
       setSyncBadge('error','FAILED');
@@ -11759,65 +11692,44 @@ const MP = {
   },
 
   leaveTable() {
-    // Show leave confirmation with session summary and tax preview
+    // Populate SP G session vars from MP state so the shared cashout modal shows correct data
     const me = this._myPlayer;
-    const finalBal  = me?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
-    const buyIn     = this._buyIn ?? 0;
-    const sessionPL = finalBal - buyIn;
-    const stake     = me?.stake || this._myStake || 'low';
-    const taxRate   = (typeof STAKES !== 'undefined' && STAKES[stake]) ? STAKES[stake].tax : 0.04;
-    const totalBal  = (G._totalBalance || 0) - buyIn + finalBal;
-    const taxEst    = Math.floor(totalBal * taxRate);
-    const plSign    = sessionPL >= 0 ? '+' : '';
-    const plColor   = sessionPL > 0 ? 'var(--green)' : sessionPL < 0 ? 'var(--red)' : 'var(--muted)';
-    const nextTax   = (typeof _nextTaxDate === 'function') ? _nextTaxDate() : '25th';
-
-    const summaryEl = document.getElementById('mp-leave-summary');
-    if (summaryEl) summaryEl.innerHTML = `
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-        <span style="color:var(--muted2)">Buy-in</span>
-        <span>${this._fmt(buyIn)} KFC</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-        <span style="color:var(--muted2)">Cash-out</span>
-        <span>${this._fmt(finalBal)} KFC</span>
-      </div>
-      <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);padding-top:8px;margin-top:4px;">
-        <span style="color:var(--muted2)">Session P/L</span>
-        <span style="color:${plColor};font-weight:700;">${plSign}${this._fmt(sessionPL)} KFC</span>
-      </div>
-      ${totalBal > 0 ? `<div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;">
-        <span style="color:var(--muted)">Dealer tax est. (${nextTax})</span>
-        <span style="color:var(--muted);">${Math.round(taxRate*100)}% = −${this._fmt(taxEst)}</span>
-      </div>` : ''}`;
-
-    const modal = document.getElementById('mp-leave-modal');
-    if (modal) modal.style.display = 'flex';
+    const finalBal = me?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
+    G.balance      = finalBal;
+    G.sessionStart = this._buyIn ?? finalBal;
+    G._atCashout   = true;
+    // showCashout() renders the session summary modal (shared SP/MP UI)
+    try { if (typeof showCashout === 'function') showCashout(); } catch(e) {}
   },
 
   _cancelLeave() {
-    const modal = document.getElementById('mp-leave-modal');
-    if (modal) modal.style.display = 'none';
+    G._atCashout = false;
+    try { if (typeof closeModal === 'function') closeModal('cashout-modal'); } catch(e) {}
   },
 
-  async _doLeave() {
-    const modal = document.getElementById('mp-leave-modal');
-    if (modal) modal.style.display = 'none';
+  // Called after confirmCashout sync completes — just does state cleanup and returns to lobby
+  _doLeaveCleanup() {
     this._stopPolling();
     this._stopTimerTick();
-    if (this.tableId && this.state) this._syncBalanceToSheets('leave'); // fire-and-forget — GAS is slow
-    if (this.tableId) await this._action('leave'); // still await — fast KV op, removes seat
-    const _finalBal = this._myPlayer?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
-    this.tableId = null;
-    this.state   = null;
+    this.tableId = null; this.state = null;
     G.mpMode = false;
     this._clearMpSnap();
-    // Update lobby balance display and return to table selection
+    const _finalBal = G.balance;
     if (_pendingLogin) _pendingLogin.balance = _finalBal;
     document.body.classList.remove('mp-active', 'playing', 'dealer', 'done', 'result');
     document.body.classList.add('betting');
     try { this._unmountMpStrip(); } catch(e) {}
     this._openLobby();
+  },
+
+  async _doLeave() {
+    // Legacy direct-leave path (AFK kick, table-closed, beacon). Uses cleanup helper.
+    this._stopPolling(); this._stopTimerTick();
+    if (this.tableId && this.state) this._syncBalanceToSheets('leave');
+    if (this.tableId) await this._action('leave');
+    const _finalBal = this._myPlayer?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
+    G.balance = _finalBal;
+    this._doLeaveCleanup();
   },
 
   // ── rendering ─────────────────────────────────────────────
@@ -11996,7 +11908,15 @@ const MP = {
         if (this._lastBonusIds.has(key)) return;
         this._lastBonusIds.add(key);
         const bc = BONUS_CARDS.find(b => b.id === c.bonus) || { id: c.bonus, label: c.bonus, desc: '' };
+        // Fire toast
         bonusToast(bc, bc.desc || '');
+        // Fire per-bonus effect UIs (state is already synced server-side via bonusFlags)
+        if (c.bonus === 'stamped') {
+          try { if (typeof showStampedBoost === 'function') showStampedBoost(); } catch(e) {}
+        } else if (c.bonus === 'arrow') {
+          const at = document.getElementById('arrow-toast');
+          if (at) at.style.display = 'block';
+        }
       });
     });
   },
@@ -12335,6 +12255,15 @@ const MP = {
     const timerTxt = secs !== null && secs > 0 ? `${secs}s` : '';
     if (el) { el.textContent = timerTxt; el.style.color = secs <= 10 ? 'var(--red)' : 'var(--gold-hi)'; }
 
+    // During result cooldown, show countdown in msg-strip
+    if (t.phase === 'result' && MP._lastSpResultKey && secs !== null) {
+      const _ms = document.getElementById('msg-strip');
+      if (_ms) {
+        _ms.className = '';
+        _ms.textContent = secs > 0 ? `Next round starting in ${secs}s…` : 'Starting next round…';
+      }
+    }
+
     // Mirror countdown into the visible remote-strip turn label
     const tt = document.getElementById('mp-remote-turn');
     if (tt && timerTxt) {
@@ -12625,7 +12554,17 @@ const _MP_SUIT_MAP = { S:'♠', H:'♥', D:'♦', C:'♣' };
 function mpToSpCard(c) {
   if (!c) return null;
   if (c === '??') return { r:'?', s:'?', _hidden:true };
-  if (typeof c === 'object') return c; // already SP-shaped (bonus card)
+  if (typeof c === 'object') {
+    // Server sends bonus cards as {bonus:'gold', repIdx:0} where bonus is a string ID.
+    // SP's renderAll/bonusCardInner expects bonus as a full BONUS_CARDS object {id,label,...}.
+    // Inflate here so the rest of the render pipeline works identically to SP.
+    if (c.bonus && typeof c.bonus === 'string') {
+      const _bc = (typeof BONUS_CARDS !== 'undefined' ? BONUS_CARDS : []).find(b => b.id === c.bonus)
+                  || { id: c.bonus, label: c.bonus, desc: '' };
+      return { bonus: _bc, repIdx: c.repIdx ?? 0 };
+    }
+    return c; // already SP-shaped
+  }
   const rank = c.slice(0, -1);
   const suit = c.slice(-1);
   return { r: rank, s: _MP_SUIT_MAP[suit] || suit };
@@ -12729,20 +12668,6 @@ function _mpSyncServerToSp(t) {
     }
     G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
 
-    // Reveal hole card exactly once on play → dealer transition
-    if (t.phase === 'dealer' && _prevSpPhase === 'play') {
-      const _revKey = 'r' + (t.roundNum || 0);
-      if (MP._lastRevealKey !== _revKey) {
-        MP._lastRevealKey = _revKey;
-        try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
-      }
-      // Staggered dealer card sounds for any cards beyond the initial 2
-      const _extraDealer = Math.max(0, (t.dealerHand||[]).length - 2);
-      for (let _di = 0; _di < _extraDealer; _di++) {
-        setTimeout(() => { try { sfx('card'); } catch(e) {} }, 220 + _di * 280);
-      }
-    }
-
     // Dealer drawing phase — fire sfx for each new dealer card that appears
     if (t.phase === 'dealer') {
       const _newDealerCount = (t.dealerHand||[]).length;
@@ -12811,6 +12736,17 @@ function _mpSyncServerToSp(t) {
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
   try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
   try { if (typeof buildLevPanel === 'function') buildLevPanel(); } catch(e) {}
+
+  // 6a) Hole card reveal — fires once per round as soon as server exposes the hole card.
+  // Called AFTER renderAll so the down-card DOM element is in place (renderAll won't re-render
+  // existing cards if count hasn't changed, keeping card[1] as .card.down for the animation).
+  if (!t.dealerHidden && G.holeRevealed) {
+    const _revKey = 'h' + (t.roundNum || 0);
+    if (MP._lastRevealKey !== _revKey) {
+      MP._lastRevealKey = _revKey;
+      try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
+    }
+  }
 
   // 6b) Result phase: show result overlay + side bet wins + score flash + session stats — once per round
   if (t.phase === 'result' && me.status === 'done' && me.result) {
@@ -13121,30 +13057,43 @@ function _mpRenderRemoteSeats(t, me) {
     notif('⭐ 2× Leverage Token activated');
   });
 
-  // confirmCashout: in MP, use leaveTable() instead of SP's own sync/clearSession flow.
-  // SP's flow would orphan the server seat; leaveTable() removes the slot and syncs balance.
+  // confirmCashout: in MP, sync balance to sheet + kick server seat, then return to lobby.
+  // Runs inside the shared SP cashout modal — intercepts the Confirm & Sync button.
   wrap('confirmCashout', async function() {
-    try { if (typeof closeModal === 'function') closeModal('cashout-modal'); } catch(e) {}
-    G._atCashout = false;
-    await MP.leaveTable();
+    if (G._syncInProgress) { notif('Already syncing — please wait'); return; }
+    G._syncInProgress = true;
+    // Show syncing state in the modal
+    const badge   = document.getElementById('co-confirmed-badge');
+    const preEl   = document.getElementById('co-actions-pre');
+    const postEl  = document.getElementById('co-actions-post');
+    const leaveBtn= document.getElementById('co-leave-btn');
+    const retryBtn= document.getElementById('co-retry-btn');
+    if (preEl)  preEl.style.display  = 'none';
+    if (postEl) postEl.style.display = 'flex';
+    if (badge)  { badge.textContent = 'Syncing MP session…'; badge.style.color = 'var(--muted)'; }
+    if (leaveBtn) leaveBtn.disabled = true;
+    try {
+      if (MP.tableId && MP.state) await MP._syncBalanceToSheets('leave');
+      if (MP.tableId) await MP._action('leave');
+      G._syncInProgress = false;
+      if (badge)   { badge.textContent = '✓ Synced — chips returned to wallet'; badge.style.color = 'var(--green)'; }
+      if (leaveBtn){ leaveBtn.disabled = false; leaveBtn.textContent = 'Return to Lobby';
+        leaveBtn.onclick = () => { try { closeModal('cashout-modal'); } catch(e) {} G._atCashout=false; MP._doLeaveCleanup(); };
+      }
+    } catch(e) {
+      G._syncInProgress = false;
+      if (badge)   { badge.textContent = '⚠ Sync failed — try again'; badge.style.color = 'var(--red)'; }
+      if (leaveBtn){ leaveBtn.disabled = true; leaveBtn.textContent = 'Sync Required'; }
+      if (retryBtn){ retryBtn.style.display = 'block'; retryBtn.onclick = () => confirmCashout(); }
+      notif('Sync failed — tap Retry to try again');
+    }
   });
 
   // cycleSB: SP cycles through stake values locally; in MP we still cycle locally
   // (G.sideBets) and only send the side-bet to worker on deal(). Leave un-wrapped.
 })();
 
-// ─── leaveTable hook: also clear mp-active body class + clear snap ───
-(function _hookLeave() {
-  if (typeof MP === 'undefined') return;
-  const _orig_leave = MP.leaveTable.bind(MP);
-  MP.leaveTable = async function() {
-    document.body.classList.remove('mp-active');
-    G.mpMode = false;
-    try { MP._unmountMpStrip(); } catch(e) {}
-    try { MP._clearMpSnap(); } catch(e) {}
-    return _orig_leave();
-  };
-})();
+// _hookLeave removed — cleanup is now handled in _doLeaveCleanup() called after confirmCashout sync
 
 // ─── Reload-resume: intercept SP's restoreSession on boot ───
 // SP's restoreSession() runs inside the existing DOMContentLoaded handler.

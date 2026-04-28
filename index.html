@@ -11803,11 +11803,17 @@ const MP = {
     this._stopTimerTick();
     if (this.tableId && this.state) this._syncBalanceToSheets('leave'); // fire-and-forget — GAS is slow
     if (this.tableId) await this._action('leave'); // still await — fast KV op, removes seat
+    const _finalBal = this._myPlayer?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
     this.tableId = null;
     this.state   = null;
     G.mpMode = false;
-    this._clearMpSnap(); // clear before reload so boot doesn't attempt a resume
-    window.location.reload();
+    this._clearMpSnap();
+    // Update lobby balance display and return to table selection
+    if (_pendingLogin) _pendingLogin.balance = _finalBal;
+    document.body.classList.remove('mp-active', 'playing', 'dealer', 'done', 'result');
+    document.body.classList.add('betting');
+    try { this._unmountMpStrip(); } catch(e) {}
+    this._openLobby();
   },
 
   // ── rendering ─────────────────────────────────────────────
@@ -12822,7 +12828,7 @@ function _mpRenderRemoteSeats(t, me) {
 
 // ─── Hook MP poll: after every state update, sync to SP ───
 (function _hookMpPoll() {
-  if (!window.MP) return;
+  if (typeof MP === 'undefined') return;
   const _orig_render = MP._render.bind(MP);
   MP._render = function() {
     _orig_render();
@@ -12930,7 +12936,7 @@ function _mpRenderRemoteSeats(t, me) {
 
 // ─── leaveTable hook: also clear mp-active body class + clear snap ───
 (function _hookLeave() {
-  if (!window.MP) return;
+  if (typeof MP === 'undefined') return;
   const _orig_leave = MP.leaveTable.bind(MP);
   MP.leaveTable = async function() {
     document.body.classList.remove('mp-active');
@@ -12977,21 +12983,17 @@ function _mpRenderRemoteSeats(t, me) {
   };
 })();
 
-// ─── Reload guard: warn before unload when MP active ───
-window.addEventListener('beforeunload', (e) => {
-  if (G.mpMode && MP.tableId) {
-    e.preventDefault();
-    e.returnValue = '';
-    // Snap is already saved on _enterGame and updated on each poll;
-    // here we just bump the timestamp so it's fresh.
+// ─── Unload guard: silently auto-leave MP table on page close/reload ───
+// Uses sendBeacon so the leave request survives the unload. No confirm dialog —
+// player accepts losing the hand (per design). Snap is cleared so reload boots to SP login.
+window.addEventListener('beforeunload', () => {
+  if (typeof MP !== 'undefined' && G.mpMode && MP.tableId) {
     try {
-      const raw = localStorage.getItem('kfc_mp_snap');
-      if (raw) {
-        const snap = JSON.parse(raw);
-        snap.ts = Date.now();
-        localStorage.setItem('kfc_mp_snap', JSON.stringify(snap));
-      }
-    } catch(err) {}
+      const baseUrl = (G.url || 'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/, '');
+      const body = JSON.stringify({ username: G.username || G.player, action: 'leave' });
+      navigator.sendBeacon(`${baseUrl}/mp/tables/${MP.tableId}/action`, new Blob([body], { type: 'application/json' }));
+    } catch(e) {}
+    try { MP._clearMpSnap(); } catch(e) {}
   }
 });
 </script>

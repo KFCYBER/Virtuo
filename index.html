@@ -5240,6 +5240,7 @@ function clearSession(){
 // Fires silently in the background — player never sees this UI-side.
 async function _expireStaleSession(snap){
   if(!snap||!snap.player||!snap.balance) return;
+  const url=localStorage.getItem('kfc_url')||G.url; // declare early — used in points sync below
   // Award loyalty points for the partial shoe before expiring
   if(snap.shoeHandCount > 0){
     const wins = (snap.shoeLog||[]).filter(e=>e.pl>0).length;
@@ -5261,7 +5262,6 @@ async function _expireStaleSession(snap){
       fetch(url+'?'+pParams.toString(),{method:'GET',redirect:'follow',cache:'no-store'}).catch(()=>{});
     }
   }
-  const url=localStorage.getItem('kfc_url')||G.url;
   if(!url||!snap.cachedPin) return; // no sheet configured, nothing to do
   try{
     const params=new URLSearchParams({
@@ -5369,16 +5369,6 @@ window.onload=()=>{
     }
   }catch(e){}
 
-  // Legacy path kept as comment — session restore removed intentionally.
-  // On reload, players are always kicked and auto-synced, then must log in again.
-  // This prevents lingering open sessions and pending un-synced balances.
-  if(false){
-    const _lastUser = (localStorage.getItem('kfc_last_user')||'').toLowerCase();
-    if(false){
-        return;
-      }
-    }
-  }
   setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
 };
 

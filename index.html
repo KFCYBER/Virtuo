@@ -12664,6 +12664,22 @@ function _mpSyncServerToSp(t) {
   }
   G.cur = me._onHand2 ? 1 : 0;
 
+  // 3b) Sync server bonusFlags into SP G vars so PU panel, arrow indicator etc. stay accurate
+  {
+    const bf = me.bonusFlags || {};
+    if (!G.kruegerOn)   G.kruegerOn   = [false, false];
+    if (!G.arrowCounts) G.arrowCounts = [0, 0];
+    if (!G.desertOn)    G.desertOn    = [false, false];
+    if (!G.steelOn)     G.steelOn     = [false, false];
+    G.kruegerOn[0]   = !!bf.krueger;
+    G.arrowCounts[0] = bf.arrowCount || 0;
+    G.desertOn[0]    = !!bf.desert;
+    G.steelOn[0]     = !!bf.steel;
+    G.goldOn         = !!bf.goldFreeDB;
+    G.stampedOn      = !!bf.stamped;
+    G.stampedInitialBet = bf.stampedInitialBet || 0;
+  }
+
   // 4) Bet mirrored from server — only overwrite local chips once a bet is committed
   if (me.bet > 0) G.mainBet = me.bet;
   if (me.bet2 > 0) G.mainBet2 = me.bet2;
@@ -12696,7 +12712,17 @@ function _mpSyncServerToSp(t) {
     if (G.phase === 'bet' || G.phase === 'done') {
       try { if (typeof resetCards === 'function') resetCards(); } catch(e) {}
     }
+    const _prevSpPhase = G.phase;
     G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
+    // Reveal hole card exactly once when dealer phase begins (SP's renderAll skips dealer card
+    // re-render when G.phase==='dealer', so we must flip it explicitly here)
+    if (t.phase === 'dealer' && _prevSpPhase === 'play') {
+      const _revKey = 'r' + (t.roundNum || 0);
+      if (MP._lastRevealKey !== _revKey) {
+        MP._lastRevealKey = _revKey;
+        try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
+      }
+    }
     mpPhaseToSpBody('playing');
     try {
       const myTurnNow = t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username;
@@ -12920,6 +12946,16 @@ function _mpRenderRemoteSeats(t, me) {
     if (myPts < ptsCost) { notif('Not enough loyalty points (need ⭐' + ptsCost + ')'); return; }
     try { if (typeof _spendPoints === 'function') _spendPoints(ptsCost); } catch(e) {}
     MP._action('grantPowerup', { puId: pu.id });
+  });
+
+  // Leverage token (pts redemption): send to server instead of setting G.leverage locally
+  wrap('_redeemLev2x', function() {
+    const myPts = typeof _getPoints === 'function' ? _getPoints(G.username||G.player) : (G._pts||0);
+    if (myPts < (PTS_COST?.lev2x || 35)) { notif('Not enough points (need ⭐' + (PTS_COST?.lev2x || 35) + ')'); return; }
+    try { if (typeof _spendPoints === 'function') _spendPoints(PTS_COST?.lev2x || 35); } catch(e) {}
+    MP._action('leverage', { levCard: '2x' });
+    try { if (typeof sfx === 'function') sfx('buy'); } catch(e) {}
+    notif('⭐ 2× Leverage Token sent to server');
   });
 
   // confirmCashout: in MP, use leaveTable() instead of SP's own sync/clearSession flow.

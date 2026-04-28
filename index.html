@@ -11643,6 +11643,10 @@ const MP = {
             // Mirror into G.log so SP's cashout stats/chart work correctly in MP
             G.log.push({ detail: me.result || 'played', pl: roundPL, bal: me.balance });
             try { this._updateMpChart(); } catch(e) {}
+            // Keep SP's session chart, streak badge, and shoe temperature in sync
+            try { if (typeof updateSessionChart === 'function') updateSessionChart(roundPL); } catch(e) {}
+            try { if (typeof _updateStreakBadge === 'function') _updateStreakBadge(); } catch(e) {}
+            try { if (typeof _updateShoeTemp === 'function') _updateShoeTemp(); } catch(e) {}
             // Personal best flash
             if (me.balance > this._sessionHigh) {
               this._sessionHigh = me.balance;
@@ -12680,6 +12684,10 @@ function _mpSyncServerToSp(t) {
     G.stampedInitialBet = bf.stampedInitialBet || 0;
   }
 
+  // 3c) Sync leverage state from server so buildLevPanel + inventory bar show correct active state
+  G.leverage  = me.leverage  || null;
+  G.levCards  = me.levCards  || [];
+
   // 4) Bet mirrored from server — only overwrite local chips once a bet is committed
   if (me.bet > 0) G.mainBet = me.bet;
   if (me.bet2 > 0) G.mainBet2 = me.bet2;
@@ -12708,21 +12716,67 @@ function _mpSyncServerToSp(t) {
       }
     } catch(e) {}
   } else if (t.phase === 'playing' || t.phase === 'dealer' || t.phase === 'insurance') {
-    // Transition from bet/result → playing: clear old cards so renderAll repaints from scratch
-    if (G.phase === 'bet' || G.phase === 'done') {
-      try { if (typeof resetCards === 'function') resetCards(); } catch(e) {}
-    }
     const _prevSpPhase = G.phase;
+    // Transition from bet/result → playing: clear old cards, trigger deal stagger + sounds
+    if (_prevSpPhase === 'bet' || _prevSpPhase === 'done') {
+      try { if (typeof resetCards === 'function') resetCards(); } catch(e) {}
+      try { if (typeof _clearIdleFloat === 'function') _clearIdleFloat(); } catch(e) {}
+      // Deal stagger animation — cards fan in with delays matching SP's deal()
+      G._dealStagger = true;
+      setTimeout(() => { G._dealStagger = false; }, 50);
+      // 4 staggered card sounds (initial deal: dealer up, player c1, dealer hole, player c2)
+      [0, 300, 600, 900].forEach(ms => setTimeout(() => { try { sfx('card'); } catch(e) {} }, ms));
+    }
     G.phase = (t.phase === 'dealer') ? 'dealer' : 'play';
-    // Reveal hole card exactly once when dealer phase begins (SP's renderAll skips dealer card
-    // re-render when G.phase==='dealer', so we must flip it explicitly here)
+
+    // Reveal hole card exactly once on play → dealer transition
     if (t.phase === 'dealer' && _prevSpPhase === 'play') {
       const _revKey = 'r' + (t.roundNum || 0);
       if (MP._lastRevealKey !== _revKey) {
         MP._lastRevealKey = _revKey;
         try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
       }
+      // Staggered dealer card sounds for any cards beyond the initial 2
+      const _extraDealer = Math.max(0, (t.dealerHand||[]).length - 2);
+      for (let _di = 0; _di < _extraDealer; _di++) {
+        setTimeout(() => { try { sfx('card'); } catch(e) {} }, 220 + _di * 280);
+      }
     }
+
+    // Dealer drawing phase — fire sfx for each new dealer card that appears
+    if (t.phase === 'dealer') {
+      const _newDealerCount = (t.dealerHand||[]).length;
+      const _prevDealerCount = MP._prevDealerCount || 0;
+      if (_newDealerCount > _prevDealerCount) {
+        const _added = _newDealerCount - _prevDealerCount;
+        for (let _di = 0; _di < _added; _di++) {
+          setTimeout(() => { try { sfx('card'); } catch(e) {} }, _di * 280);
+        }
+      }
+      MP._prevDealerCount = _newDealerCount;
+    } else {
+      MP._prevDealerCount = (t.dealerHand||[]).length;
+    }
+
+    // Hit SFX — fire sfx('card') for each new card added to player hands mid-round
+    if (_prevSpPhase === 'play' && t.phase === 'playing') {
+      const _curHands = G.hands; // already updated above
+      if (!MP._prevHandCounts) MP._prevHandCounts = [0, 0];
+      _curHands.forEach((hand, hi) => {
+        const _prev = MP._prevHandCounts[hi] || 0;
+        const _now  = hand.length;
+        if (_now > _prev) {
+          // Each new card beyond what was there before
+          for (let _ci = 0; _ci < (_now - _prev); _ci++) {
+            setTimeout(() => { try { sfx('card'); } catch(e) {} }, _ci * 200);
+          }
+        }
+        MP._prevHandCounts[hi] = _now;
+      });
+    } else if (_prevSpPhase === 'bet' || _prevSpPhase === 'done') {
+      MP._prevHandCounts = G.hands.map(h => h.length);
+    }
+
     mpPhaseToSpBody('playing');
     try {
       const myTurnNow = t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username;
@@ -12733,10 +12787,15 @@ function _mpSyncServerToSp(t) {
         const cur = t.players[t.currentTurnIdx];
         _ms.className = ''; _ms.textContent = `Waiting for ${cur?.displayName || cur?.username || 'player'}…`;
       } else if (_ms && t.phase === 'dealer') {
-        _ms.className = ''; _ms.textContent = 'Dealer is playing…';
+        _ms.className = 'dealer-drawing'; _ms.textContent = 'Dealer is playing…';
       }
     } catch(e) {}
   } else if (t.phase === 'result') {
+    // Bust animation: fire once when player status first becomes busted
+    if (me.status === 'busted' && MP._lastBustRound !== t.roundNum) {
+      MP._lastBustRound = t.roundNum;
+      try { if (typeof _playBustAnimation === 'function') _playBustAnimation(0); } catch(e) {}
+    }
     G.phase = 'done';
     mpPhaseToSpBody('done');
   }
@@ -12751,8 +12810,9 @@ function _mpSyncServerToSp(t) {
   try { if (G.s && typeof updateUI === 'function') updateUI(); } catch(e) {}
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
   try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
+  try { if (typeof buildLevPanel === 'function') buildLevPanel(); } catch(e) {}
 
-  // 6b) Result phase: show SP msg-strip outcome once per round
+  // 6b) Result phase: show result overlay + side bet wins + score flash + session stats — once per round
   if (t.phase === 'result' && me.status === 'done' && me.result) {
     const _rKey = `${t.roundNum}_${me.result}`;
     if (MP._lastSpResultKey !== _rKey) {
@@ -12770,10 +12830,51 @@ function _mpSyncServerToSp(t) {
       };
       const [txt, cls] = _MSG[me.result] || [`${me.result.toUpperCase()}`,''];
       try { if (typeof msg === 'function') msg(txt, cls); } catch(e) {}
+
+      // Score flash-win / flash-lose on the hand slot
+      try {
+        const _scoreEl = document.getElementById('score-0');
+        if (_scoreEl) {
+          const _fc = pay > 0 ? 'flash-win' : pay < 0 ? 'flash-lose' : '';
+          if (_fc) {
+            _scoreEl.classList.remove('flash-win','flash-lose');
+            void _scoreEl.offsetWidth;
+            _scoreEl.classList.add(_fc);
+            setTimeout(() => _scoreEl.classList.remove(_fc), 750);
+          }
+        }
+      } catch(e) {}
+
+      // showResult overlay (W/L/PUSH card with payout breakdown)
+      try {
+        if (typeof showResult === 'function') showResult(pay, txt, me.balance);
+      } catch(e) {}
+
+      // Side bet win popups — staggered 600ms apart, wins only
+      try {
+        const _sbWins = (me.sideBetResults||[]).filter(r => r.won && r.pl > 0);
+        _sbWins.forEach((r, i) => {
+          setTimeout(() => {
+            try { if (typeof showSideBetWin === 'function') showSideBetWin(r.label || r.name, r.pl); } catch(e) {}
+          }, i * 600);
+        });
+      } catch(e) {}
+
+      // Session chart, streak badge, shoe temperature — mirror SP's settle() calls
+      try { if (typeof updateSessionChart === 'function') updateSessionChart(pay); } catch(e) {}
+      try { if (typeof _updateStreakBadge === 'function') _updateStreakBadge(); } catch(e) {}
+      try { if (typeof _updateShoeTemp === 'function') _updateShoeTemp(); } catch(e) {}
     }
   }
-  // Reset per-round result key when a new betting phase begins
-  if (t.phase === 'betting' || t.phase === 'waiting') MP._lastSpResultKey = null;
+  // Reset per-round result key when a new betting phase begins; auto-close result modal
+  if (t.phase === 'betting' || t.phase === 'waiting') {
+    if (MP._lastSpResultKey !== null) {
+      try { if (typeof closeModal === 'function') closeModal('result-modal'); } catch(e) {}
+    }
+    MP._lastSpResultKey = null;
+    MP._prevHandCounts  = [0, 0];
+    MP._prevDealerCount = 0;
+  }
 
   // 6c) Insurance: open SP modal once when we enter insurance phase; close when it ends
   if (t.phase === 'insurance' && !me.insuranceDecided) {
@@ -12809,7 +12910,20 @@ function _mpSyncServerToSp(t) {
     }
   });
 
-  // 8) Render remote seats strip
+  // 8) Stamped boost modal — show once per round when stamp is active and it's our turn
+  if (G.stampedOn && !me.bonusFlags?.stampedBoosted && t.phase === 'playing' && myTurn) {
+    const _sk = 'sb' + (t.roundNum || 0);
+    if (MP._lastStampedKey !== _sk) {
+      MP._lastStampedKey = _sk;
+      try { if (typeof showStampedBoost === 'function') showStampedBoost(); } catch(e) {}
+    }
+  }
+  // Hide stamped boost button when not relevant (stamped already used, wrong phase, not our turn)
+  if (!G.stampedOn || me.bonusFlags?.stampedBoosted || t.phase !== 'playing' || !myTurn) {
+    try { if (typeof hideStampedBoost === 'function') hideStampedBoost(); } catch(e) {}
+  }
+
+  // 9) Render remote seats strip
   _mpRenderRemoteSeats(t, me);
 }
 
@@ -12891,6 +13005,22 @@ function _mpRenderRemoteSeats(t, me) {
       return;
     }
 
+    // Hand 2 pre-deal bets require worker support not yet implemented
+    if (G._hand2Active && (G.mainBet2||0) > 0) {
+      notif('Second hand bets are not supported in multiplayer yet — your Hand 1 bet will be placed');
+    }
+
+    // All Side Bets token: auto-fill G.sideBets before reading them (mirrors SP's deal() logic)
+    if (G._allSBNextHand && G.s) {
+      const _target = G._allSBNextHand;
+      if (_target === 'h1' || _target === 'both' || _target === true) {
+        (typeof SB_NAMES !== 'undefined' ? SB_NAMES : ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'])
+          .forEach(n => { if (!(G.sideBets[n] > 0)) G.sideBets[n] = G.s.sMin || G.s.min / 2 || 0; });
+      }
+      G._allSBNextHand = false;
+      try { if (typeof updateSBCircles === 'function') updateSBCircles(); } catch(e) {}
+    }
+
     const betAmt  = G.mainBet; // capture now — poll may reset G.mainBet later
     MP._lastBet   = betAmt;    // used by auto-same-bet on the next round
     const sideBets = {};
@@ -12948,14 +13078,47 @@ function _mpRenderRemoteSeats(t, me) {
     MP._action('grantPowerup', { puId: pu.id });
   });
 
+  // toggleLev: route leverage activation/deactivation to server
+  wrap('toggleLev', function(key) {
+    if (G.leverage === key) {
+      MP._action('useLeverage', { levCard: null });
+    } else {
+      if (key.startsWith('c') && G.phase !== 'bet') {
+        notif('Jester cards can only be evoked before dealing');
+        return;
+      }
+      MP._action('useLeverage', { levCard: key });
+    }
+  });
+
+  // Stamped card boost: send amount to server rather than modifying G.balance/G.mainBet locally
+  wrap('confirmStampedBoost', function() {
+    try { if (typeof closeModal === 'function') closeModal('stamped-modal'); } catch(e) {}
+    try { if (typeof hideStampedBoost === 'function') hideStampedBoost(); } catch(e) {}
+    const slider = document.getElementById('stamped-slider');
+    const boost  = parseFloat(slider ? slider.value : 0);
+    G.stampedOn  = false; // clear locally regardless — server is authoritative
+    if (!boost || boost <= 0) {
+      // Player chose 0 — skip boost, server turn continues without it
+      return;
+    }
+    MP._action('stampedBoost', { amount: boost });
+    notif('Stamped boost sent — ' + (typeof fmtKFC === 'function' ? fmtKFC(boost) : boost) + ' added to bet');
+  });
+
+  // Insurance token — not supported server-side in MP yet; inform the player
+  wrap('_redeemInsurance', function() {
+    notif('Insurance Token not yet available in multiplayer — coming soon');
+  });
+
   // Leverage token (pts redemption): send to server instead of setting G.leverage locally
   wrap('_redeemLev2x', function() {
     const myPts = typeof _getPoints === 'function' ? _getPoints(G.username||G.player) : (G._pts||0);
     if (myPts < (PTS_COST?.lev2x || 35)) { notif('Not enough points (need ⭐' + (PTS_COST?.lev2x || 35) + ')'); return; }
     try { if (typeof _spendPoints === 'function') _spendPoints(PTS_COST?.lev2x || 35); } catch(e) {}
-    MP._action('leverage', { levCard: '2x' });
+    MP._action('useLeverage', { levCard: '2x' });
     try { if (typeof sfx === 'function') sfx('buy'); } catch(e) {}
-    notif('⭐ 2× Leverage Token sent to server');
+    notif('⭐ 2× Leverage Token activated');
   });
 
   // confirmCashout: in MP, use leaveTable() instead of SP's own sync/clearSession flow.

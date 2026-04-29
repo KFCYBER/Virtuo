@@ -7059,6 +7059,7 @@ function revealHole(){
   const holeIdx=1; // hole card is always the second card dealt (index 1)
   if(cards.length>holeIdx){
     const holeEl=cards[holeIdx];
+    if(!holeEl.classList.contains('down')) return; // already revealed — skip animation
     const c=G.dealer[holeIdx];
     // Phase 1: rotate the face-down card out (to 90°) over 180ms
     holeEl.style.transition='transform .18s ease-in';
@@ -11431,6 +11432,12 @@ const MP = {
       }));
     } catch(e) { console.error('[MP] save snap:', e); }
 
+    // Sync MP strategy toggle checkbox with the shared _strategyOn setting
+    try {
+      const _mpStEl = document.getElementById('mp-strategy-toggle');
+      if (_mpStEl) _mpStEl.checked = (localStorage.getItem('kfc_strategy') === '1');
+    } catch(e) {}
+
     console.log('[MP] _enterGame finished — SP UI should be visible');
   },
 
@@ -12519,6 +12526,14 @@ const MP = {
     if (modal) modal.style.display = 'none';
   },
 
+  // ── Strategy toggle — shares _strategyOn with SP so one checkbox drives both ──
+  _toggleMpStrategy(on) {
+    if (typeof toggleStrategy === 'function') toggleStrategy(on);
+    // Keep SP settings checkbox in sync
+    const spEl = document.getElementById('strategy-toggle');
+    if (spEl) spEl.checked = on;
+  },
+
   // ── Pts-based power-up grant ──────────────────────────────────
   _mpGrantPowerup(puId) {
     const PTS_COST_PU = { sally:75, net:60, seeker:60, guard:45, novak:45 };
@@ -12613,6 +12628,15 @@ function _mpSyncServerToSp(t) {
     G.stampedInitialBet = bf.stampedInitialBet || 0;
   }
 
+  // Sync split count so basicStrategyAction knows whether split is available
+  G.splits = me.hasSplit ? 1 : 0;
+
+  // Sync server-committed side bets to G.sideBets during active hand
+  // (not during betting/waiting to avoid overwriting the player's pending local bets)
+  if (t.phase === 'playing' || t.phase === 'dealer' || t.phase === 'insurance' || t.phase === 'result') {
+    if (me.sideBets) G.sideBets = { ...me.sideBets };
+  }
+
   // 3c) Sync leverage state from server so buildLevPanel + inventory bar show correct active state
   G.leverage  = me.leverage  || null;
   G.levCards  = me.levCards  || [];
@@ -12692,6 +12716,15 @@ function _mpSyncServerToSp(t) {
       MP._prevHandCounts = G.hands.map(h => h.length);
     }
 
+    // Bust animation — fire as soon as status becomes 'busted' (status becomes 'done' by result phase, so must detect here)
+    if (me.status === 'busted') {
+      const _bustKey = 'b' + (t.roundNum || 0);
+      if (MP._lastBustKey !== _bustKey) {
+        MP._lastBustKey = _bustKey;
+        try { if (typeof _playBustAnimation === 'function') _playBustAnimation(0); } catch(e) {}
+      }
+    }
+
     mpPhaseToSpBody('playing');
     try {
       const myTurnNow = t.phase === 'playing' && t.players[t.currentTurnIdx]?.username === G.username;
@@ -12706,11 +12739,6 @@ function _mpSyncServerToSp(t) {
       }
     } catch(e) {}
   } else if (t.phase === 'result') {
-    // Bust animation: fire once when player status first becomes busted
-    if (me.status === 'busted' && MP._lastBustRound !== t.roundNum) {
-      MP._lastBustRound = t.roundNum;
-      try { if (typeof _playBustAnimation === 'function') _playBustAnimation(0); } catch(e) {}
-    }
     G.phase = 'done';
     mpPhaseToSpBody('done');
   }
@@ -12723,9 +12751,24 @@ function _mpSyncServerToSp(t) {
   // 6) Repaint SP UI — full re-render is safest given format conversions
   try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
   try { if (G.s && typeof updateUI === 'function') updateUI(); } catch(e) {}
+  // MP: override shoe count with server deck remaining (G.deck is always [] in MP — worker strips it)
+  if (t.deckRemaining != null) {
+    const _mpTotal = 208; // buildShoe(4) = 4×52, bonus cards replace so total stays 208
+    const _mpRem   = t.deckRemaining;
+    const _sc = document.getElementById('shoe-count');
+    if (_sc) _sc.textContent = _mpRem;
+    const _used = Math.max(0, _mpTotal - _mpRem);
+    const _pct  = Math.min(100, Math.round((_used / _mpTotal) * 100));
+    const _fill = document.getElementById('discard-fill');
+    const _dc   = document.getElementById('discard-count');
+    if (_fill) _fill.style.height = _pct + '%';
+    if (_dc)   _dc.textContent = _used > 0 ? _used : '';
+  }
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
   try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
   try { if (typeof buildLevPanel === 'function') buildLevPanel(); } catch(e) {}
+  try { if (typeof updateBetPanel === 'function') updateBetPanel(); } catch(e) {}
+  try { if (typeof updateSBCircles === 'function') updateSBCircles(); } catch(e) {}
 
   // 6a) Hole card reveal — fires once per round as soon as server exposes the hole card.
   // Called AFTER renderAll so the down-card DOM element is in place (renderAll won't re-render
@@ -12835,6 +12878,9 @@ function _mpSyncServerToSp(t) {
       el.disabled = true;
     }
   });
+
+  // 7b) Strategy hint — update now that G.phase, G.hands, and button states are current
+  try { if (typeof updateStrategyHint === 'function') updateStrategyHint(); } catch(e) {}
 
   // 8) Stamped boost modal — show once per round when stamp is active and it's our turn
   if (G.stampedOn && !me.bonusFlags?.stampedBoosted && t.phase === 'playing' && myTurn) {

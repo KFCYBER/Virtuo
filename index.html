@@ -3090,7 +3090,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
     <div class="mp-title">SELECT MODE</div>
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
     <button class="mp-mode-btn primary" onclick="MP._chooseSP()">&#9654; SINGLEPLAYER</button>
-    <button class="mp-mode-btn ghost" onclick="MP._chooseMP()">&#9782; MULTIPLAYER</button>
+    <button class="mp-mode-btn ghost" onclick="MP._chooseMP()">&#9782; MULTIPLAYER (Classic)</button>
+    <button class="mp-mode-btn ghost" style="border-color:var(--gold-lo);color:var(--gold);" onclick="HA._chooseHA()">&#9733; HOST-AUTH MULTIPLAYER</button>
   </div>
 </div>
 
@@ -3344,11 +3345,92 @@ body.hand2-active #chip-strip .chip { position: relative; }
 <!-- MP LEAVE CONFIRMATION MODAL -->
 <div class="overlay" id="mp-leave-modal" style="display:none;z-index:1200;">
   <div class="modal" style="max-width:340px;padding:28px 24px;">
-    <div style="font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:18px;">Leave Table?</div>
+    <div style="font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:18px;">Return to Lobby?</div>
     <div id="mp-leave-summary" style="font-family:var(--mono);font-size:11px;line-height:1.7;margin-bottom:16px;"></div>
     <div style="display:flex;flex-direction:column;gap:8px;">
-      <button class="btn-primary" onclick="MP._doLeave()">Cash Out &amp; Leave</button>
-      <button class="btn-ghost" onclick="MP._cancelLeave()">Stay &amp; Play More</button>
+      <button class="btn-primary" onclick="MP._doLeave()">Return to Lobby</button>
+      <button class="btn-ghost" onclick="MP._cancelLeave()">Stay &amp; Play</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════
+   HA-MP: LOBBY
+══════════════════════════════════════════════ -->
+<div id="ha-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:1100;background:var(--bg);overflow-y:auto;">
+  <div class="mp-lobby-inner">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;border-bottom:1px solid var(--line);padding-bottom:16px;">
+      <div>
+        <div class="mp-title" style="margin-bottom:0;color:var(--gold)">HOST-AUTH LOBBY</div>
+        <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-top:4px;" id="ha-lobby-user"></div>
+      </div>
+      <button class="mp-mode-btn ghost" style="width:auto;padding:8px 18px;margin:0;font-size:10px;" onclick="HA._backToModeSelect()">&#8592; Back</button>
+    </div>
+
+    <div class="mp-section-title">CREATE A TABLE</div>
+    <div class="mp-create-form">
+      <div style="margin-bottom:12px;">
+        <label class="field-label">Table Name <span style="color:var(--red)">*</span></label>
+        <input type="text" id="ha-create-name" placeholder="e.g. Friday Night HA" maxlength="40" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+        <div>
+          <label class="field-label">Category</label>
+          <select id="ha-create-category" onchange="HA._onCategoryChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;">
+            <option value="standard">Standard</option>
+            <option value="vip">VIP</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Your Stake</label>
+          <select id="ha-create-stake" onchange="HA._onStakeChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;"></select>
+        </div>
+      </div>
+      <div style="margin-bottom:12px;">
+        <label class="field-label">Your Buy-In <span style="color:var(--red)">*</span></label>
+        <input type="text" id="ha-buyin-inp" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;" oninput="MP._fmtBuyIn(this)">
+        <div id="ha-buyin-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:4px;letter-spacing:1px;"></div>
+      </div>
+      <button class="mp-mode-btn primary" style="margin:0;border-color:var(--gold-lo);background:var(--gold);" onclick="HA.createTable()" id="ha-create-btn">&#9733; CREATE HA TABLE</button>
+      <div id="ha-create-err" style="font-family:var(--mono);font-size:11px;color:var(--red);margin-top:8px;min-height:16px;"></div>
+    </div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+      <div class="mp-section-title" style="margin-bottom:0">OPEN HA TABLES</div>
+      <button class="mp-mode-btn ghost" style="width:auto;padding:6px 14px;margin:0;font-size:9px;" onclick="HA.refreshLobby()">&#8635; Refresh</button>
+    </div>
+    <div id="ha-tables-list"><div class="mp-empty">Loading tables…</div></div>
+
+    <div id="ha-join-form" style="display:none;border:1px solid var(--gold-lo);border-radius:8px;padding:20px;background:var(--bg2);margin-top:16px;">
+      <div class="mp-section-title">JOIN TABLE: <span id="ha-join-name-lbl"></span></div>
+      <label class="field-label">Your Stake</label>
+      <select id="ha-join-stake" onchange="HA._onJoinStakeChange()" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--sans);font-size:13px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:12px;"></select>
+      <label class="field-label">Your Buy-In <span style="color:var(--red)">*</span></label>
+      <input type="text" id="ha-join-buyin" inputmode="numeric" placeholder="Enter amount" style="width:100%;padding:9px 12px;background:var(--bg);border:1px solid var(--line2);color:var(--white);font-family:var(--mono);font-size:14px;outline:none;border-radius:var(--radius);box-sizing:border-box;margin-bottom:4px;" oninput="MP._fmtBuyIn(this)">
+      <div id="ha-join-buyin-hint" style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:12px;letter-spacing:1px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="mp-mode-btn primary" style="flex:2;margin:0;" onclick="HA._confirmJoin()">JOIN TABLE</button>
+        <button class="mp-mode-btn ghost" style="flex:1;margin:0;" onclick="HA._cancelJoin()">Cancel</button>
+      </div>
+      <div id="ha-join-err" style="font-family:var(--mono);font-size:11px;color:var(--red);margin-top:8px;min-height:16px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- HA HOST-GONE BANNER -->
+<div id="ha-host-gone-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:2000;background:rgba(248,81,73,0.92);backdrop-filter:blur(4px);padding:10px 16px;align-items:center;justify-content:center;gap:12px;font-family:var(--mono);font-size:11px;letter-spacing:1px;color:#fff;">
+  <span>&#9888; The host has left the table — the table will close after this round ends.</span>
+  <button onclick="document.getElementById('ha-host-gone-banner').style.display='none'" style="background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);color:#fff;font-family:var(--mono);font-size:10px;padding:3px 10px;cursor:pointer;border-radius:2px;">&#10005;</button>
+</div>
+
+<!-- HA LEAVE MODAL -->
+<div class="overlay" id="ha-leave-modal" style="display:none;z-index:1200;">
+  <div class="modal" style="max-width:340px;padding:28px 24px;">
+    <div style="font-family:var(--sans);font-size:11px;font-weight:700;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:18px;">Return to HA Lobby?</div>
+    <div id="ha-leave-summary" style="font-family:var(--mono);font-size:11px;line-height:1.7;margin-bottom:16px;"></div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <button class="btn-primary" onclick="HA._doLeave()">Return to Lobby</button>
+      <button class="btn-ghost" onclick="HA._cancelLeave()">Stay &amp; Play</button>
     </div>
   </div>
 </div>
@@ -11356,6 +11438,15 @@ const MP = {
     this._mpChartPts  = [0];
     this._mpLog       = [];
     this._lastBet     = 0;
+    // Reset per-session poll-state so stale values from a previous table don't bleed in
+    this._lastSyncedRound  = -1;
+    MP._mpPrevDeckRem      = undefined;
+    MP._lastRevealKey      = null;
+    MP._lastSpResultKey    = null;
+    MP._lastBustKey        = null;
+    MP._lastInsuranceKey   = null;
+    MP._prevDealerCount    = 0;
+    MP._prevHandCounts     = [0, 0];
 
     // ── MP-IN-SP MODE ──────────────────────────────────────────────
     G.mpMode      = true;
@@ -11566,22 +11657,66 @@ const MP = {
           const rn = d.table.roundNum;
           if (rn !== this._lastSyncedRound) {
             this._lastSyncedRound = rn;
-            // Earn loyalty pts
-            if (me.ptsEarned > 0 && typeof _addPoints === 'function') {
-              try { _addPoints(me.ptsEarned); } catch(e) {}
-            }
             // Track session P/L and update chart
             const roundPL  = me.payout || 0;
             const cumulPL  = (this._mpChartPts[this._mpChartPts.length - 1] || 0) + roundPL;
             this._mpChartPts.push(cumulPL);
             this._mpLog.push({ pl: roundPL, bal: me.balance, result: me.result });
-            // Mirror into G.log so SP's cashout stats/chart work correctly in MP
-            G.log.push({ detail: me.result || 'played', pl: roundPL, bal: me.balance });
+            // Build breakdown from server data so showResult() modal renders detail rows (mirrors SP settle())
+            try {
+              const _mpSbTotal = (me.sideBetResults||[]).reduce((a,r) => a+(r.pl||0), 0);
+              // For split: approximate per-hand PL from result string + bet (server has no per-hand breakdown)
+              const _mpResultPL = (res, bet) => {
+                if (!res || !bet) return 0;
+                if (res === 'blackjack') return Math.floor(bet * 1.5);
+                if (res === 'win')       return bet;
+                if (res === 'push')      return 0;
+                if (res === 'surrender') return -Math.floor(bet * 0.5);
+                return -bet; // bust / lose / dealer_bj
+              };
+              const _mpBD = {
+                main: {
+                  bet: me.bet||0,
+                  pl: me.hasSplit ? _mpResultPL(me.result, me.bet) : (roundPL - _mpSbTotal),
+                  detail: me.result||''
+                },
+                hand2: me.hasSplit ? {
+                  bet: me.bet2||me.bet||0,
+                  pl: _mpResultPL(me.result2, me.bet2||me.bet),
+                  detail: me.result2||''
+                } : null,
+                levCost: 0, bonus: [],
+                sbs: (me.sideBetResults||[]).map(r => ({
+                  name: r.name, bet: r.bet||0, pl: r.pl||0, won: !!r.won, free: !!r.free
+                }))
+              };
+              G.log.push({ detail: me.result || 'played', pl: roundPL, bal: me.balance, breakdown: _mpBD });
+            } catch(e) {
+              G.log.push({ detail: me.result || 'played', pl: roundPL, bal: me.balance });
+            }
+            // Streak tracking — mirrors SP settle() exactly using the same module-level _streak variable
+            try {
+              if (roundPL > 0) _streak = _streak > 0 ? _streak + 1 : 1;
+              else if (roundPL < 0) _streak = _streak < 0 ? _streak - 1 : -1;
+              else _streak = 0;
+              // Streak bonus points (identical thresholds as SP)
+              if      (_streak ===  3) { _addPoints(5);  notif('🔥 3-win streak — ⭐+5 pts'); }
+              else if (_streak ===  5) { _addPoints(10); notif('🔥 5-win streak — ⭐+10 pts'); }
+              else if (_streak ===  7) { _addPoints(15); notif('🔥 7-win streak — ⭐+15 pts'); }
+              else if (_streak === -3) { _addPoints(3);  notif('🥶 Pity points — ⭐+3 pts'); }
+            } catch(e) {}
+            // Shoe log tracking — mirrors SP settle() so _calcShoePoints() works correctly at shoe end
+            try {
+              const _mpSbWins = (me.sideBetResults||[]).filter(r => r.won && r.pl > 0).length;
+              _shoeLog.push({ pl: roundPL, bj: me.result === 'blackjack', sbWins: _mpSbWins });
+              _shoeHandCount++;
+            } catch(e) {}
             try { this._updateMpChart(); } catch(e) {}
             // Keep SP's session chart, streak badge, and shoe temperature in sync
             try { if (typeof updateSessionChart === 'function') updateSessionChart(roundPL); } catch(e) {}
             try { if (typeof _updateStreakBadge === 'function') _updateStreakBadge(); } catch(e) {}
             try { if (typeof _updateShoeTemp === 'function') _updateShoeTemp(); } catch(e) {}
+            try { if (typeof _updatePointsBadge === 'function') _updatePointsBadge(); } catch(e) {}
             // Personal best flash
             if (me.balance > this._sessionHigh) {
               this._sessionHigh = me.balance;
@@ -11694,19 +11829,24 @@ const MP = {
   },
 
   leaveTable() {
-    // Populate SP G session vars from MP state so the shared cashout modal shows correct data
+    // Bottom MP-strip button: show lobby-return confirmation (does NOT full-logout)
     const me = this._myPlayer;
     const finalBal = me?.balance ?? this._lastSeenBalance ?? this._buyIn ?? 0;
-    G.balance      = finalBal;
-    G.sessionStart = this._buyIn ?? finalBal;
-    G._atCashout   = true;
-    // showCashout() renders the session summary modal (shared SP/MP UI)
-    try { if (typeof showCashout === 'function') showCashout(); } catch(e) {}
+    const pl = finalBal - (this._buyIn ?? finalBal);
+    const summary = document.getElementById('mp-leave-summary');
+    if (summary) {
+      summary.innerHTML =
+        `Balance: <b>${typeof fmtKFC === 'function' ? fmtKFC(finalBal) : finalBal}</b><br>` +
+        `Session P/L: <b style="color:${pl >= 0 ? 'var(--green)' : 'var(--red)'}">${pl >= 0 ? '+' : ''}${typeof fmtKFC === 'function' ? fmtKFC(pl) : pl}</b>`;
+    }
+    const mpLeaveEl = document.getElementById('mp-leave-modal');
+    if (mpLeaveEl) mpLeaveEl.style.display = 'flex';
   },
 
   _cancelLeave() {
     G._atCashout = false;
-    try { if (typeof closeModal === 'function') closeModal('cashout-modal'); } catch(e) {}
+    const mpLeaveEl = document.getElementById('mp-leave-modal');
+    if (mpLeaveEl) mpLeaveEl.style.display = 'none';
   },
 
   // Called after confirmCashout sync completes — just does state cleanup and returns to lobby
@@ -11724,8 +11864,50 @@ const MP = {
     this._openLobby();
   },
 
+  // Full logout — used by the top "Leave Table" button (cashout modal confirm path).
+  // Awards partial shoe points, clears MP state, navigates to the login screen.
+  _doFullLogout() {
+    // Award partial shoe points before leaving (mirrors SP's confirmCashout partial-shoe logic)
+    try {
+      if (_shoeHandCount > 0 && typeof _calcShoePoints === 'function') {
+        const _ppts = _calcShoePoints(true);
+        if (_ppts > 0) {
+          if (typeof _addPoints === 'function') _addPoints(_ppts);
+          notif('⭐ +' + _ppts + ' pts (partial shoe)');
+          if (typeof _updatePointsBadge === 'function') _updatePointsBadge();
+        }
+        _shoeLog = []; _shoeHandCount = 0;
+      }
+    } catch(e) {}
+    this._stopPolling();
+    this._stopTimerTick();
+    this.tableId = null; this.state = null;
+    G.mpMode = false;
+    this._clearMpSnap();
+    G.cashedOut = true;   // satisfy doLogout() guard
+    G.phase     = 'bet';  // satisfy doLogout() phase guard
+    const _finalBal = G.balance;
+    if (_pendingLogin) _pendingLogin.balance = _finalBal;
+    try { this._unmountMpStrip(); } catch(e) {}
+    try { if (typeof doLogout === 'function') doLogout(_finalBal <= 0); } catch(e) {}
+  },
+
   async _doLeave() {
-    // Legacy direct-leave path (AFK kick, table-closed, beacon). Uses cleanup helper.
+    // Lobby-return path (bottom strip button via mp-leave-modal, AFK kick, beacon).
+    // Awards partial shoe points, syncs balance to sheet, then returns to MP lobby.
+    try {
+      if (_shoeHandCount > 0 && typeof _calcShoePoints === 'function') {
+        const _ppts = _calcShoePoints(true);
+        if (_ppts > 0) {
+          if (typeof _addPoints === 'function') _addPoints(_ppts);
+          notif('⭐ +' + _ppts + ' pts (partial shoe)');
+          if (typeof _updatePointsBadge === 'function') _updatePointsBadge();
+        }
+        _shoeLog = []; _shoeHandCount = 0;
+      }
+    } catch(e) {}
+    const mpLeaveEl = document.getElementById('mp-leave-modal');
+    if (mpLeaveEl) mpLeaveEl.style.display = 'none';
     this._stopPolling(); this._stopTimerTick();
     if (this.tableId && this.state) this._syncBalanceToSheets('leave');
     if (this.tableId) await this._action('leave');
@@ -12771,8 +12953,26 @@ function _mpSyncServerToSp(t) {
   const _revKeyNow = 'h' + (t.roundNum || 0);
   const _isFirstReveal = !t.dealerHidden && MP._lastRevealKey !== _revKeyNow;
   if (_isFirstReveal) G.holeRevealed = false; // force face-down for renderAll
+  // Capture pre-render dealer card count so we can stagger newly added cards post-render
+  const _dealerPreRenderCount = (document.getElementById('dealer-cards')?.children.length) || 0;
   try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
   if (_isFirstReveal) G.holeRevealed = true;  // restore after renderAll
+  // Dealer draw animation stagger: when multiple cards arrive in one poll, slide each in 280ms apart
+  // (matches SFX timing already staggered above). Does not touch SP's renderAll code.
+  try {
+    if (t.phase === 'dealer') {
+      const _dc = document.getElementById('dealer-cards');
+      if (_dc && _dc.children.length > _dealerPreRenderCount) {
+        Array.from(_dc.children).slice(_dealerPreRenderCount).forEach((el, bIdx) => {
+          if (bIdx === 0) return; // first new card animates at 0s (immediate)
+          el.style.animation = 'none';
+          void el.offsetWidth; // force reflow to restart animation
+          el.style.animation = '';
+          el.style.animationDelay = (bIdx * 0.28) + 's';
+        });
+      }
+    }
+  } catch(e) {}
   try { if (G.s && typeof updateUI === 'function') updateUI(); } catch(e) {}
   // MP: override shoe count with server deck remaining (G.deck is always [] in MP — worker strips it)
   if (t.deckRemaining != null) {
@@ -12783,9 +12983,25 @@ function _mpSyncServerToSp(t) {
     const _used = Math.max(0, _mpTotal - _mpRem);
     const _pct  = Math.min(100, Math.round((_used / _mpTotal) * 100));
     const _fill = document.getElementById('discard-fill');
-    const _dc   = document.getElementById('discard-count');
+    const _dc2  = document.getElementById('discard-count');
     if (_fill) _fill.style.height = _pct + '%';
-    if (_dc)   _dc.textContent = _used > 0 ? _used : '';
+    if (_dc2)  _dc2.textContent = _used > 0 ? _used : '';
+    // Shoe reshuffle detection: deckRemaining jumps UP when server rebuilds the shoe.
+    // Award accumulated shoe points using SP's exact _calcShoePoints() formula.
+    try {
+      if (MP._mpPrevDeckRem !== undefined && _mpRem > MP._mpPrevDeckRem + 30 && _shoeHandCount > 0) {
+        const _se = typeof _calcShoePoints === 'function' ? _calcShoePoints() : 0;
+        if (_se > 0) {
+          if (typeof _addPoints === 'function') _addPoints(_se);
+          const _sw = _shoeLog.filter(e => e.pl > 0).length;
+          const _sb = _shoeLog.filter(e => e.bj).length;
+          notif('⭐ +' + _se + ' points (' + _shoeHandCount + 'h · ' + _sw + 'w · ' + _sb + 'bj)');
+          if (typeof _updatePointsBadge === 'function') _updatePointsBadge();
+        }
+        _shoeLog = []; _shoeHandCount = 0;
+      }
+      MP._mpPrevDeckRem = _mpRem;
+    } catch(e) {}
   }
   try { if (typeof renderScores === 'function') renderScores(); } catch(e) {}
   try { if (typeof buildPuPanel === 'function') buildPuPanel(); } catch(e) {}
@@ -13126,11 +13342,25 @@ function _mpRenderRemoteSeats(t, me) {
     notif('⭐ 2× Leverage Token activated');
   });
 
-  // confirmCashout: in MP, sync balance to sheet + kick server seat, then return to lobby.
-  // Runs inside the shared SP cashout modal — intercepts the Confirm & Sync button.
+  // confirmCashout (top "Leave Table" path): sync balance to sheet, kick server seat,
+  // award partial shoe points, then full-logout to the login screen.
   wrap('confirmCashout', async function() {
     if (G._syncInProgress) { notif('Already syncing — please wait'); return; }
     G._syncInProgress = true;
+    // Award partial shoe points before syncing — mirrors SP's confirmCashout partial-shoe logic
+    try {
+      if (_shoeHandCount > 0 && typeof _calcShoePoints === 'function') {
+        const _ppts = _calcShoePoints(true);
+        if (_ppts > 0) {
+          if (typeof _addPoints === 'function') _addPoints(_ppts);
+          notif('⭐ +' + _ppts + ' pts (partial shoe)');
+          if (typeof _updatePointsBadge === 'function') _updatePointsBadge();
+        }
+        _shoeLog = []; _shoeHandCount = 0;
+      }
+    } catch(e) {}
+    // Also sync accumulated loyalty points to sheet before leaving
+    try { if (typeof _syncPtsToSheet === 'function') await _syncPtsToSheet(true); } catch(e) {}
     // Show syncing state in the modal
     const badge   = document.getElementById('co-confirmed-badge');
     const preEl   = document.getElementById('co-actions-pre');
@@ -13145,9 +13375,10 @@ function _mpRenderRemoteSeats(t, me) {
       if (MP.tableId && MP.state) await MP._syncBalanceToSheets('leave');
       if (MP.tableId) await MP._action('leave');
       G._syncInProgress = false;
-      if (badge)   { badge.textContent = '✓ Synced — chips returned to wallet'; badge.style.color = 'var(--green)'; }
-      if (leaveBtn){ leaveBtn.disabled = false; leaveBtn.textContent = 'Return to Lobby';
-        leaveBtn.onclick = () => { try { closeModal('cashout-modal'); } catch(e) {} G._atCashout=false; MP._doLeaveCleanup(); };
+      if (badge) { badge.textContent = '✓ Synced — chips returned to wallet'; badge.style.color = 'var(--green)'; }
+      if (leaveBtn) {
+        leaveBtn.disabled = false; leaveBtn.textContent = 'Log Out';
+        leaveBtn.onclick = () => { try { closeModal('cashout-modal'); } catch(e) {} G._atCashout = false; MP._doFullLogout(); };
       }
     } catch(e) {
       G._syncInProgress = false;
@@ -13213,6 +13444,935 @@ window.addEventListener('beforeunload', () => {
     try { MP._clearMpSnap(); } catch(e) {}
   }
 });
+
+// ══════════════════════════════════════════════════════════════════
+//  HA_ENGINE — Client-side game engine (mirrors worker.js game logic)
+//  Runs synchronously in the host's browser. No KV, no async.
+//  handleAction(table, username, action, payload) → null|errorString
+// ══════════════════════════════════════════════════════════════════
+const HA_ENGINE = {
+  RANKS: ['2','3','4','5','6','7','8','9','10','J','Q','K','A'],
+  SUITS: ['S','H','D','C'],
+  BONUS_CARD_REPS_MP: {
+    stamped:  [{r:'7',s:'S'},{r:'5',s:'D'},{r:'9',s:'H'}],
+    gold:     [{r:'2',s:'S'},{r:'6',s:'C'}],
+    scarface: [{r:'10',s:'D'},{r:'3',s:'C'}],
+    arrow:    [{r:'8',s:'D'},{r:'2',s:'H'}],
+    krueger:  [{r:'9',s:'C'},{r:'4',s:'H'}],
+    ice:      [{r:'10',s:'S'}],
+    desert:   [{r:'8',s:'H'}],
+    steel:    [{r:'A',s:'D'}],
+  },
+  BONUS_CARDS_SHOE: [
+    {id:'stamped',rarity:17.3},{id:'gold',rarity:26},{id:'scarface',rarity:26},
+    {id:'arrow',rarity:26},{id:'krueger',rarity:26},{id:'ice',rarity:52},
+    {id:'desert',rarity:52},{id:'steel',rarity:52},
+  ],
+  BETTING_MS: 45000, TURN_MS: 30000, RESULT_MS: 4000, AFK_LIMIT: 2,
+  BALANCE_CAP: 50_000_000_000,
+  STAKE_MINS: {low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000},
+  STAKE_ORDER: ['low','mid','high','royale','legendary','mythic','highroller','champion'],
+  POWERUP_DEFS: [
+    {id:'sally',label:'Surrender Sally',ratio:5,minStake:'mid'},
+    {id:'net',label:'Safety Net',ratio:4,minStake:'mid'},
+    {id:'seeker',label:'Seven-Seeker',ratio:4,minStake:'high'},
+    {id:'guard',label:'BJ Guard',ratio:3,minStake:'legendary'},
+    {id:'novak',label:'BJ Novak',ratio:3,minStake:'legendary'},
+  ],
+  MAX_POWERUPS: 2,
+
+  buildDeck(numDecks=4) {
+    const cards=[];
+    for(let d=0;d<numDecks;d++) for(const s of this.SUITS) for(const r of this.RANKS) cards.push(r+s);
+    for(let i=cards.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[cards[i],cards[j]]=[cards[j],cards[i]];}
+    return cards;
+  },
+  buildShoe(numDecks=4) {
+    const deck=this.buildDeck(numDecks);
+    for(const bc of this.BONUS_CARDS_SHOE){
+      const reps=this.BONUS_CARD_REPS_MP[bc.id]; if(!reps) continue;
+      reps.forEach((rep,ri)=>{
+        const repStr=rep.r+rep.s;
+        const n=Math.round(numDecks*52/bc.rarity/reps.length);
+        let converted=0;
+        for(let di=0;di<deck.length&&converted<n;di++){
+          if(typeof deck[di]==='string'&&deck[di]===repStr){deck[di]={bonus:bc.id,repIdx:ri};converted++;}
+        }
+      });
+    }
+    return deck;
+  },
+  cardRank(c) {
+    if(typeof c==='string') return c.slice(0,-1);
+    const reps=c?.bonus?this.BONUS_CARD_REPS_MP[c.bonus]:null;
+    if(!reps) return null;
+    return(reps[c.repIdx??0]||reps[0])?.r??null;
+  },
+  cardVal(c) {
+    const r=this.cardRank(c); if(!r) return 0;
+    if(['J','Q','K'].includes(r)) return 10;
+    if(r==='A') return 11;
+    return parseInt(r,10);
+  },
+  cardSuitMP(c) {
+    if(typeof c==='string') return c.slice(-1);
+    if(typeof c==='object'&&c.bonus){const reps=this.BONUS_CARD_REPS_MP[c.bonus];const rep=reps?(reps[c.repIdx??0]||reps[0]):null;return rep?.s??'S';}
+    return 'S';
+  },
+  handVal(hand) {
+    let v=0,aces=0;
+    for(const c of hand){v+=this.cardVal(c);if(this.cardRank(c)==='A')aces++;}
+    while(v>21&&aces-->0) v-=10;
+    return v;
+  },
+  isBlackjack(hand){return hand.length===2&&this.handVal(hand)===21;},
+  evalPP(c1,c2) {
+    const r1=this.cardRank(c1),r2=this.cardRank(c2); if(r1!==r2) return null;
+    const s1=this.cardSuitMP(c1),s2=this.cardSuitMP(c2);
+    const high=this.cardVal(c1)>=10;
+    if(s1===s2) return{name:'Perfect Pair',mult:high?50:25};
+    const reds=['H','D'],blacks=['S','C'];
+    const sameColor=(reds.includes(s1)&&reds.includes(s2))||(blacks.includes(s1)&&blacks.includes(s2));
+    if(sameColor) return{name:'Coloured Pair',mult:high?15:10};
+    return{name:'Mixed Pair',mult:high?10:8};
+  },
+  eval21p3(c1,c2,d) {
+    const ord={'A':1,'2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13};
+    const suits=[c1,c2,d].map(x=>this.cardSuitMP(x));
+    const sameSuit=suits.every(s=>s===suits[0]);
+    const ranks=[c1,c2,d].map(x=>this.cardRank(x));
+    const rn=ranks.map(r=>ord[r]||10).sort((a,b)=>a-b);
+    const rnH=ranks.map(r=>r==='A'?14:(ord[r]||10)).sort((a,b)=>a-b);
+    const isStr=(rn[2]-rn[1]===1&&rn[1]-rn[0]===1)||(rnH[2]-rnH[1]===1&&rnH[1]-rnH[0]===1);
+    const lo=Math.min(rn[0],rnH[0]);
+    const is3k=ranks[0]&&ranks[0]===ranks[1]&&ranks[1]===ranks[2];
+    if(sameSuit&&is3k)  return{name:'Suited 3 of a Kind',mult:100};
+    if(sameSuit&&isStr) return{name:'Straight Flush',mult:lo>=9?40:30};
+    if(is3k)            return{name:'Three of a Kind',mult:25};
+    if(isStr)           return{name:'Straight',mult:lo>=9?15:10};
+    if(sameSuit)        return{name:'Flush',mult:5};
+    return null;
+  },
+  evalC7s(c1,c2,d,seeker=false) {
+    const mul=seeker?2:1;
+    const s1=this.cardSuitMP(c1),s2=this.cardSuitMP(c2),sd=this.cardSuitMP(d);
+    const p1=this.cardVal(c1)===7,p2=this.cardVal(c2)===7,di=this.cardVal(d)===7;
+    if(p1&&p2&&di) return s1===s2&&s2===sd?{name:'Three 7s — same suit',mult:50*mul}:{name:'Three 7s',mult:25*mul};
+    if(p1&&p2) return s1===s2?{name:'Two 7s — same suit',mult:30*mul}:{name:'Two 7s (player)',mult:20*mul};
+    if((p1||p2)&&di) return{name:'7 player + 7 dealer',mult:10*mul};
+    if(p2) return{name:'7 on second card',mult:3*mul};
+    if(p1) return{name:'7 on first card',mult:5*mul};
+    return null;
+  },
+  resolveSideBets(p,dealerHand,dBust) {
+    if(!p.sideBets||!p.hand||p.hand.length<2||!dealerHand?.length) return 0;
+    const[c1,c2]=p.hand; const dUp=dealerHand[0];
+    let gain=0; const results=[]; const seeker=p.powerups?.includes('seeker');
+    const early={'Perfect Pairs':()=>this.evalPP(c1,c2),'21+3':()=>this.eval21p3(c1,c2,dUp),'Crazy 7s':()=>this.evalC7s(c1,c2,dUp,seeker)};
+    for(const[name,fn] of Object.entries(early)){
+      const amt=p.sideBets[name]||0; if(!amt) continue;
+      const r=fn();
+      if(r){gain+=amt*r.mult;results.push({name,bet:amt,pl:amt*r.mult,won:true,label:r.name+' '+r.mult+':1'});}
+      else {gain-=amt;results.push({name,bet:amt,pl:-amt,won:false});}
+    }
+    const db=p.sideBets['Dealer Bust']||0;
+    if(db){
+      if(dBust){const tbl={3:1,4:2,5:6,6:12,7:25};const m=tbl[Math.min(dealerHand.length,8)]||50;gain+=db*m;results.push({name:'Dealer Bust',bet:db,pl:db*m,won:true,label:'Dealer Bust ('+dealerHand.length+' cards) '+m+':1'});}
+      else{gain-=db;results.push({name:'Dealer Bust',bet:db,pl:-db,won:false});}
+    }
+    p.sideBetResults=results; return gain;
+  },
+  getLevMult(p) {
+    if(!p.leverage) return 1;
+    if(p.leverage==='2x') return 2;
+    if(p.leverage.startsWith('c')){const i=parseInt(p.leverage.slice(1));const card=(p.levCards||[])[i];return card==='blood'?2:3;}
+    return 1;
+  },
+  allInsuranceDecided(table){return table.players.every(p=>p.status==='sitting_out'||p.insuranceDecided===true);},
+  resolveInsurance(table) {
+    if(this.isBlackjack(table.dealerHand)){table.dealerHidden=false;this.resolveRound(table);}
+    else{table.phase='playing';table.currentTurnIdx=-1;this.advanceTurn(table);}
+  },
+  dealerShouldHit(hand) {
+    const v=this.handVal(hand); if(v<17) return true; if(v>17) return false;
+    let hard=0,ace=false;
+    for(const c of hand){const r=this.cardRank(c);if(r==='A'){hard+=1;ace=true;}else if(['J','Q','K'].includes(r))hard+=10;else hard+=parseInt(r,10);}
+    return ace&&hard+10===17;
+  },
+  drawCard(table) {
+    if(table.deck.length<15) table.deck=this.buildShoe(4);
+    return table.deck.pop();
+  },
+  processBonusCard(p,card,table) {
+    if(typeof card!=='object'||!card.bonus) return;
+    if(!p.bonusFlags) p.bonusFlags={};
+    const stakeMin=this.STAKE_MINS[p.stake]||5;
+    switch(card.bonus){
+      case'scarface':p.balance=Math.min(this.BALANCE_CAP,p.balance+Math.floor(stakeMin/2));break;
+      case'ice':p.balance=Math.min(this.BALANCE_CAP,p.balance+stakeMin*2);break;
+      case'gold':{const amt=stakeMin*2;if(!p.sideBets)p.sideBets={};p.sideBets['Dealer Bust']=(p.sideBets['Dealer Bust']||0)+amt;p.bonusFlags.goldFreeDB=(p.bonusFlags.goldFreeDB||0)+amt;break;}
+      case'krueger':p.bonusFlags.krueger=true;break;
+      case'desert':p.bonusFlags.desert=true;break;
+      case'steel':p.bonusFlags.steel=true;break;
+      case'arrow':p.bonusFlags.arrowCount=(p.bonusFlags.arrowCount||0)+1;break;
+      case'stamped':p.bonusFlags.stamped=true;p.bonusFlags.stampedInitialBet=p.bet;break;
+      case'blood':p.levCardsPending=[...(p.levCardsPending||[]),'blood'];break;
+    }
+  },
+  startBetting(table) {
+    table.phase='betting'; table.bettingDeadline=Date.now()+this.BETTING_MS;
+    table.insuranceDeadline=null; table.currentTurnIdx=-1;
+    table.dealerHand=[]; table.dealerHidden=true;
+    for(const p of table.players){
+      p.levCards=[...(p.levCards||[]),...(p.levCardsPending||[])]; p.levCardsPending=[];
+      p.leverage=null; p.bet=0; p.bet2=0; p.hand=[]; p.hand2=null;
+      p.status='betting'; p.result=null; p.result2=null; p.payout=0;
+      p.hasDoubled=false; p.hasSplit=false; p.joinedMidRound=false;
+      p.insuranceBet=0; p.insuranceDecided=false;
+      p.sideBets={'Perfect Pairs':0,'21+3':0,'Crazy 7s':0,'Dealer Bust':0};
+      p.sideBetResults=[]; p.bonusFlags={}; p.ptsEarned=0;
+    }
+  },
+  dealCards(table) {
+    for(const p of table.players){
+      if(p.status!=='bet_placed'){p.status='sitting_out';continue;}
+      p.hand=[this.drawCard(table),this.drawCard(table)];
+      for(const card of p.hand) this.processBonusCard(p,card,table);
+      p.status=this.isBlackjack(p.hand)?'blackjack':'playing';
+    }
+    table.dealerHand=[this.drawCard(table),this.drawCard(table)]; table.dealerHidden=true;
+    if(this.cardRank(table.dealerHand[0])==='A'){
+      table.phase='insurance'; table.insuranceDeadline=Date.now()+15000;
+      for(const p of table.players) if(p.status==='playing'||p.status==='blackjack'){p.insuranceDecided=false;p.insuranceBet=0;}
+      return true;
+    }
+    table.phase='playing'; return false;
+  },
+  advanceTurn(table) {
+    const start=table.currentTurnIdx+1;
+    for(let i=start;i<table.players.length;i++){
+      if(table.players[i].status==='playing'){table.currentTurnIdx=i;table.turnDeadline=Date.now()+this.TURN_MS;return;}
+    }
+    table.phase='dealer'; table.dealerHidden=false;
+    while(this.dealerShouldHit(table.dealerHand)) table.dealerHand.push(this.drawCard(table));
+    this.resolveRound(table);
+  },
+  resolveRound(table) {
+    const dv=this.handVal(table.dealerHand),dBJ=this.isBlackjack(table.dealerHand),dBust=dv>21;
+    for(const p of table.players){
+      if(!p.bet||p.status==='sitting_out'||p.status==='done') continue;
+      let gain=0;
+      const pv=this.handVal(p.hand),pBust=pv>21,pBJ=this.isBlackjack(p.hand)&&!p.hasSplit;
+      const pu=p.powerups||[],bf=p.bonusFlags||{};
+      const bjMult=(pu.includes('novak')||bf.steel)?2:1.5;
+      let outcome;
+      if(pBust&&pv===22&&pu.includes('net')){outcome='push';}
+      else if(pBust&&bf.desert){outcome='push';}
+      else if(pBust){outcome='bust';gain-=p.bet;if(bf.krueger)gain+=Math.floor(p.bet/2);}
+      else if(pBJ&&dBJ){outcome='push';}
+      else if(pBJ){outcome='blackjack';gain+=Math.floor(p.bet*bjMult);}
+      else if(dBJ){outcome=pu.includes('guard')?'push':'lose';if(outcome==='lose')gain-=p.bet;}
+      else if(dBust||pv>dv){outcome='win';gain+=p.bet;}
+      else if(pv===dv){outcome='push';}
+      else{outcome=bf.desert?'push':'lose';if(outcome==='lose')gain-=p.bet;}
+      p.result=outcome;
+      if(bf.plague&&gain>0) gain=Math.floor(gain/2);
+      const levMult=this.getLevMult(p); if(levMult>1) gain=Math.round(gain*levMult);
+      if(p.hand2&&p.hand2.length>=2){
+        const pv2=this.handVal(p.hand2),pBust2=pv2>21; let outcome2;
+        if(pBust2){outcome2='bust';gain-=p.bet2;}
+        else if(dBJ){outcome2='lose';gain-=p.bet2;}
+        else if(dBust||pv2>dv){outcome2='win';gain+=p.bet2;}
+        else if(pv2===dv){outcome2='push';}
+        else{outcome2='lose';gain-=p.bet2;}
+        p.result2=outcome2;
+      }
+      if(dBJ&&p.insuranceBet>0) gain+=p.insuranceBet*2;
+      gain+=this.resolveSideBets(p,table.dealerHand,dBust);
+      p.payout=gain; p.balance=Math.min(this.BALANCE_CAP,Math.max(0,p.balance+gain));
+      p.status='done';
+      let pts=1;
+      if(outcome==='win'||outcome==='blackjack') pts+=2;
+      if(outcome==='blackjack') pts+=1;
+      if(p.hasPass) pts=Math.floor(pts*1.5);
+      p.ptsEarned=pts;
+      if(p.leverage&&p.leverage.startsWith('c')){const li=parseInt(p.leverage.slice(1));if(p.levCards?.[li]!==undefined)p.levCards.splice(li,1);}
+      p.leverage=null;
+    }
+    table.phase='result'; table.roundNum++; table.turnDeadline=Date.now()+this.RESULT_MS; table.lastAction=Date.now();
+  },
+  checkTimeouts(table) {
+    const now=Date.now(); let changed=false;
+    if(table.phase==='betting'&&table.bettingDeadline&&now>table.bettingDeadline){
+      let anyBet=false;
+      for(const p of table.players){
+        if(p.status==='betting'){const min=this.STAKE_MINS[p.stake]||5;if(p.balance>=min){p.bet=min;p.status='bet_placed';p.afkTurns=(p.afkTurns||0)+1;anyBet=true;}else{p.status='sitting_out';}}
+        else if(p.status==='bet_placed') anyBet=true;
+      }
+      if(!anyBet){this.startBetting(table);return true;}
+      const insMode=this.dealCards(table); if(!insMode){table.currentTurnIdx=-1;this.advanceTurn(table);}
+      return true;
+    }
+    if(table.phase==='insurance'&&table.insuranceDeadline&&now>table.insuranceDeadline){
+      for(const p of table.players) if(!p.insuranceDecided){p.insuranceBet=0;p.insuranceDecided=true;}
+      this.resolveInsurance(table); changed=true;
+    }
+    if(table.phase==='playing'&&table.turnDeadline&&now>table.turnDeadline){
+      const p=table.players[table.currentTurnIdx];
+      if(p){p.status='stood';p.afkTurns=(p.afkTurns||0)+1;if(p.afkTurns>=this.AFK_LIMIT)p.kicked=true;}
+      this.advanceTurn(table); changed=true;
+    }
+    if(table.phase==='result'&&table.turnDeadline&&now>table.turnDeadline){
+      table.players=table.players.filter(p=>!p.kicked);
+      if(table.players.length===0){table.phase='done';table.turnDeadline=null;}
+      else{this.startBetting(table);}
+      changed=true;
+    }
+    return changed;
+  },
+  handleAction(table, username, action, payload={}) {
+    const{amount,hand2,sideBets,levCard,puId}=payload;
+    this.checkTimeouts(table);
+    const p=table.players.find(pl=>pl.username===username);
+    if(!p) return 'Not seated at this table';
+    p.lastSeen=Date.now();
+
+    if(action==='bet'&&table.phase==='betting'){
+      if(p.status!=='betting') return 'Already placed a bet this round';
+      const betAmt=parseFloat(amount);const min=this.STAKE_MINS[p.stake]||5;
+      if(isNaN(betAmt)||betAmt<min) return`Minimum bet is ${min} KFC`;
+      if(betAmt>p.balance) return 'Insufficient balance';
+      const SB_VALID=['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'];
+      const sbMin=min/2;const validSBs={};let sbTotal=0;
+      if(sideBets&&typeof sideBets==='object'){
+        for(const[name,v] of Object.entries(sideBets)){
+          if(!SB_VALID.includes(name)) continue;const amt=parseFloat(v)||0;if(amt<=0) continue;
+          if(amt<sbMin) return`Side bet minimum is ${sbMin} KFC`;sbTotal+=amt;validSBs[name]=amt;
+        }
+      }
+      if(betAmt+sbTotal>p.balance) return 'Insufficient balance for bet + side bets';
+      p.bet=betAmt;p.status='bet_placed';p.afkTurns=0;
+      if(sbTotal>0) Object.assign(p.sideBets,validSBs);
+      const pending=table.players.filter(pl=>pl.status==='betting'&&!pl.kicked);
+      if(pending.length===0){const insMode=this.dealCards(table);if(!insMode){table.currentTurnIdx=-1;this.advanceTurn(table);}}
+      return null;
+    }
+
+    if((action==='start'||action==='startAndBet')&&(table.phase==='waiting'||table.phase==='betting')){
+      if(action==='start'&&table.phase==='waiting'){if(!p.isHost) return 'Only the host can start';this.startBetting(table);return null;}
+      if(table.phase==='waiting'){if(!p.isHost) return 'Only the host can start';this.startBetting(table);}
+      if(p.status!=='betting') return 'Already placed a bet';
+      const betAmt=parseFloat(amount);const min=this.STAKE_MINS[p.stake]||5;
+      if(isNaN(betAmt)||betAmt<min) return`Minimum bet is ${min} KFC`;
+      if(betAmt>p.balance) return 'Insufficient balance';
+      const SB_VALID=['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'];
+      const sbMin=min/2;const validSBs2={};let sbTotal2=0;
+      if(sideBets&&typeof sideBets==='object'){
+        for(const[name,v] of Object.entries(sideBets)){
+          if(!SB_VALID.includes(name)) continue;const amt=parseFloat(v)||0;if(amt<=0) continue;
+          if(amt<sbMin) return`Side bet minimum is ${sbMin} KFC`;sbTotal2+=amt;validSBs2[name]=amt;
+        }
+      }
+      if(betAmt+sbTotal2>p.balance) return 'Insufficient balance for bet + side bets';
+      p.bet=betAmt;p.status='bet_placed';p.afkTurns=0;
+      if(sbTotal2>0) Object.assign(p.sideBets,validSBs2);
+      const pending2=table.players.filter(pl=>pl.status==='betting'&&!pl.kicked);
+      if(pending2.length===0){const insMode2=this.dealCards(table);if(!insMode2){table.currentTurnIdx=-1;this.advanceTurn(table);}}
+      return null;
+    }
+
+    if(action==='hit'&&table.phase==='playing'){
+      if(table.players[table.currentTurnIdx]?.username!==username) return 'Not your turn';
+      if(p.status!=='playing') return 'Cannot hit';
+      const onHand2=hand2===true&&p.hand2&&p.hand2.length>0;
+      const activeHand=onHand2?p.hand2:p.hand;
+      activeHand.push(this.drawCard(table));
+      if(this.handVal(activeHand)>21){
+        if(!onHand2&&p.hand2&&p.hand2.length>=2&&!p._hand2Done){p._mainBust=true;}
+        else{p.status='busted';this.advanceTurn(table);}
+      }
+      table.lastAction=Date.now();return null;
+    }
+
+    if(action==='stand'&&table.phase==='playing'){
+      if(table.players[table.currentTurnIdx]?.username!==username) return 'Not your turn';
+      const onHand2=hand2===true&&p.hand2&&p.hand2.length>0;
+      if(onHand2){p._hand2Done=true;if(p._mainBust){p.status='busted';this.advanceTurn(table);}else{p.status='stood';this.advanceTurn(table);}}
+      else if(p.hand2&&p.hand2.length>=2&&!p._mainBust&&!p._hand2Done){p._onHand2=true;}
+      else{p.status='stood';this.advanceTurn(table);}
+      p.afkTurns=0;table.lastAction=Date.now();return null;
+    }
+
+    if(action==='double'&&table.phase==='playing'){
+      if(table.players[table.currentTurnIdx]?.username!==username) return 'Not your turn';
+      if(p.hand.length!==2) return 'Can only double on first two cards';
+      const arrowFree=(p.bonusFlags?.arrowCount||0)>0;
+      if(!arrowFree&&p.balance<p.bet) return 'Insufficient balance to double';
+      if(arrowFree){p.bonusFlags.arrowCount--;}else{p.balance-=p.bet;}
+      p.bet*=2;p.hasDoubled=true;
+      p.hand.push(this.drawCard(table));
+      p.status=this.handVal(p.hand)>21?'busted':'stood';
+      this.advanceTurn(table);table.lastAction=Date.now();return null;
+    }
+
+    if(action==='split'&&table.phase==='playing'){
+      if(table.players[table.currentTurnIdx]?.username!==username) return 'Not your turn';
+      if(p.hand.length!==2) return 'Can only split on first two cards';
+      if(this.cardVal(p.hand[0])!==this.cardVal(p.hand[1])) return 'Cards must be the same value to split';
+      if(typeof p.hand[0]==='object'&&p.hand[0].bonus) return 'Cannot split a bonus card hand';
+      if(typeof p.hand[1]==='object'&&p.hand[1].bonus) return 'Cannot split a bonus card hand';
+      if(p.balance<p.bet) return 'Insufficient balance to split';
+      p.balance-=p.bet;p.bet2=p.bet;
+      p.hand2=[p.hand.pop()];p.hand.push(this.drawCard(table));p.hand2.push(this.drawCard(table));
+      p.hasSplit=true;table.turnDeadline=Date.now()+this.TURN_MS;table.lastAction=Date.now();return null;
+    }
+
+    if(action==='surrender'&&table.phase==='playing'){
+      if(table.players[table.currentTurnIdx]?.username!==username) return 'Not your turn';
+      if(!p.powerups?.includes('sally')) return 'Surrender Sally power-up required';
+      if(p.hand.length!==2) return 'Can only surrender on first two cards';
+      if(this.cardVal(table.dealerHand[0])<10) return 'Surrender only available vs dealer 10/J/Q/K/A';
+      const loss=Math.ceil(p.bet/2);p.balance-=loss;p.payout=-loss;p.result='surrender';
+      p.status='done';p.sideBetResults=[];this.advanceTurn(table);table.lastAction=Date.now();return null;
+    }
+
+    if(action==='takeInsurance'&&table.phase==='insurance'){
+      if(p.insuranceDecided) return 'Already decided';
+      const maxIns=Math.floor(p.bet/2);
+      if(maxIns>0&&p.balance>=maxIns){p.balance-=maxIns;p.insuranceBet=maxIns;}else{p.insuranceBet=0;}
+      p.insuranceDecided=true;if(this.allInsuranceDecided(table))this.resolveInsurance(table);return null;
+    }
+
+    if(action==='declineInsurance'&&table.phase==='insurance'){
+      if(p.insuranceDecided) return 'Already decided';
+      p.insuranceBet=0;p.insuranceDecided=true;if(this.allInsuranceDecided(table))this.resolveInsurance(table);return null;
+    }
+
+    if(action==='useLeverage'){
+      if(table.phase!=='betting'&&table.phase!=='waiting') return 'Cannot use leverage now';
+      const lc=levCard??null;
+      if(lc===null||lc===undefined){p.leverage=null;}
+      else if(lc.startsWith('c')){const idx=parseInt(lc.slice(1));if(!p.levCards?.[idx]) return 'No leverage card at that position';p.leverage=lc;}
+      else{p.leverage=lc;}
+      return null;
+    }
+
+    if(action==='stampedBoost'){
+      if(table.phase!=='playing'&&table.phase!=='insurance') return 'Cannot boost now';
+      if(!p.bonusFlags?.stamped) return 'No Stamped card';
+      if(p.bonusFlags?.stampedBoosted) return 'Already boosted';
+      const boost=Math.floor(parseFloat(amount)||0);
+      const maxBoost=p.bonusFlags?.stampedInitialBet||p.bet;
+      if(boost<0||boost>maxBoost) return`Boost must be 0–${maxBoost}`;
+      if(boost>p.balance) return 'Insufficient balance';
+      p.balance-=boost;p.bet+=boost;p.bonusFlags.stampedBoosted=true;p.bonusFlags.stamped=false;return null;
+    }
+
+    if(action==='buyPowerup'){
+      if(table.phase!=='betting'&&table.phase!=='waiting') return 'Power-ups only available before a hand';
+      const pu=this.POWERUP_DEFS.find(d=>d.id===puId);if(!pu) return 'Unknown power-up';
+      if(!p.powerups) p.powerups=[];if(p.powerups.includes(pu.id)) return`${pu.label} already active`;
+      if(p.powerups.length>=this.MAX_POWERUPS) return`Max ${this.MAX_POWERUPS} power-ups active`;
+      if(this.STAKE_ORDER.indexOf(p.stake)<this.STAKE_ORDER.indexOf(pu.minStake)) return`${pu.label} requires ${pu.minStake} stake or higher`;
+      const cost=(this.STAKE_MINS[p.stake]||5)*pu.ratio;if(p.balance<cost) return 'Insufficient balance';
+      p.balance-=cost;p.powerups.push(pu.id);return null;
+    }
+
+    if(action==='grantPowerup'){
+      if(table.phase!=='betting'&&table.phase!=='waiting') return 'Power-ups only available before a hand';
+      const pu=this.POWERUP_DEFS.find(d=>d.id===puId);if(!pu) return 'Unknown power-up';
+      if(!p.powerups) p.powerups=[];if(p.powerups.includes(pu.id)) return`${pu.label} already active`;
+      if(p.powerups.length>=this.MAX_POWERUPS) return`Max ${this.MAX_POWERUPS} active`;
+      p.powerups.push(pu.id);return null;
+    }
+
+    if(action==='topUp'){
+      if(table.phase!=='betting'&&table.phase!=='waiting') return 'Top-up only between hands';
+      const topAmt=parseInt(amount)||0;if(topAmt<=0) return 'Invalid amount';
+      p.balance=Math.min(this.BALANCE_CAP,p.balance+topAmt);return null;
+    }
+
+    return `Unknown action: ${action}`;
+  },
+  clientView(table, viewerUsername) {
+    const hand=table.dealerHand??[];
+    return {
+      ...table, deck:[],
+      deckRemaining:table.deck.length,
+      dealerHand:(table.dealerHidden&&hand.length>0)?[hand[0],'??']:hand,
+    };
+  },
+};
+
+// ══════════════════════════════════════════════════════════════════
+//  HA  — Host-Authoritative Multiplayer Coordinator
+//  Host: runs HA_ENGINE locally, pushes state to worker every 1.5s
+//  Guest: polls worker for state every 1s, queues actions
+// ══════════════════════════════════════════════════════════════════
+const HA = {
+  tableId: null,
+  engine: null,   // full table object (with deck) — host only
+  state: null,    // clientView snapshot (used for rendering by both host+guest)
+  isHost: false,
+  pollTimer: null,
+  pushTimer: null,
+  pushDebounce: null,
+  _buyIn: 0,
+  _pendingJoinId: null,
+  _pendingJoinCategory: null,
+  _hostGoneNotified: false,
+  _beforeUnloadHandler: null,
+  _sbStakes: {},
+
+  get _url() { return (G.url||'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/,''); },
+  get _me()  { return G.username; },
+  get _myPlayer() {
+    if(!this.state) return null;
+    return (this.state.players||[]).find(p=>p.username===this._me)||null;
+  },
+  _STAKE_MINS: {low:5,mid:50,high:500,royale:5000,legendary:50000,mythic:500000,highroller:5000000,champion:50000000},
+  _STANDARD_STAKES: ['low','mid','high','royale'],
+  _VIP_STAKES: ['legendary','mythic','highroller','champion'],
+
+  _stakeLabel(k) { return {low:'Low',mid:'Mid',high:'High',royale:'Royale',legendary:'Legendary',mythic:'Mythic',highroller:'High-Roller',champion:'Champion'}[k]||k; },
+
+  // ── Mode entry ─────────────────────────────────────────────────
+  _chooseHA() {
+    MP._hideModeSelect();
+    this._openLobby();
+  },
+  _backToModeSelect() {
+    const lo=document.getElementById('ha-lobby-overlay');
+    if(lo) lo.style.display='none';
+    MP._showModeSelect();
+  },
+
+  // ── Lobby ──────────────────────────────────────────────────────
+  _openLobby() {
+    const lo=document.getElementById('ha-lobby-overlay');
+    if(lo) lo.style.display='block';
+    const lu=document.getElementById('ha-lobby-user');
+    if(lu) lu.textContent=(G.player||G.username||'')+(G._totalBalance?' · '+(typeof fmtKFC==='function'?fmtKFC(G._totalBalance):G._totalBalance):'');
+    this._populateStakes('ha-create-category','ha-create-stake');
+    this.refreshLobby();
+  },
+
+  _populateStakes(catId,stakeId) {
+    const cat=(document.getElementById(catId)?.value)||'standard';
+    const stakes=cat==='vip'?this._VIP_STAKES:this._STANDARD_STAKES;
+    const sel=document.getElementById(stakeId);
+    if(!sel) return;
+    sel.innerHTML=stakes.map(s=>`<option value="${s}">${this._stakeLabel(s)}</option>`).join('');
+  },
+
+  _onCategoryChange() { this._populateStakes('ha-create-category','ha-create-stake'); },
+  _onStakeChange() {
+    const stake=document.getElementById('ha-create-stake')?.value;
+    const hint=document.getElementById('ha-buyin-hint');
+    if(hint&&stake) hint.textContent=`Min buy-in: ${(this._STAKE_MINS[stake]||0).toLocaleString('de-CH')} KFC`;
+  },
+  _onJoinStakeChange() {
+    const stake=document.getElementById('ha-join-stake')?.value;
+    const hint=document.getElementById('ha-join-buyin-hint');
+    if(hint&&stake) hint.textContent=`Min buy-in: ${(this._STAKE_MINS[stake]||0).toLocaleString('de-CH')} KFC`;
+  },
+
+  async refreshLobby() {
+    const listEl=document.getElementById('ha-tables-list');
+    if(listEl) listEl.innerHTML='<div class="mp-empty">Loading…</div>';
+    try {
+      const resp=await fetch(this._url+'/mp/ha/tables');
+      const d=await resp.json();
+      this._renderTableList(d.tables||[]);
+    } catch(e) {
+      if(listEl) listEl.innerHTML='<div class="mp-empty" style="color:var(--red)">Could not load tables</div>';
+    }
+  },
+
+  _renderTableList(tables) {
+    const listEl=document.getElementById('ha-tables-list');
+    if(!listEl) return;
+    if(!tables.length){listEl.innerHTML='<div class="mp-empty">No open tables — create one above</div>';return;}
+    listEl.innerHTML=tables.map(t=>{
+      const hostP=t.players?.[0]||{};
+      const isFull=t.playerCount>=t.maxPlayers;
+      const phaseLabel={waiting:'Waiting',betting:'Betting',playing:'Playing',dealer:'Dealer',result:'Result complete',insurance:'Insurance',done:'Closed'}[t.phase]||t.phase;
+      return`<div class="mp-table-card" style="border-color:var(--gold-lo);">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+          <div>
+            <div style="font-family:var(--sans);font-size:13px;font-weight:700;color:var(--gold)">${t.name}</div>
+            <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;margin-top:2px">HOST-AUTH · ${(t.category||'standard').toUpperCase()} · R#${t.roundNum||0}</div>
+          </div>
+          <div style="text-align:right">
+            <div style="font-family:var(--mono);font-size:9px;color:var(--muted)">${t.playerCount}/${t.maxPlayers} players</div>
+            <div style="font-family:var(--mono);font-size:9px;color:${t.hostGone?'var(--red)':'var(--muted2)'};">${t.hostGone?'HOST GONE':phaseLabel}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+          ${(t.players||[]).map(p=>`<span style="font-family:var(--mono);font-size:9px;background:var(--bg2);border:1px solid var(--line);padding:2px 6px;border-radius:2px;">${p.displayName||p.username}</span>`).join('')}
+        </div>
+        ${isFull?`<div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;">Table full</div>`
+          :`<button class="mp-mode-btn ghost" style="margin:0;padding:6px 0;font-size:9px;width:100%;border-color:var(--gold-lo);color:var(--gold);" onclick="HA._openJoinForm('${t.id}','${(t.name||'').replace(/'/g,'\\'')}','${t.category||'standard'}')">JOIN TABLE</button>`}
+      </div>`;
+    }).join('');
+  },
+
+  _openJoinForm(tableId,tableName,category) {
+    this._pendingJoinId=tableId; this._pendingJoinCategory=category;
+    const jf=document.getElementById('ha-join-form');
+    if(jf) jf.style.display='block';
+    const nl=document.getElementById('ha-join-name-lbl');
+    if(nl) nl.textContent=tableName;
+    const stakes=category==='vip'?this._VIP_STAKES:this._STANDARD_STAKES;
+    const sel=document.getElementById('ha-join-stake');
+    if(sel) sel.innerHTML=stakes.map(s=>`<option value="${s}">${this._stakeLabel(s)}</option>`).join('');
+    this._onJoinStakeChange();
+    document.getElementById('ha-join-form')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+  },
+  _cancelJoin() {
+    const jf=document.getElementById('ha-join-form');
+    if(jf) jf.style.display='none';
+    this._pendingJoinId=null;
+    document.getElementById('ha-join-err').textContent='';
+  },
+
+  async createTable() {
+    const btn=document.getElementById('ha-create-btn');
+    const errEl=document.getElementById('ha-create-err');
+    const name=(document.getElementById('ha-create-name')?.value||'').trim();
+    const category=document.getElementById('ha-create-category')?.value||'standard';
+    const stake=document.getElementById('ha-create-stake')?.value||'low';
+    const buyIn=document.getElementById('ha-buyin-inp')?._raw||0;
+    if(!name){if(errEl) errEl.textContent='Table name is required';return;}
+    if(!buyIn){if(errEl) errEl.textContent='Enter a buy-in amount';return;}
+    if(btn) btn.disabled=true;
+    if(errEl) errEl.textContent='Creating…';
+    try {
+      const resp=await fetch(this._url+'/mp/ha/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:G.username,displayName:G.player||G.username,category,stake,tableName:name,balance:buyIn,totalBalance:G._totalBalance||buyIn,hasPass:G.hasPass||false})});
+      const d=await resp.json();
+      if(d.error){if(errEl) errEl.textContent=d.error;if(btn) btn.disabled=false;return;}
+      if(errEl) errEl.textContent='';
+      this._enterAsHost(d.tableId,d.fullTable);
+    } catch(e) {
+      if(errEl) errEl.textContent='Network error — try again';
+      if(btn) btn.disabled=false;
+    }
+  },
+
+  async _confirmJoin() {
+    const errEl=document.getElementById('ha-join-err');
+    const tableId=this._pendingJoinId;
+    if(!tableId){if(errEl) errEl.textContent='No table selected';return;}
+    const stake=document.getElementById('ha-join-stake')?.value||'low';
+    const buyIn=document.getElementById('ha-join-buyin')?._raw||0;
+    if(!buyIn){if(errEl) errEl.textContent='Enter a buy-in amount';return;}
+    if(errEl) errEl.textContent='Joining…';
+    try {
+      const resp=await fetch(this._url+'/mp/ha/join',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId,username:G.username,displayName:G.player||G.username,balance:buyIn,totalBalance:G._totalBalance||buyIn,stake,hasPass:G.hasPass||false})});
+      const d=await resp.json();
+      if(d.error){if(errEl) errEl.textContent=d.error;return;}
+      if(errEl) errEl.textContent='';
+      this._enterAsGuest(tableId,d.table);
+    } catch(e) {
+      if(errEl) errEl.textContent='Network error — try again';
+    }
+  },
+
+  // ── Host game entry ─────────────────────────────────────────────
+  _enterAsHost(tableId,fullTable) {
+    this.tableId=tableId;
+    this.engine=JSON.parse(JSON.stringify(fullTable)); // deep copy; contains deck
+    this.isHost=true;
+    this._hostGoneNotified=false;
+    const me=(fullTable.players||[]).find(p=>p.username===this._me);
+    if(!me){notif('Seat not found — cannot enter');return;}
+    this._buyIn=me.balance||0;
+    this._syncEngineToState();
+    this._enterGame(tableId);
+    this._startPushLoop();
+    this._installBeforeUnload();
+    this._pushState(); // initial push
+  },
+
+  // ── Guest game entry ────────────────────────────────────────────
+  _enterAsGuest(tableId,tableState) {
+    this.tableId=tableId;
+    this.engine=null;
+    this.isHost=false;
+    this._hostGoneNotified=false;
+    const me=(tableState.players||[]).find(p=>p.username===this._me);
+    if(!me){notif('Seat not found — cannot enter');return;}
+    this._buyIn=me.balance||0;
+    this.state=tableState;
+    this._enterGame(tableId);
+    this._startPolling();
+  },
+
+  // ── Shared game setup (mirrors MP._enterGame) ───────────────────
+  _enterGame(tableId) {
+    G.haMode=true; G.mpMode=true;
+    G.mpTableId=tableId;
+    const me=this._myPlayer||{};
+    G.stake=me.stake||'low';
+    G.s=(typeof STAKES!=='undefined'&&STAKES[G.stake])||STAKES?.low||null;
+    G.player=G.player||_pendingLogin?.player||G.username||'Player';
+    G._totalBalance=_pendingLogin?.totalBalance||_pendingLogin?.balance||me.balance||0;
+    G.cashedOut=false; G._atCashout=false; G.phase='bet';
+
+    // Reset per-session state vars
+    this._lastSyncedRound=-1;
+    MP._mpPrevDeckRem=undefined; MP._lastRevealKey=null; MP._lastSpResultKey=null;
+    MP._lastBustKey=null; MP._lastInsuranceKey=null; MP._prevDealerCount=0; MP._prevHandCounts=[0,0];
+
+    try {document.getElementById('ha-lobby-overlay').style.display='none';} catch(e){}
+    try {document.getElementById('mp-mode-select').style.display='none';} catch(e){}
+
+    try {if(typeof openApp==='function') openApp(G.player,me.balance||0);} catch(e){}
+    if(typeof _loadPtsFromLogin==='function'&&_pendingLogin?.loyaltyPoints!=null){try{_loadPtsFromLogin(_pendingLogin.loyaltyPoints);}catch(e){}}
+    G.sessionStart=this._buyIn; G._sessionActive=true; G.log=[];
+
+    try {
+      document.body.classList.add('mp-active');
+      document.body.classList.remove('playing'); document.body.classList.add('betting');
+      const loginEl=document.getElementById('login');if(loginEl) loginEl.style.display='none';
+      const app=document.getElementById('app');if(app){app.style.display='flex';app.style.flexDirection='column';}
+    } catch(e){}
+
+    try {MP._mountMpStrip();} catch(e){}
+    this._render();
+    this._startTimerTick();
+  },
+
+  _startTimerTick() { MP._startTimerTick(); },
+
+  // ── State sync ─────────────────────────────────────────────────
+  _syncEngineToState() {
+    if(!this.engine) return;
+    this.state=HA_ENGINE.clientView(this.engine,this._me);
+  },
+
+  // ── Rendering ─────────────────────────────────────────────────
+  _render() {
+    if(!this.state) return;
+    try { _mpSyncServerToSp(this.state); } catch(e) { console.error('[HA] sync:',e); }
+    try { MP._renderMpStrip(this.state); } catch(e) {}
+  },
+
+  // ── Host: action pipeline ──────────────────────────────────────
+  _action(action, opts={}) {
+    if(this.isHost) {
+      const err=HA_ENGINE.handleAction(this.engine,this._me,action,opts);
+      if(err){notif(err);return;}
+      this._syncEngineToState();
+      this._render();
+      this._schedulePush();
+    } else {
+      this._guestAction(action,opts);
+    }
+  },
+
+  _schedulePush() {
+    clearTimeout(this.pushDebounce);
+    this.pushDebounce=setTimeout(()=>this._pushState(),200);
+  },
+
+  async _pushState() {
+    if(!this.tableId||!this.engine) return;
+    try {
+      const resp=await fetch(this._url+'/mp/ha/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me,state:this.engine})});
+      if(!resp.ok) return;
+      const d=await resp.json();
+      if(d.pendingActions&&d.pendingActions.length>0) this._applyGuestActions(d.pendingActions);
+    } catch(e){}
+  },
+
+  _applyGuestActions(actions) {
+    let anyChange=false;
+    for(const a of actions){
+      if(a.type==='join'){
+        if(!this.engine.players.find(p=>p.username===a.username)){
+          this.engine.players.push({
+            username:a.username,displayName:a.displayName||a.username,balance:a.balance,stake:a.stake,
+            isHost:false,bet:0,bet2:0,hand:[],hand2:null,
+            status:this.engine.phase==='waiting'?'waiting':'sitting_out',
+            result:null,result2:null,payout:0,hasDoubled:false,hasSplit:false,
+            afkTurns:0,kicked:false,lastSeen:Date.now(),joinedMidRound:this.engine.phase!=='waiting',
+            insuranceBet:0,insuranceDecided:false,levCards:[],levCardsPending:[],leverage:null,hasPass:false,
+            ptsEarned:0,sideBets:{'Perfect Pairs':0,'21+3':0,'Crazy 7s':0,'Dealer Bust':0},
+            sideBetResults:[],powerups:[],bonusFlags:{},
+          });
+          notif(`${a.displayName||a.username} joined the table`);
+        }
+        anyChange=true;
+      } else {
+        const err=HA_ENGINE.handleAction(this.engine,a.username,a.action,a.payload||{});
+        if(err) console.warn(`[HA] guest action ${a.action} from ${a.username}: ${err}`);
+        anyChange=true;
+      }
+    }
+    if(anyChange){this._syncEngineToState();this._render();this._schedulePush();}
+  },
+
+  // ── Host: push loop (relay state to guests every 1.5s) ─────────
+  _startPushLoop() {
+    this._stopPushLoop();
+    this.pushTimer=setInterval(()=>{if(this.engine) this._pushState();},1500);
+  },
+  _stopPushLoop() { clearInterval(this.pushTimer); this.pushTimer=null; clearTimeout(this.pushDebounce); },
+
+  // ── Guest: poll loop ───────────────────────────────────────────
+  _startPolling() {
+    this._stopPolling();
+    this.pollTimer=setInterval(()=>this._poll(),1000);
+  },
+  _stopPolling() { clearInterval(this.pollTimer); this.pollTimer=null; },
+
+  async _poll() {
+    if(!this.tableId) return;
+    try {
+      const resp=await fetch(`${this._url}/mp/ha/${this.tableId}/state?username=${encodeURIComponent(this._me)}`);
+      if(resp.status===410){this._onTableClosed();return;}
+      if(!resp.ok) return;
+      const d=await resp.json();
+      this.state=d.table;
+      if(d.hostGone&&!this._hostGoneNotified){
+        this._hostGoneNotified=true;
+        const b=document.getElementById('ha-host-gone-banner');
+        if(b) b.style.display='flex';
+      }
+      this._render();
+      // Loyalty: per-round result processing (same as MP but referencing HA)
+      this._processRoundResult();
+    } catch(e){}
+  },
+
+  _processRoundResult() {
+    if(!this.state) return;
+    const me=this._myPlayer; if(!me) return;
+    const roundNum=this.state.roundNum||0;
+    if(this.state.phase==='result'&&roundNum>this._lastSyncedRound&&me.result&&me.status==='done'){
+      this._lastSyncedRound=roundNum;
+      const roundPL=me.payout||0;
+      const _mpSbTotal=(me.sideBetResults||[]).reduce((a,r)=>a+(r.pl||0),0);
+      const _mpResultPL=(res,bet)=>{if(!res||!bet) return 0;if(res==='blackjack') return Math.floor(bet*1.5);if(res==='win') return bet;if(res==='push') return 0;if(res==='surrender') return -Math.floor(bet*0.5);return -bet;};
+      const _mpBD={main:{bet:me.bet||0,pl:me.hasSplit?_mpResultPL(me.result,me.bet):(roundPL-_mpSbTotal),detail:me.result||''},hand2:me.hasSplit?{bet:me.bet2||me.bet||0,pl:_mpResultPL(me.result2,me.bet2||me.bet),detail:me.result2||''}:null,levCost:0,bonus:[],sbs:(me.sideBetResults||[]).map(r=>({name:r.name,bet:r.bet||0,pl:r.pl||0,won:!!r.won,free:!!r.free}))};
+      G.log.push({detail:me.result||'played',pl:roundPL,bal:me.balance,breakdown:_mpBD});
+      if(roundPL>0) _streak=_streak>0?_streak+1:1;
+      else if(roundPL<0) _streak=_streak<0?_streak-1:-1;
+      else _streak=0;
+      if(_streak===3){try{_addPoints(5);notif('🔥 3-win streak — ⭐+5 pts');}catch(e){}}
+      else if(_streak===5){try{_addPoints(10);notif('🔥 5-win streak — ⭐+10 pts');}catch(e){}}
+      else if(_streak===7){try{_addPoints(15);notif('🔥 7-win streak — ⭐+15 pts');}catch(e){}}
+      else if(_streak===-3){try{_addPoints(3);notif('🥶 Pity points — ⭐+3 pts');}catch(e){}}
+      const _mpSbWins=(me.sideBetResults||[]).filter(r=>r.won&&r.pl>0).length;
+      try{_shoeLog.push({pl:roundPL,bj:me.result==='blackjack',sbWins:_mpSbWins});_shoeHandCount++;}catch(e){}
+      try{_updatePointsBadge();}catch(e){}
+      try{_updateStreakBadge();}catch(e){}
+      try{_updateShoeTemp();}catch(e){}
+    }
+  },
+
+  // ── Guest: action queueing ─────────────────────────────────────
+  async _guestAction(action, opts={}) {
+    if(!this.tableId) return;
+    try {
+      await fetch(this._url+'/mp/ha/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me,action,payload:opts})});
+    } catch(e){}
+  },
+
+  // ── Leave / cleanup ───────────────────────────────────────────
+  leaveTable() {
+    const me=this._myPlayer;
+    const finalBal=me?.balance??this._buyIn??0;
+    const pl=finalBal-(this._buyIn??finalBal);
+    const summary=document.getElementById('ha-leave-summary');
+    if(summary) summary.innerHTML=`Balance: <b>${typeof fmtKFC==='function'?fmtKFC(finalBal):finalBal}</b><br>Session P/L: <b style="color:${pl>=0?'var(--green)':'var(--red)'}">${pl>=0?'+':''}${typeof fmtKFC==='function'?fmtKFC(pl):pl}</b>`;
+    const leaveEl=document.getElementById('ha-leave-modal');
+    if(leaveEl) leaveEl.style.display='flex';
+  },
+  _cancelLeave() {
+    const leaveEl=document.getElementById('ha-leave-modal');
+    if(leaveEl) leaveEl.style.display='none';
+  },
+  async _doLeave() {
+    // Partial shoe points
+    try{if(_shoeHandCount>0&&typeof _calcShoePoints==='function'){const p=_calcShoePoints(true);if(p>0){_addPoints(p);notif('⭐ +'+p+' pts (partial shoe)');_updatePointsBadge();}_shoeLog=[];_shoeHandCount=0;}}catch(e){}
+    const leaveEl=document.getElementById('ha-leave-modal');
+    if(leaveEl) leaveEl.style.display='none';
+    this._stopPushLoop(); this._stopPolling();
+    clearTimeout(this.pushDebounce); this._removeBeforeUnload();
+    if(this.isHost&&this.engine&&this.tableId){
+      // Final push of current state before leaving
+      try{await this._pushState();}catch(e){}
+    }
+    if(this.tableId){try{await fetch(this._url+'/mp/ha/leave',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me})});}catch(e){}}
+    const finalBal=this._myPlayer?.balance??this._buyIn??0;
+    G.balance=finalBal;
+    this._cleanup();
+    this._openLobby();
+  },
+  _onTableClosed() {
+    notif('Table closed');
+    this._stopPolling(); this._stopPushLoop();
+    this._removeBeforeUnload();
+    this._cleanup();
+    this._openLobby();
+  },
+  _cleanup() {
+    this.tableId=null; this.engine=null; this.state=null;
+    G.haMode=false; G.mpMode=false;
+    const banner=document.getElementById('ha-host-gone-banner');
+    if(banner) banner.style.display='none';
+    this._hostGoneNotified=false;
+    try{MP._unmountMpStrip();}catch(e){}
+    try{MP._stopTimerTick();}catch(e){}
+    document.body.classList.remove('mp-active');
+    const app=document.getElementById('app');if(app) app.style.display='none';
+    const loginEl=document.getElementById('login');if(loginEl) loginEl.style.display='flex';
+  },
+
+  // ── beforeunload guard for host ────────────────────────────────
+  _installBeforeUnload() {
+    this._beforeUnloadHandler=(e)=>{
+      if(this.isHost&&this.tableId){e.preventDefault();e.returnValue='';}
+    };
+    window.addEventListener('beforeunload',this._beforeUnloadHandler);
+  },
+  _removeBeforeUnload() {
+    if(this._beforeUnloadHandler){
+      window.removeEventListener('beforeunload',this._beforeUnloadHandler);
+      this._beforeUnloadHandler=null;
+    }
+  },
+};
+
+// ─── HA action interceptors: wrap SP buttons to route to HA when haMode ───
+// Applied AFTER _wrapSpActions so this wrapper is outermost (runs first).
+(function _wrapHaActions() {
+  const haWrap=(name,haHandler)=>{
+    const curr=window[name];
+    if(typeof curr!=='function') return;
+    window[name]=function(...args){
+      if(G.haMode){try{return haHandler.apply(this,args);}catch(e){console.error('[HA] action '+name+':',e);notif('Action failed');}return;}
+      return curr.apply(this,args);
+    };
+  };
+
+  haWrap('deal',function(){
+    if(!HA.tableId){notif('Not connected to a table');return;}
+    const t=HA.isHost?HA.state:HA.state;
+    if(!t){notif('Waiting for table state…');return;}
+    if(G.mainBet<(HA._STAKE_MINS[G.stake]||5)){notif('Bet must meet stake minimum');return;}
+    HA._action('startAndBet',{amount:G.mainBet,sideBets:G.sideBets||{}});
+  });
+  haWrap('hit',function(){HA._action('hit',{hand2:G.cur===1});});
+  haWrap('stand',function(){HA._action('stand',{hand2:G.cur===1});});
+  haWrap('doubleDown',function(){HA._action('double');});
+  haWrap('splitHand',function(){HA._action('split');});
+  haWrap('surrender',function(){HA._action('surrender');});
+  haWrap('takeInsurance',function(){HA._action('takeInsurance');});
+  haWrap('declineInsurance',function(){HA._action('declineInsurance');});
+})();
 </script>
 
 <!-- ALL-IN SPLASH -->

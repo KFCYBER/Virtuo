@@ -7061,6 +7061,11 @@ function revealHole(){
     const holeEl=cards[holeIdx];
     if(!holeEl.classList.contains('down')) return; // already revealed — skip animation
     const c=G.dealer[holeIdx];
+    // Cancel any running cardIn animation so its fill-state doesn't conflict with the flip transform
+    holeEl.style.transition='none';
+    holeEl.style.animation='none';
+    holeEl.style.transform='';
+    void holeEl.getBoundingClientRect(); // force reflow to flush above changes
     // Phase 1: rotate the face-down card out (to 90°) over 180ms
     holeEl.style.transition='transform .18s ease-in';
     holeEl.style.transform='rotateY(90deg)';
@@ -7504,7 +7509,7 @@ function renderAll(){
     dc.innerHTML='';
     G.dealer.forEach((c,i)=>{
       const el=document.createElement('div');
-      const down=i===holeIdx&&G.phase==='play'&&!G.holeRevealed;
+      const down=i===holeIdx&&!G.holeRevealed;
       if(down){
         el.className='card down';
         el.innerHTML='<div class="card-shimmer"></div>'; // shimmer overlay
@@ -12004,7 +12009,14 @@ const MP = {
     }
 
     // Reset side bet selection when a fresh betting round begins
-    if (t.phase === 'betting' && this._lastPhase !== 'betting') this._sbStakes = {};
+    if (t.phase === 'betting' && this._lastPhase !== 'betting') {
+      this._sbStakes = {};
+      // Clear G.sideBets so SP circles and deal button don't re-use last round's values
+      if (typeof G !== 'undefined') {
+        ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'].forEach(n => { G.sideBets[n] = 0; });
+        try { if (typeof updateSBCircles === 'function') updateSBCircles(); } catch(e) {}
+      }
+    }
     this._lastPhase = t.phase;
 
     // WAITING phase
@@ -12209,6 +12221,8 @@ const MP = {
     const amt = inp._raw || parseInt((inp.value||'').replace(/[^0-9]/g,''))||0;
     if (!amt) { notif('Enter a bet amount'); return; }
     this._lastBet = amt;
+    G.lastMainBet  = amt;
+    G.lastSideBets = { ...this._sbStakes };
     this._action('bet', { amount: amt, sideBets: { ...this._sbStakes } });
   },
 
@@ -12221,6 +12235,8 @@ const MP = {
     const cur = this._sbStakes[name] || 0;
     const next = cur === 0 ? sMin : (cur + sMin > maxSB ? 0 : cur + sMin);
     this._sbStakes[name] = next;
+    // Mirror into G.sideBets so the SP deal button and sameBet() both see these values
+    if (typeof G !== 'undefined') G.sideBets[name] = next;
     if (typeof sfx === 'function') try { sfx('chip'); } catch(e) {}
     this._updateSBCircles();
   },
@@ -12748,8 +12764,15 @@ function _mpSyncServerToSp(t) {
     G.puOwned = new Set(me.powerups);
   }
 
-  // 6) Repaint SP UI — full re-render is safest given format conversions
+  // 6) Repaint SP UI — full re-render is safest given format conversions.
+  // If this poll is the first one where the hole card is revealed, temporarily hold
+  // G.holeRevealed = false so renderAll draws the card face-down (.card.down), then
+  // revealHole() can find it and run the flip animation even if playing phase was missed.
+  const _revKeyNow = 'h' + (t.roundNum || 0);
+  const _isFirstReveal = !t.dealerHidden && MP._lastRevealKey !== _revKeyNow;
+  if (_isFirstReveal) G.holeRevealed = false; // force face-down for renderAll
   try { if (typeof renderAll === 'function') renderAll(); } catch(e) { console.error('[MP] renderAll:', e); }
+  if (_isFirstReveal) G.holeRevealed = true;  // restore after renderAll
   try { if (G.s && typeof updateUI === 'function') updateUI(); } catch(e) {}
   // MP: override shoe count with server deck remaining (G.deck is always [] in MP — worker strips it)
   if (t.deckRemaining != null) {
@@ -12771,14 +12794,11 @@ function _mpSyncServerToSp(t) {
   try { if (typeof updateSBCircles === 'function') updateSBCircles(); } catch(e) {}
 
   // 6a) Hole card reveal — fires once per round as soon as server exposes the hole card.
-  // Called AFTER renderAll so the down-card DOM element is in place (renderAll won't re-render
-  // existing cards if count hasn't changed, keeping card[1] as .card.down for the animation).
-  if (!t.dealerHidden && G.holeRevealed) {
-    const _revKey = 'h' + (t.roundNum || 0);
-    if (MP._lastRevealKey !== _revKey) {
-      MP._lastRevealKey = _revKey;
-      try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
-    }
+  // renderAll above already drew the hole card as .card.down (via _isFirstReveal override),
+  // so revealHole() will find the element and play the flip animation.
+  if (_isFirstReveal) {
+    MP._lastRevealKey = _revKeyNow;
+    try { if (typeof revealHole === 'function') revealHole(); } catch(e) {}
   }
 
   // 6b) Result phase: show result overlay + side bet wins + score flash + session stats — once per round
@@ -12995,8 +13015,12 @@ function _mpRenderRemoteSeats(t, me) {
 
     const betAmt  = G.mainBet; // capture now — poll may reset G.mainBet later
     MP._lastBet   = betAmt;    // used by auto-same-bet on the next round
+    G.lastMainBet  = betAmt;   // enables sameBet() to restore this bet next round
     const sideBets = {};
-    Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
+    // Merge MP action-bar side bets (MP._sbStakes) and SP circle side bets (G.sideBets)
+    Object.entries(MP._sbStakes||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ sideBets[n]=v; });
+    Object.entries(G.sideBets||{}).filter(([,v])=>v>0).forEach(([n,v])=>{ if(!sideBets[n]) sideBets[n]=v; });
+    G.lastSideBets = { ...sideBets }; // enables sameBet() to restore side bets next round
 
     if (t.phase === 'waiting') {
       const me = (t.players||[]).find(p => p.username === G.username);
@@ -13033,6 +13057,15 @@ function _mpRenderRemoteSeats(t, me) {
   wrap('surrender',    () => MP._action('surrender'));
   wrap('takeInsurance',    () => MP._action('takeInsurance'));
   wrap('declineInsurance', () => MP._action('declineInsurance'));
+
+  // sameBet: run SP logic (restores G.mainBet + G.sideBets), then mirror sideBets to MP circles
+  wrap('sameBet', function(...args) {
+    orig.apply(this, args);
+    if (MP._sbStakes) {
+      ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'].forEach(n => { MP._sbStakes[n] = G.sideBets[n] || 0; });
+      try { MP._updateSBCircles(); } catch(e) {}
+    }
+  });
 
   // Power-up purchase: route to worker instead of local G.balance deduction
   wrap('buyPu', function(pu) {

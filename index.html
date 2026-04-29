@@ -14012,7 +14012,7 @@ const HA = {
           ${(t.players||[]).map(p=>`<span style="font-family:var(--mono);font-size:9px;background:var(--bg2);border:1px solid var(--line);padding:2px 6px;border-radius:2px;">${p.displayName||p.username}</span>`).join('')}
         </div>
         ${isFull?`<div style="font-family:var(--mono);font-size:9px;color:var(--muted);text-align:center;">Table full</div>`
-          :`<button class="mp-mode-btn ghost" style="margin:0;padding:6px 0;font-size:9px;width:100%;border-color:var(--gold-lo);color:var(--gold);" onclick="HA._openJoinForm('${t.id}','${(t.name||'').replace(/'/g,'\\'')}','${t.category||'standard'}')">JOIN TABLE</button>`}
+          :`<button class="mp-mode-btn ghost" style="margin:0;padding:6px 0;font-size:9px;width:100%;border-color:var(--gold-lo);color:var(--gold);" onclick="HA._openJoinForm('${t.id}','${encodeURIComponent(t.name||'')}','${t.category||'standard'}')">JOIN TABLE</button>`}
       </div>`;
     }).join('');
   },
@@ -14022,7 +14022,7 @@ const HA = {
     const jf=document.getElementById('ha-join-form');
     if(jf) jf.style.display='block';
     const nl=document.getElementById('ha-join-name-lbl');
-    if(nl) nl.textContent=tableName;
+    if(nl) nl.textContent=decodeURIComponent(tableName);
     const stakes=category==='vip'?this._VIP_STAKES:this._STANDARD_STAKES;
     const sel=document.getElementById('ha-join-stake');
     if(sel) sel.innerHTML=stakes.map(s=>`<option value="${s}">${this._stakeLabel(s)}</option>`).join('');

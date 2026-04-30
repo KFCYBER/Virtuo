@@ -10578,11 +10578,6 @@ const PM = (() => {
 //  Only dealer hand + phase + player metadata are shared.
 // ══════════════════════════════════════════════════════════════
 const MP2_WORKER = 'https://virtuomain.kfcstaffco.workers.dev';
-// Maps MP lobby category+level → actual STAKES key (STAKES has no 'medium'/'high' keys for VIP)
-const MP2_STAKE_KEY_MAP = {
-  standard: { low: 'low', medium: 'mid',      high: 'high'       },
-  vip:      { low: 'legendary', medium: 'mythic', high: 'highroller' },
-};
 const MP2 = {
   tableId:     null,
   _state:      null,
@@ -10627,43 +10622,53 @@ const MP2 = {
     document.getElementById('mp-lobby-overlay').style.display = 'block';
     const u = document.getElementById('mp-lobby-user');
     if (u) u.textContent = `Logged in as ${this._me}  ·  Balance: ${typeof fmtKFC==='function'?fmtKFC(_pendingLogin?.balance||0):(_pendingLogin?.balance||0)} KFC`;
-    this._populateStakes('mp-create-stake');
-    this._populateStakes('mp-join-stake');
+    const cat = document.getElementById('mp-create-category')?.value || 'standard';
+    this._populateStakes('mp-create-stake', cat);
+    this._populateStakes('mp-join-stake', this._pendingJoinCat || 'standard');
     this._onStakeChange();
     const purge = document.getElementById('mp-master-purge');
     if (purge) purge.style.display = G._clubPass ? 'block' : 'none';
     const vipOpt = document.getElementById('mp-vip-opt');
-    if (vipOpt) vipOpt.disabled = (_pendingLogin?.balance||0) < 50000;
+    const vipGate = STAKES.legendary?.min || 50000;
+    if (vipOpt) vipOpt.disabled = (_pendingLogin?.balance||0) < vipGate;
     this.refreshLobby();
   },
   _backToModeSelect() {
     document.getElementById('mp-lobby-overlay').style.display = 'none';
     this._showModeSelect();
   },
-  _populateStakes(selId) {
+  _populateStakes(selId, cat) {
     const sel = document.getElementById(selId);
     if (!sel) return;
-    sel.innerHTML = [['low','Low'],['medium','Medium'],['high','High']].map(([v,l]) => `<option value="${v}">${l}</option>`).join('');
+    const keys = cat === 'vip'
+      ? ['legendary','mythic','highroller','champion']
+      : ['low','mid','high','royale'];
+    sel.innerHTML = keys.map(k => `<option value="${k}">${STAKES[k]?.label||k}</option>`).join('');
   },
   _onCategoryChange() {
     const cat = document.getElementById('mp-create-category')?.value || 'standard';
+    this._populateStakes('mp-create-stake', cat);
     const hint = document.getElementById('mp-vip-hint');
-    if (hint) hint.textContent = cat === 'vip' ? `Requires ${(STAKES.legendary?.min||50000).toLocaleString('de-CH')}+ KFC balance` : '';
+    if (hint) hint.textContent = cat === 'vip'
+      ? `Min balance: ${(STAKES.legendary?.min||50000).toLocaleString('de-CH')} KFC (Legendary tier)`
+      : '';
     this._onStakeChange();
   },
+  _stakeHintText(stakeKey) {
+    const s = STAKES[stakeKey];
+    if (!s) return '';
+    const fmt = n => n >= 1e9 ? (n/1e9)+'B' : n >= 1e6 ? (n/1e6)+'M' : n >= 1e3 ? (n/1e3)+'K' : String(n);
+    return `Bet: ${fmt(s.min)}–${fmt(s.max)} KFC per hand`;
+  },
   _onStakeChange() {
-    const cat   = document.getElementById('mp-create-category')?.value || 'standard';
-    const stake = document.getElementById('mp-create-stake')?.value    || 'low';
-    const ranges = { standard:{low:'1K–50K',medium:'5K–200K',high:'20K–1M'}, vip:{low:'50K–500K',medium:'200K–2M',high:'500K–10M'} };
-    const hint = document.getElementById('mp-buyin-hint');
-    if (hint) hint.textContent = `Range: ${ranges[cat]?.[stake]||''} KFC`;
+    const stake = document.getElementById('mp-create-stake')?.value || 'low';
+    const hint  = document.getElementById('mp-buyin-hint');
+    if (hint) hint.textContent = this._stakeHintText(stake);
   },
   _onJoinStakeChange() {
     const stake = document.getElementById('mp-join-stake')?.value || 'low';
-    const cat   = this._pendingJoinCat || 'standard';
-    const ranges = { standard:{low:'1K–50K',medium:'5K–200K',high:'20K–1M'}, vip:{low:'50K–500K',medium:'200K–2M',high:'500K–10M'} };
-    const hint = document.getElementById('mp-join-buyin-hint');
-    if (hint) hint.textContent = `Range: ${ranges[cat]?.[stake]||''} KFC`;
+    const hint  = document.getElementById('mp-join-buyin-hint');
+    if (hint) hint.textContent = this._stakeHintText(stake);
   },
   _fmtBuyIn(inp) {
     const n = parseInt(inp.value.replace(/[^0-9]/g,'') || '0');
@@ -10700,6 +10705,7 @@ const MP2 = {
     this._pendingJoinCat = cat;
     document.getElementById('mp-join-name-lbl').textContent = name;
     document.getElementById('mp-join-cat-lbl').textContent  = (cat||'').toUpperCase();
+    this._populateStakes('mp-join-stake', cat);
     document.getElementById('mp-join-form').style.display   = 'block';
     document.getElementById('mp-join-err').textContent      = '';
     this._onJoinStakeChange();
@@ -10758,13 +10764,10 @@ const MP2 = {
     this.tableId = tableId;
     this._state  = table;
     this._isHost = isHost;
-    // Map lobby level ('medium') to actual STAKES key ('mid') based on table category
-    const cat        = table?.category || 'standard';
-    const stakeKey   = MP2_STAKE_KEY_MAP[cat]?.[stake] || stake;
     G.mpMode  = true;
     G.balance = balance;
-    G.stake   = stakeKey;
-    G.s       = STAKES[stakeKey] || G.s;
+    G.stake   = stake; // form now sends actual STAKES keys directly (low/mid/legendary etc.)
+    G.s       = STAKES[stake] || G.s;
     // Mirror balance tracking vars that SP flow sets in _doStartSP
     G._totalBalance         = _pendingLogin?.balance || balance;
     G._walletBalAtLogin     = G._totalBalance;
@@ -11091,8 +11094,9 @@ const MP2 = {
     const wrap = document.createElement('div');
     wrap.id = 'mp-remote-strip';
     wrap.innerHTML = '<div id="mp-remote-info"></div><div id="mp-remote-seats"></div>';
+    // Insert as first child of table-area so it stays in the left grid column
     const tableArea = document.getElementById('table-area');
-    if (tableArea) tableArea.insertAdjacentElement('beforebegin', wrap);
+    if (tableArea) tableArea.prepend(wrap);
     else document.getElementById('main')?.prepend(wrap);
   },
   _renderOpponentsStrip(table) {

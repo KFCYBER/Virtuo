@@ -3090,7 +3090,6 @@ body.hand2-active #chip-strip .chip { position: relative; }
     <div class="mp-title">SELECT MODE</div>
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
     <button class="mp-mode-btn primary" onclick="MP._chooseSP()">&#9654; SINGLEPLAYER</button>
-    <button class="mp-mode-btn ghost" onclick="MP._chooseMP()">&#9782; MULTIPLAYER (Classic)</button>
     <button class="mp-mode-btn ghost" style="border-color:var(--gold-lo);color:var(--gold);" onclick="HA._chooseHA()">&#9733; HOST-AUTH MULTIPLAYER</button>
   </div>
 </div>
@@ -12773,6 +12772,18 @@ function mpToSpCard(c) {
   return { r: rank, s: _MP_SUIT_MAP[suit] || suit };
 }
 
+// ─── SP→worker card format (reverse of mpToSpCard) ───
+const _SP_SUIT_REV = {'♠':'S','♥':'H','♦':'D','♣':'C'};
+function spToMpCard(c) {
+  if (!c) return null;
+  if (c.bonus) {
+    const id = typeof c.bonus === 'object' ? (c.bonus.id || String(c.bonus)) : c.bonus;
+    return {bonus: id, repIdx: c.repIdx ?? 0};
+  }
+  if (!c.r || c.r === '?' || c.r === 'CUT' || c.r === '★') return null;
+  return c.r + (_SP_SUIT_REV[c.s] || 'S');
+}
+
 // ─── Map server phase to SP body class ───
 function mpPhaseToSpBody(serverPhase) {
   document.body.classList.remove('betting','playing','dealer','done','result');
@@ -13904,15 +13915,38 @@ const HA_ENGINE = {
   },
 };
 
+// ── HA_ENGINE_GUEST: modified engine for guest hands only ─────────
+// advanceTurn does NOT draw dealer cards or call resolveRound.
+// Instead it sets phase='dealer' and waits for the host to inject
+// SP's authoritative dealer hand before resolution.
+const HA_ENGINE_GUEST = Object.assign({}, HA_ENGINE, {
+  advanceTurn(table) {
+    const start = table.currentTurnIdx + 1;
+    for (let i = start; i < table.players.length; i++) {
+      if (table.players[i].status === 'playing') {
+        table.currentTurnIdx = i;
+        table.turnDeadline = Date.now() + this.TURN_MS;
+        return;
+      }
+    }
+    // All guests done — enter dealer phase, but DO NOT draw cards or resolve.
+    // _resolveGuestRound() fires when SP's dealer is ready.
+    table.phase = 'dealer';
+    table.dealerHidden = false;
+    table.currentTurnIdx = -1;
+  },
+});
+
 // ══════════════════════════════════════════════════════════════════
 //  HA  — Host-Authoritative Multiplayer Coordinator
-//  Host: runs HA_ENGINE locally, pushes state to worker every 1.5s
-//  Guest: polls worker for state every 1s, queues actions
+//  Host: SP runs unintercepted; renderAll spy pushes combined state.
+//  Guest: polls worker for state every 1s, queues actions.
 // ══════════════════════════════════════════════════════════════════
 const HA = {
   tableId: null,
-  engine: null,   // full table object (with deck) — host only
-  state: null,    // clientView snapshot (used for rendering by both host+guest)
+  engine: null,        // unused in new arch (kept for compat)
+  guestEngine: null,   // HA_ENGINE_GUEST table for guest hands — host only
+  state: null,         // clientView snapshot — guest rendering
   isHost: false,
   pollTimer: null,
   pushTimer: null,
@@ -13922,6 +13956,9 @@ const HA = {
   _pendingJoinCategory: null,
   _hostGoneNotified: false,
   _beforeUnloadHandler: null,
+  _origRenderAll: null,
+  _lastSpPhase: null,
+  _haRoundNum: 0,
   _sbStakes: {},
 
   get _url() { return (G.url||'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/,''); },
@@ -14079,138 +14116,371 @@ const HA = {
   },
 
   // ── Host game entry ─────────────────────────────────────────────
-  _enterAsHost(tableId,fullTable) {
-    this.tableId=tableId;
-    this.engine=JSON.parse(JSON.stringify(fullTable)); // deep copy; contains deck
-    this.isHost=true;
-    this._hostGoneNotified=false;
-    const me=(fullTable.players||[]).find(p=>p.username===this._me);
-    if(!me){notif('Seat not found — cannot enter');return;}
-    this._buyIn=me.balance||0;
-    this._syncEngineToState();
+  _enterAsHost(tableId, fullTable) {
+    this.tableId = tableId;
+    this.engine = null; // unused in new arch
+    this.guestEngine = null;
+    this.isHost = true;
+    this._hostGoneNotified = false;
+    this._lastSpPhase = null;
+    this._haRoundNum = 0;
+    const me = (fullTable.players||[]).find(p => p.username === this._me);
+    if (!me) { notif('Seat not found — cannot enter'); return; }
+    this._buyIn = me.balance || 0;
+    G.stake = me.stake || 'low'; // pre-set before _enterGame (this.state is null for host)
     this._enterGame(tableId);
+    // Re-apply correct balance/stake since _enterGame's _myPlayer returned {} for host
+    G.mpMode = false; // host SP runs completely unintercepted — override what _enterGame set
+    try { if (typeof openApp === 'function') openApp(G.player, me.balance || 0); } catch(e) {}
+    this._installRenderSpy();
     this._startPushLoop();
     this._installBeforeUnload();
-    this._pushState(); // initial push
+    this._pushState(); // initial heartbeat
   },
 
   // ── Guest game entry ────────────────────────────────────────────
-  _enterAsGuest(tableId,tableState) {
-    this.tableId=tableId;
-    this.engine=null;
-    this.isHost=false;
-    this._hostGoneNotified=false;
-    const me=(tableState.players||[]).find(p=>p.username===this._me);
-    if(!me){notif('Seat not found — cannot enter');return;}
-    this._buyIn=me.balance||0;
-    this.state=tableState;
+  _enterAsGuest(tableId, tableState) {
+    this.tableId = tableId;
+    this.engine = null;
+    this.guestEngine = null;
+    this.isHost = false;
+    this._hostGoneNotified = false;
+    const me = (tableState.players||[]).find(p => p.username === this._me);
+    if (!me) { notif('Seat not found — cannot enter'); return; }
+    this._buyIn = me.balance || 0;
+    this.state = tableState;
     this._enterGame(tableId);
     this._startPolling();
   },
 
-  // ── Shared game setup (mirrors MP._enterGame) ───────────────────
+  // ── Shared game setup ───────────────────────────────────────────
   _enterGame(tableId) {
-    G.haMode=true; G.mpMode=true;
-    G.mpTableId=tableId;
-    const me=this._myPlayer||{};
-    G.stake=me.stake||'low';
-    G.s=(typeof STAKES!=='undefined'&&STAKES[G.stake])||STAKES?.low||null;
-    G.player=G.player||_pendingLogin?.player||G.username||'Player';
-    G._totalBalance=_pendingLogin?.totalBalance||_pendingLogin?.balance||me.balance||0;
-    G.cashedOut=false; G._atCashout=false; G.phase='bet';
+    G.haMode = true; G.mpMode = true;
+    G.mpTableId = tableId;
+    const me = this._myPlayer || {};
+    G.stake = me.stake || G.stake || 'low'; // G.stake may be pre-set by host path
+    G.s = (typeof STAKES !== 'undefined' && STAKES[G.stake]) || STAKES?.low || null;
+    G.player = G.player || _pendingLogin?.player || G.username || 'Player';
+    G._totalBalance = _pendingLogin?.totalBalance || _pendingLogin?.balance || me.balance || 0;
+    G.cashedOut = false; G._atCashout = false; G.phase = 'bet';
 
-    // Reset per-session state vars
-    this._lastSyncedRound=-1;
-    MP._mpPrevDeckRem=undefined; MP._lastRevealKey=null; MP._lastSpResultKey=null;
-    MP._lastBustKey=null; MP._lastInsuranceKey=null; MP._prevDealerCount=0; MP._prevHandCounts=[0,0];
+    this._lastSyncedRound = -1;
+    MP._mpPrevDeckRem = undefined; MP._lastRevealKey = null; MP._lastSpResultKey = null;
+    MP._lastBustKey = null; MP._lastInsuranceKey = null; MP._prevDealerCount = 0; MP._prevHandCounts = [0,0];
 
-    try {document.getElementById('ha-lobby-overlay').style.display='none';} catch(e){}
-    try {document.getElementById('mp-mode-select').style.display='none';} catch(e){}
+    try { document.getElementById('ha-lobby-overlay').style.display = 'none'; } catch(e) {}
+    try { document.getElementById('mp-mode-select').style.display = 'none'; } catch(e) {}
 
-    try {if(typeof openApp==='function') openApp(G.player,me.balance||0);} catch(e){}
-    if(typeof _loadPtsFromLogin==='function'&&_pendingLogin?.loyaltyPoints!=null){try{_loadPtsFromLogin(_pendingLogin.loyaltyPoints);}catch(e){}}
-    G.sessionStart=this._buyIn; G._sessionActive=true; G.log=[];
+    try { if (typeof openApp === 'function') openApp(G.player, me.balance || 0); } catch(e) {}
+    if (typeof _loadPtsFromLogin === 'function' && _pendingLogin?.loyaltyPoints != null) {
+      try { _loadPtsFromLogin(_pendingLogin.loyaltyPoints); } catch(e) {}
+    }
+    G.sessionStart = this._buyIn; G._sessionActive = true; G.log = [];
 
     try {
       document.body.classList.add('mp-active');
       document.body.classList.remove('playing'); document.body.classList.add('betting');
-      const loginEl=document.getElementById('login');if(loginEl) loginEl.style.display='none';
-      const app=document.getElementById('app');if(app){app.style.display='flex';app.style.flexDirection='column';}
-    } catch(e){}
+      const loginEl = document.getElementById('login'); if (loginEl) loginEl.style.display = 'none';
+      const app = document.getElementById('app');
+      if (app) { app.style.display = 'flex'; app.style.flexDirection = 'column'; }
+    } catch(e) {}
 
-    try {MP._mountMpStrip();} catch(e){}
+    try { MP._mountMpStrip(); } catch(e) {}
     this._render();
     this._startTimerTick();
   },
 
   _startTimerTick() { MP._startTimerTick(); },
 
-  // ── State sync ─────────────────────────────────────────────────
-  _syncEngineToState() {
-    if(!this.engine) return;
-    this.state=HA_ENGINE.clientView(this.engine,this._me);
-  },
-
-  // ── Rendering ─────────────────────────────────────────────────
+  // ── Guest: render from polled server state ──────────────────────
   _render() {
-    if(!this.state) return;
-    try { _mpSyncServerToSp(this.state); } catch(e) { console.error('[HA] sync:',e); }
+    if (!this.state) return;
+    try { _mpSyncServerToSp(this.state); } catch(e) { console.error('[HA] sync:', e); }
     try { MP._renderMpStrip(this.state); } catch(e) {}
   },
 
-  // ── Host: action pipeline ──────────────────────────────────────
-  _action(action, opts={}) {
-    if(this.isHost) {
-      const err=HA_ENGINE.handleAction(this.engine,this._me,action,opts);
-      if(err){notif(err);return;}
-      this._syncEngineToState();
-      this._render();
-      this._schedulePush();
-    } else {
-      this._guestAction(action,opts);
+  // ── Host: renderAll spy ────────────────────────────────────────
+  _installRenderSpy() {
+    if (this._origRenderAll) return;
+    this._origRenderAll = window.renderAll;
+    const _ha = this;
+    window.renderAll = function(...args) {
+      const r = _ha._origRenderAll.apply(this, args);
+      if (G.haMode && _ha.isHost && _ha.tableId) {
+        try { _ha._onSpRender(); } catch(e) { console.error('[HA] spy:', e); }
+      }
+      return r;
+    };
+  },
+  _removeRenderSpy() {
+    if (this._origRenderAll) {
+      window.renderAll = this._origRenderAll;
+      this._origRenderAll = null;
     }
+  },
+
+  // ── Host: fires after every SP renderAll ──────────────────────
+  _onSpRender() {
+    const prev = this._lastSpPhase;
+    const cur  = G.phase;
+
+    if (cur !== prev) {
+      // bet→play: host just clicked deal — deal guest cards too
+      if ((prev === 'bet' || prev === null) && cur === 'play') {
+        this._dealGuestCards();
+      }
+      // any phase→dealer: SP entering dealer — resolve guests with SP dealer hand
+      if (cur === 'dealer' && prev !== 'dealer') {
+        this._resolveGuestRound();
+      }
+      // done→bet: new round — reset guest engine
+      if (cur === 'bet' && prev === 'done') {
+        this._haRoundNum++;
+        this._resetGuestRound();
+      }
+      // →done: count round (if we didn't count it via done→bet already)
+      if (cur === 'done' && prev !== 'done' && prev !== 'bet') {
+        this._haRoundNum++;
+      }
+      this._lastSpPhase = cur;
+    }
+
+    this._schedulePush();
+  },
+
+  // ── Host: guest engine init ────────────────────────────────────
+  _initGuestEngine() {
+    if (this.guestEngine) return;
+    this.guestEngine = {
+      players: [],
+      phase: 'waiting',
+      dealerHand: [],
+      dealerHidden: true,
+      currentTurnIdx: -1,
+      deck: HA_ENGINE.buildShoe(4),
+      roundNum: 0,
+      turnDeadline: null,
+      bettingDeadline: null,
+      lastAction: Date.now(),
+    };
+    HA_ENGINE.startBetting(this.guestEngine);
+  },
+
+  // ── Host: deal guest cards when host SP starts a round ─────────
+  _dealGuestCards() {
+    if (!this.guestEngine) return;
+    const ge = this.guestEngine;
+    if (!ge.players.some(p => p.status === 'bet_placed')) return;
+
+    // Deal player hands from guest deck
+    for (const p of ge.players) {
+      if (p.status !== 'bet_placed') { p.status = 'sitting_out'; continue; }
+      p.hand = [HA_ENGINE.drawCard(ge), HA_ENGINE.drawCard(ge)];
+      for (const card of p.hand) HA_ENGINE.processBonusCard(p, card, ge);
+      p.status = HA_ENGINE.isBlackjack(p.hand) ? 'blackjack' : 'playing';
+    }
+
+    // Dealer upcard from SP (authoritative) — hole card arrives when SP reveals it
+    const spUpcard = G.dealer && G.dealer[0] ? spToMpCard(G.dealer[0]) : HA_ENGINE.drawCard(ge);
+    ge.dealerHand = [spUpcard];
+    ge.dealerHidden = true;
+
+    // Insurance if SP dealer shows ace
+    const spUpcardRank = G.dealer && G.dealer[0] ? G.dealer[0].r : null;
+    if (spUpcardRank === 'A') {
+      ge.phase = 'insurance';
+      ge.insuranceDeadline = Date.now() + 15000;
+      for (const p of ge.players) {
+        if (p.status === 'playing' || p.status === 'blackjack') {
+          p.insuranceDecided = false; p.insuranceBet = 0;
+        }
+      }
+    } else {
+      ge.phase = 'playing';
+      ge.currentTurnIdx = -1;
+      HA_ENGINE_GUEST.advanceTurn(ge);
+    }
+  },
+
+  // ── Host: resolve guests with SP's dealer hand ─────────────────
+  _resolveGuestRound() {
+    if (!this.guestEngine) return;
+    const ge = this.guestEngine;
+    if (ge.phase === 'result') return;
+
+    // Inject SP's authoritative dealer hand (full, revealed)
+    ge.dealerHand = (G.dealer || []).map(spToMpCard).filter(Boolean);
+    ge.dealerHidden = false;
+
+    // Force any still-playing guests to stood
+    for (const p of ge.players) {
+      if (p.status === 'playing') p.status = 'stood';
+    }
+
+    HA_ENGINE.resolveRound(ge);
+  },
+
+  // ── Host: reset guest engine for next round ────────────────────
+  _resetGuestRound() {
+    if (!this.guestEngine) return;
+    HA_ENGINE.startBetting(this.guestEngine);
+  },
+
+  // ── Host: build combined table state for relay ─────────────────
+  _buildHostTableState() {
+    const spPhase = G.phase || 'bet';
+
+    const hostPlayer = {
+      username: this._me,
+      displayName: G.player || this._me,
+      balance: G.balance || 0,
+      stake: G.stake || 'low',
+      isHost: true,
+      bet: G.mainBet || 0,
+      bet2: G.mainBet2 || 0,
+      hand: (G.hands[0] || []).map(spToMpCard).filter(Boolean),
+      hand2: (G.hands[1] && G.hands[1].length) ? G.hands[1].map(spToMpCard).filter(Boolean) : null,
+      _onHand2: G.cur === 1,
+      status: this._hostStatus(spPhase),
+      result: null, result2: null, payout: 0,
+      hasSplit: (G.splits || 0) > 0,
+      hasDoubled: false,
+      insuranceBet: G.insuranceBet || 0,
+      insuranceDecided: false,
+      sideBets: G.sideBets ? {...G.sideBets} : {},
+      sideBetResults: [],
+      powerups: G.puOwned ? Array.from(G.puOwned) : [],
+      bonusFlags: {
+        krueger: !!(G.kruegerOn && G.kruegerOn[0]),
+        arrowCount: (G.arrowCounts && G.arrowCounts[0]) || 0,
+        desert: !!(G.desertOn && G.desertOn[0]),
+        steel: !!(G.steelOn && G.steelOn[0]),
+        goldFreeDB: !!G.goldOn,
+        stamped: !!G.stampedOn,
+        stampedInitialBet: G.stampedInitialBet || 0,
+      },
+      leverage: G.leverage || null,
+      levCards: G.levCards || [],
+      ptsEarned: 0,
+    };
+
+    const guestPlayers = this.guestEngine ? this.guestEngine.players : [];
+
+    // Server phase: use guestEngine phase once guests are active, else mirror SP
+    let serverPhase;
+    if (this.guestEngine && guestPlayers.length > 0) {
+      serverPhase = this.guestEngine.phase;
+      // If SP is done but guestEngine never got to resolve (no bets), keep 'betting'
+      if (!serverPhase || serverPhase === 'waiting') serverPhase = 'betting';
+    } else {
+      if (spPhase === 'play')   serverPhase = 'playing';
+      else if (spPhase === 'dealer') serverPhase = 'dealer';
+      else if (spPhase === 'done')   serverPhase = 'result';
+      else                           serverPhase = 'betting';
+    }
+
+    const dealerHand = (G.dealer || []).map(spToMpCard).filter(Boolean);
+    const dealerHidden = !G.holeRevealed && spPhase !== 'done' && spPhase !== 'dealer';
+
+    // currentTurnIdx: offset +1 because host is at index 0
+    let currentTurnIdx = -1;
+    if (serverPhase === 'playing' && this.guestEngine && this.guestEngine.currentTurnIdx >= 0) {
+      currentTurnIdx = this.guestEngine.currentTurnIdx + 1;
+    }
+
+    return {
+      id: this.tableId,
+      mode: 'ha',
+      phase: serverPhase,
+      players: [hostPlayer, ...guestPlayers],
+      dealerHand,
+      dealerHidden,
+      currentTurnIdx,
+      deckRemaining: G.deck ? G.deck.filter(c => c && !c.cutCard).length : 0,
+      roundNum: this._haRoundNum || 0,
+      hostGone: false,
+      lastHostPing: Date.now(),
+    };
+  },
+
+  _hostStatus(spPhase) {
+    if (spPhase === 'bet') return (G.mainBet > 0) ? 'bet_placed' : 'betting';
+    if (spPhase === 'play') {
+      try { if (G.hands[0] && G.hands[0].length && hv(G.hands[0]) > 21) return 'busted'; } catch(e) {}
+      return 'playing';
+    }
+    if (spPhase === 'dealer') return 'stood';
+    if (spPhase === 'done')   return 'done';
+    return 'waiting';
   },
 
   _schedulePush() {
     clearTimeout(this.pushDebounce);
-    this.pushDebounce=setTimeout(()=>this._pushState(),200);
+    this.pushDebounce = setTimeout(() => this._pushState(), 200);
   },
 
   async _pushState() {
-    if(!this.tableId||!this.engine) return;
+    if (!this.tableId) return;
+    if (!this.isHost) return; // guests never push
     try {
-      const resp=await fetch(this._url+'/mp/ha/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me,state:this.engine})});
-      if(!resp.ok) return;
-      const d=await resp.json();
-      if(d.pendingActions&&d.pendingActions.length>0) this._applyGuestActions(d.pendingActions);
-    } catch(e){}
+      const state = this._buildHostTableState();
+      const resp = await fetch(this._url + '/mp/ha/push', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({tableId: this.tableId, username: this._me, state})
+      });
+      if (!resp.ok) return;
+      const d = await resp.json();
+      if (d.pendingActions && d.pendingActions.length > 0) {
+        this._applyGuestActions(d.pendingActions);
+      }
+    } catch(e) {}
   },
 
   _applyGuestActions(actions) {
-    let anyChange=false;
-    for(const a of actions){
-      if(a.type==='join'){
-        if(!this.engine.players.find(p=>p.username===a.username)){
-          this.engine.players.push({
-            username:a.username,displayName:a.displayName||a.username,balance:a.balance,stake:a.stake,
-            isHost:false,bet:0,bet2:0,hand:[],hand2:null,
-            status:this.engine.phase==='waiting'?'waiting':'sitting_out',
-            result:null,result2:null,payout:0,hasDoubled:false,hasSplit:false,
-            afkTurns:0,kicked:false,lastSeen:Date.now(),joinedMidRound:this.engine.phase!=='waiting',
-            insuranceBet:0,insuranceDecided:false,levCards:[],levCardsPending:[],leverage:null,hasPass:false,
-            ptsEarned:0,sideBets:{'Perfect Pairs':0,'21+3':0,'Crazy 7s':0,'Dealer Bust':0},
-            sideBetResults:[],powerups:[],bonusFlags:{},
+    if (!actions || !actions.length) return;
+    let anyChange = false;
+    for (const a of actions) {
+      if (a.type === 'join') {
+        this._initGuestEngine();
+        const ge = this.guestEngine;
+        if (!ge.players.find(p => p.username === a.username)) {
+          const inBetPhase = ge.phase === 'waiting' || ge.phase === 'betting';
+          ge.players.push({
+            username: a.username, displayName: a.displayName || a.username,
+            balance: a.balance || 0, stake: a.stake || 'low',
+            isHost: false, bet: 0, bet2: 0, hand: [], hand2: null,
+            status: inBetPhase ? 'betting' : 'sitting_out',
+            result: null, result2: null, payout: 0,
+            hasDoubled: false, hasSplit: false,
+            afkTurns: 0, kicked: false, lastSeen: Date.now(),
+            joinedMidRound: !inBetPhase,
+            insuranceBet: 0, insuranceDecided: false,
+            levCards: [], levCardsPending: [], leverage: null, hasPass: false,
+            ptsEarned: 0,
+            sideBets: {'Perfect Pairs':0,'21+3':0,'Crazy 7s':0,'Dealer Bust':0},
+            sideBetResults: [], powerups: [], bonusFlags: {},
           });
-          notif(`${a.displayName||a.username} joined the table`);
+          notif(`${a.displayName || a.username} joined the table`);
         }
-        anyChange=true;
+        anyChange = true;
       } else {
-        const err=HA_ENGINE.handleAction(this.engine,a.username,a.action,a.payload||{});
-        if(err) console.warn(`[HA] guest action ${a.action} from ${a.username}: ${err}`);
-        anyChange=true;
+        this._initGuestEngine();
+        const err = HA_ENGINE_GUEST.handleAction(this.guestEngine, a.username, a.action, a.payload || {});
+        if (err) console.warn(`[HA] guest action ${a.action} from ${a.username}: ${err}`);
+        // If guest actions caused all guests to finish and guestEngine entered dealer
+        // but SP dealer isn't ready yet, _resolveGuestRound will be called when SP fires.
+        // If SP is already in dealer/done phase, resolve now with correct dealer.
+        if (this.guestEngine.phase === 'dealer' && (G.phase === 'dealer' || G.phase === 'done')) {
+          this._resolveGuestRound();
+        }
+        anyChange = true;
       }
     }
-    if(anyChange){this._syncEngineToState();this._render();this._schedulePush();}
+    if (anyChange) {
+      try { MP._renderMpStrip(this._buildHostTableState()); } catch(e) {}
+      this._schedulePush();
+    }
   },
 
   // ── Host: push loop (relay state to guests every 1.5s) ─────────
@@ -14319,16 +14589,18 @@ const HA = {
     this._openLobby();
   },
   _cleanup() {
-    this.tableId=null; this.engine=null; this.state=null;
-    G.haMode=false; G.mpMode=false;
-    const banner=document.getElementById('ha-host-gone-banner');
-    if(banner) banner.style.display='none';
-    this._hostGoneNotified=false;
-    try{MP._unmountMpStrip();}catch(e){}
-    try{MP._stopTimerTick();}catch(e){}
+    this.tableId = null; this.engine = null; this.guestEngine = null; this.state = null;
+    this._lastSpPhase = null; this._haRoundNum = 0;
+    G.haMode = false; G.mpMode = false;
+    this._removeRenderSpy();
+    const banner = document.getElementById('ha-host-gone-banner');
+    if (banner) banner.style.display = 'none';
+    this._hostGoneNotified = false;
+    try { MP._unmountMpStrip(); } catch(e) {}
+    try { MP._stopTimerTick(); } catch(e) {}
     document.body.classList.remove('mp-active');
-    const app=document.getElementById('app');if(app) app.style.display='none';
-    const loginEl=document.getElementById('login');if(loginEl) loginEl.style.display='flex';
+    const app = document.getElementById('app'); if (app) app.style.display = 'none';
+    const loginEl = document.getElementById('login'); if (loginEl) loginEl.style.display = 'flex';
   },
 
   // ── beforeunload guard for host ────────────────────────────────
@@ -14346,32 +14618,52 @@ const HA = {
   },
 };
 
-// ─── HA action interceptors: wrap SP buttons to route to HA when haMode ───
+// ─── HA action interceptors: guests only — host SP runs unintercepted ───
 // Applied AFTER _wrapSpActions so this wrapper is outermost (runs first).
 (function _wrapHaActions() {
-  const haWrap=(name,haHandler)=>{
-    const curr=window[name];
-    if(typeof curr!=='function') return;
-    window[name]=function(...args){
-      if(G.haMode){try{return haHandler.apply(this,args);}catch(e){console.error('[HA] action '+name+':',e);notif('Action failed');}return;}
-      return curr.apply(this,args);
+  function haGuestWrap(name, fn) {
+    const orig = window[name];
+    if (typeof orig !== 'function') return;
+    window[name] = function(...args) {
+      if (G.haMode && !HA.isHost) {
+        // Guest: queue action via worker relay
+        try { fn.apply(this, args); } catch(e) { console.error('[HA] action ' + name + ':', e); notif('Action failed'); }
+        return;
+      }
+      // Host (G.haMode && HA.isHost) or non-HA: fall through to SP
+      return orig.apply(this, args);
     };
-  };
+  }
 
-  haWrap('deal',function(){
-    if(!HA.tableId){notif('Not connected to a table');return;}
-    const t=HA.isHost?HA.state:HA.state;
-    if(!t){notif('Waiting for table state…');return;}
-    if(G.mainBet<(HA._STAKE_MINS[G.stake]||5)){notif('Bet must meet stake minimum');return;}
-    HA._action('startAndBet',{amount:G.mainBet,sideBets:G.sideBets||{}});
+  haGuestWrap('deal', function() {
+    if (!HA.tableId) { notif('Not at a table'); return; }
+    const min = HA._STAKE_MINS[G.stake] || 5;
+    if (G.mainBet < min) { notif('Bet must meet stake minimum'); return; }
+    HA._guestAction('startAndBet', {amount: G.mainBet, sideBets: G.sideBets || {}});
   });
-  haWrap('hit',function(){HA._action('hit',{hand2:G.cur===1});});
-  haWrap('stand',function(){HA._action('stand',{hand2:G.cur===1});});
-  haWrap('doubleDown',function(){HA._action('double');});
-  haWrap('splitHand',function(){HA._action('split');});
-  haWrap('surrender',function(){HA._action('surrender');});
-  haWrap('takeInsurance',function(){HA._action('takeInsurance');});
-  haWrap('declineInsurance',function(){HA._action('declineInsurance');});
+  haGuestWrap('sameBet', function() {
+    if (!HA.tableId) return;
+    const min = HA._STAKE_MINS[G.stake] || 5;
+    if (G.mainBet < min) { notif('Bet must meet stake minimum'); return; }
+    HA._guestAction('startAndBet', {amount: G.mainBet, sideBets: G.sideBets || {}});
+  });
+  haGuestWrap('hit',              function() { HA._guestAction('hit',    {hand2: G.cur === 1}); });
+  haGuestWrap('hitGuard',         function() { HA._guestAction('hit',    {hand2: G.cur === 1}); });
+  haGuestWrap('stand',            function() { HA._guestAction('stand',  {hand2: G.cur === 1}); });
+  haGuestWrap('doubleDown',       function() { HA._guestAction('double'); });
+  haGuestWrap('dblGuard',         function() { HA._guestAction('double'); });
+  haGuestWrap('split',            function() { HA._guestAction('split'); });
+  haGuestWrap('surrender',        function() { HA._guestAction('surrender'); });
+  haGuestWrap('takeInsurance',    function() { HA._guestAction('takeInsurance'); });
+  haGuestWrap('declineInsurance', function() { HA._guestAction('declineInsurance'); });
+  haGuestWrap('buyPu',            function(pu) { HA._guestAction('buyPowerup',  {puId: pu}); });
+  haGuestWrap('buyPuWithPoints',  function(pu) { HA._guestAction('grantPowerup', {puId: pu}); });
+  haGuestWrap('toggleLev',        function(key) { HA._guestAction('useLeverage', {levCard: key}); });
+  haGuestWrap('confirmStampedBoost', function() {
+    HA._guestAction('stampedBoost', {amount: G.stampedBoostAmt || 0});
+  });
+  haGuestWrap('_redeemInsurance', function() { HA._guestAction('takeInsurance'); });
+  haGuestWrap('_redeemLev2x',     function() { HA._guestAction('useLeverage', {levCard: '2x'}); });
 })();
 </script>
 

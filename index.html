@@ -5035,7 +5035,8 @@ window.onload=()=>{
     if(_autoSnap && _autoSnap.player){
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem('kfc_cashout_snap');
-      _expireStaleSession(_autoSnap); // fire-and-forget GAS sync
+      // Only push to sheet if hands were actually played — skip pure login-then-refresh cases
+      if(_autoSnap.sessionActive === true) _expireStaleSession(_autoSnap); // fire-and-forget GAS sync
     } else if(_coSnap){
       // Orphaned cashout snap with no session snap — discard
       localStorage.removeItem('kfc_cashout_snap');
@@ -10586,6 +10587,7 @@ const MP2 = {
   _pushTimer:  null,
   _betTimerIv: null,
   _mp2DealNow: false,
+  _roundNum:   0,
   _origDeal:        null,
   _origDealerPlay:  null,
   _origSameBet:     null,
@@ -10627,7 +10629,7 @@ const MP2 = {
     this._populateStakes('mp-join-stake', this._pendingJoinCat || 'standard');
     this._onStakeChange();
     const purge = document.getElementById('mp-master-purge');
-    if (purge) purge.style.display = G._clubPass ? 'block' : 'none';
+    if (purge) purge.style.display = this._me.toLowerCase() === 'creator' ? 'block' : 'none';
     const vipOpt = document.getElementById('mp-vip-opt');
     const vipGate = STAKES.legendary?.min || 50000;
     if (vipOpt) vipOpt.disabled = (_pendingLogin?.balance||0) < vipGate;
@@ -10862,12 +10864,28 @@ const MP2 = {
       if (d.table) { this._state = d.table; this._renderReadyRow(); this._updateBettingTimer(d.table); }
     } catch(e) {}
   },
-  _startRound() {
+  async _startRound() {
     if (!this._isHost) return;
     this._clearBettingTimer();
     this._hidePhaseBanner();
     const myP = this._myPlayer;
     if (!myP?.ready && (myP?.bet||0) <= 0) return;
+    this._roundNum++;
+    // Reset ready flags + bettingDeadline in worker before dealing
+    // so next round's timer starts fresh from first mark-ready
+    try {
+      const resetPlayers = {};
+      for (const u of Object.keys(this._state?.players || {})) {
+        resetPlayers[u] = { ready: false, status: 'betting' };
+      }
+      await fetch(`${this._url}/mp/push`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tableId: this.tableId, username: this._me,
+          state: { bettingDeadline: null, phase: 'play', roundNum: this._roundNum, players: resetPlayers },
+        }),
+      });
+    } catch(e) {}
     this._mp2DealNow = true;
     if (typeof deal === 'function') deal();
   },
@@ -11003,7 +11021,7 @@ const MP2 = {
             tableId:this.tableId, username:this._me,
             state: {
               phase, dealerHand:safeDealer, dealerHidden:(phase==='play'&&!G.holeRevealed),
-              roundNum: G._roundNum||0,
+              roundNum: this._roundNum||0,
               players: { [this._me]: {hand:hand0, hand2:G.hands?.[1]||null, status, bet:G.mainBet||0, balance:G.balance||0, result:null, payout:0} },
             },
           }),
@@ -11212,8 +11230,18 @@ const MP2 = {
 
   // ─── admin ────────────────────────────────────────────────
   async _masterPurgeAll() {
+    if (this._me.toLowerCase() !== 'creator') { alert('Not authorised'); return; }
     if (!confirm('Purge ALL tables from KV?')) return;
-    try { const r=await fetch(`${this._url}/mp/purge`,{method:'POST'}); const d=await r.json(); alert(`Purged ${d.purged} tables`); this.refreshLobby(); } catch(e) { alert('Purge failed'); }
+    try {
+      const r = await fetch(`${this._url}/mp/purge`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: this._me }),
+      });
+      const d = await r.json();
+      if (d.error) { alert(d.error); return; }
+      alert(`Purged ${d.purged} tables`);
+      this.refreshLobby();
+    } catch(e) { alert('Purge failed'); }
   },
 };
 

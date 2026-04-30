@@ -10577,6 +10577,7 @@ const PM = (() => {
 //  Worker is a pure relay. SP runs locally for every player.
 //  Only dealer hand + phase + player metadata are shared.
 // ══════════════════════════════════════════════════════════════
+const MP2_WORKER = 'https://virtuomain.kfcstaffco.workers.dev';
 const MP2 = {
   tableId:     null,
   _state:      null,
@@ -10594,9 +10595,7 @@ const MP2 = {
   _pendingJoinCat:  null,
 
   // ─── helpers ──────────────────────────────────────────────
-  get _url() {
-    return (G.url || 'https://virtuo-proxy.kfcstaffco.workers.dev').replace(/\/+$/, '');
-  },
+  get _url() { return MP2_WORKER; },
   get _me()       { return G.username || G.player || ''; },
   get _myPlayer() { return this._state?.players?.[this._me] || null; },
 
@@ -10924,9 +10923,10 @@ const MP2 = {
     if ((me.bet||0) > 0) { G.mainBet = me.bet; G.bet = me.bet; }
     // Force back to bet phase so deal() runs without bailing
     if (G.phase !== 'bet') { G.phase = 'bet'; document.body.classList.add('betting'); }
-    // Call real deal() via flag
+    // Call real deal() directly — bypass hook, reset flag immediately after
     this._mp2DealNow = true;
     this._origDeal?.call(window);
+    this._mp2DealNow = false;
     // Fix dealer from relay: replace upcard, keep random hole card face-down
     const dealerHand = table.dealerHand || [];
     if (dealerHand.length >= 1 && G.dealer.length >= 1) {

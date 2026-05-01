@@ -2224,6 +2224,14 @@ body.hand2-active #chip-strip .chip { position: relative; }
 }
 .mp2-player-badge.ready{border-color:var(--green);color:var(--green);background:rgba(63,185,80,.1);}
 .mp2-timer{font-family:var(--mono);font-size:11px;font-weight:600;color:var(--gold-hi);letter-spacing:1px;}
+/* Bet locked after pressing deal — disable chip and bet-change buttons */
+body.mp-bet-locked .chip-btn,
+body.mp-bet-locked #btn-same-bet,
+body.mp-bet-locked #btn-clear-bet,
+body.mp-bet-locked #btn-undo-bet,
+body.mp-bet-locked .all-sb-btn {
+  opacity:0.35; pointer-events:none;
+}
 /* phase banner shown inside table-area for guests waiting for dealer */
 #mp2-phase-banner{
   display:none;font-family:var(--mono);font-size:11px;letter-spacing:2px;
@@ -5027,6 +5035,16 @@ window.onload=()=>{
   G._shoeTotal=G.deck.length-1;
   SB_NAMES.forEach(n=>G.sideBets[n]=0); updateSBCircles&&updateSBCircles();
   buildStakeList();
+  // MP2: if reloaded while in a table, send leave so the table is purged cleanly
+  try {
+    const _mp2Snap = JSON.parse(sessionStorage.getItem('kfc_mp2_table') || 'null');
+    if (_mp2Snap && _mp2Snap.tableId && _mp2Snap.username) {
+      sessionStorage.removeItem('kfc_mp2_table');
+      fetch(_mp2Snap.url + '/mp/leave', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ tableId: _mp2Snap.tableId, username: _mp2Snap.username }) }).catch(()=>{});
+    }
+  } catch(e) {}
+
   // Auto-sync: if any session snap exists from a previous page close, sync it to the sheet
   // immediately and discard — then always show the login screen (no session restore).
   try{
@@ -10588,8 +10606,12 @@ const MP2 = {
   _pollTimer:  null,
   _pushTimer:  null,
   _betTimerIv: null,
-  _mp2DealNow: false,
-  _roundNum:   0,
+  _mp2DealNow:      false,
+  _roundNum:        0,
+  _guestRoundNum:   0,
+  _pendingRoundStart: false,
+  _lastPushedPhase: null,
+  _lastPushTime:    0,
   _origDeal:        null,
   _origDealerPlay:  null,
   _origSameBet:     null,
@@ -10792,6 +10814,8 @@ const MP2 = {
     if (!isHost && (table.phase === 'play' || table.phase === 'dealer')) {
       this._showPhaseBanner('Waiting for next round…');
     }
+    // Track in sessionStorage so reload can send a leave
+    try { sessionStorage.setItem('kfc_mp2_table', JSON.stringify({ tableId, username: this._me, url: this._url })); } catch(e) {}
   },
 
   // ─── SP hooks ─────────────────────────────────────────────
@@ -10839,8 +10863,20 @@ const MP2 = {
     const mp2 = this;
     window.renderAll = function() {
       mp2._origRenderAll?.apply(this, arguments);
-      if (G.mpMode && mp2.tableId && !mp2._pushTimer) {
-        mp2._pushTimer = setTimeout(() => { mp2._pushTimer = null; mp2._pushMyStatus(); }, 120);
+      if (!G.mpMode || !mp2.tableId || mp2._pushTimer) return;
+      const sp = G.phase || 'bet';
+      const wp = sp === 'bet' ? 'betting' : (sp === 'play' || sp === 'dealer') ? 'play' : 'done';
+      // Push only on phase change, or when settling (done), or at most every 30s as a keepalive
+      const isPhaseChange = wp !== mp2._lastPushedPhase;
+      const isSettling    = wp === 'done' && mp2._lastPushedPhase !== 'done';
+      const isStale       = Date.now() - mp2._lastPushTime > 30000;
+      if (isPhaseChange || isSettling || isStale) {
+        mp2._pushTimer = setTimeout(() => {
+          mp2._pushTimer = null;
+          mp2._lastPushedPhase = G.phase === 'bet' ? 'betting' : (G.phase === 'play' || G.phase === 'dealer') ? 'play' : 'done';
+          mp2._lastPushTime = Date.now();
+          mp2._pushMyStatus();
+        }, 200);
       }
     };
   },
@@ -10866,7 +10902,13 @@ const MP2 = {
         body: JSON.stringify({ tableId:this.tableId, username:this._me, bet, sideBets:G.sideBets||{} }),
       });
       const d = await r.json();
-      if (d.table) { this._state = d.table; this._renderReadyRow(); this._updateBettingTimer(d.table); this._checkAllReady(d.table); }
+      if (d.table) {
+        this._state = d.table;
+        this._renderReadyRow();
+        this._updateBettingTimer(d.table);
+        document.body.classList.add('mp-bet-locked'); // lock bet until round starts
+        this._checkAllReady(d.table);
+      }
     } catch(e) {}
   },
   async _startRound() {
@@ -10891,6 +10933,7 @@ const MP2 = {
         }),
       });
     } catch(e) {}
+    document.body.classList.remove('mp-bet-locked');
     this._mp2DealNow = true;
     if (typeof deal === 'function') deal();
   },
@@ -10962,6 +11005,26 @@ const MP2 = {
       this._showPhaseBanner('Waiting for next round…');
     }
 
+    // Guest: roundNum-based trigger — catches round starts even if phase transition was missed
+    if (!this._isHost) {
+      const tableRound = table.roundNum || 0;
+      if (tableRound > this._guestRoundNum) {
+        this._guestRoundNum = tableRound;
+        const dealerReady = (table.dealerHand || []).length > 0;
+        if (dealerReady) {
+          this._pendingRoundStart = false;
+          if (G.phase === 'bet' || G.phase === 'done') this._onGuestRoundStart(table);
+        } else {
+          this._pendingRoundStart = true; // wait for dealer hand in next poll
+        }
+      }
+      // Pending trigger: dealer hand now available
+      if (this._pendingRoundStart && (table.dealerHand || []).length > 0) {
+        this._pendingRoundStart = false;
+        if (G.phase === 'bet' || G.phase === 'done') this._onGuestRoundStart(table);
+      }
+    }
+
     // Guest: dealer result arrived
     if (!this._isHost && G.phase === 'dealer' && newPhase === 'done') {
       this._runGuestDealerPhase(table);
@@ -10989,6 +11052,7 @@ const MP2 = {
       return;
     }
     this._hidePhaseBanner();
+    document.body.classList.remove('mp-bet-locked'); // unlock bet for next round
     // Restore bet in case SP cleared it
     if ((me.bet||0) > 0) { G.mainBet = me.bet; G.bet = me.bet; }
     // Force back to bet phase so deal() runs without bailing
@@ -11214,13 +11278,19 @@ const MP2 = {
     this._clearBettingTimer();
     this._removeHooks();
     this._removeBeforeUnload();
-    this.tableId     = null;
-    this._state      = null;
-    this._isHost     = false;
-    this._mp2DealNow = false;
+    this.tableId          = null;
+    this._state           = null;
+    this._isHost          = false;
+    this._mp2DealNow      = false;
+    this._guestRoundNum     = 0;
+    this._pendingRoundStart = false;
+    this._roundNum          = 0;
+    this._lastPushedPhase   = null;
+    this._lastPushTime      = 0;
     G.mpMode = false;
-    document.body.classList.remove('mp-active');
+    document.body.classList.remove('mp-active', 'mp-bet-locked');
     this._hidePhaseBanner();
+    try { sessionStorage.removeItem('kfc_mp2_table'); } catch(e) {}
     const strip = document.getElementById('mp-remote-strip');
     if (strip) strip.innerHTML = '';
     const rr = document.getElementById('mp2-ready-row');

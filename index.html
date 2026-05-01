@@ -10861,7 +10861,7 @@ const MP2 = {
         body: JSON.stringify({ tableId:this.tableId, username:this._me, bet, sideBets:G.sideBets||{} }),
       });
       const d = await r.json();
-      if (d.table) { this._state = d.table; this._renderReadyRow(); this._updateBettingTimer(d.table); }
+      if (d.table) { this._state = d.table; this._renderReadyRow(); this._updateBettingTimer(d.table); this._checkAllReady(d.table); }
     } catch(e) {}
   },
   async _startRound() {

@@ -10882,7 +10882,7 @@ const MP2 = {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableId: this.tableId, username: this._me,
-          state: { bettingDeadline: null, phase: 'play', roundNum: this._roundNum, players: resetPlayers },
+          state: { bettingDeadline: null, roundNum: this._roundNum, players: resetPlayers },
         }),
       });
     } catch(e) {}
@@ -11007,12 +11007,14 @@ const MP2 = {
   async _pushMyStatus() {
     if (!this.tableId) return;
     const hand0  = G.hands?.[0] || [];
-    const phase  = G.phase || 'bet';
-    const status = phase === 'bet' ? 'betting' : phase === 'play' ? 'playing' : phase === 'dealer' ? 'playing' : 'done';
+    const spPhase = G.phase || 'bet';
+    // Map SP phase values to worker phase values so handleJoin whitelist works correctly
+    const workerPhase = spPhase === 'bet' ? 'betting' : (spPhase === 'play' || spPhase === 'dealer') ? 'play' : 'done';
+    const status = spPhase === 'bet' ? 'betting' : (spPhase === 'play' || spPhase === 'dealer') ? 'playing' : 'done';
     try {
       if (this._isHost) {
         // Hide hole card during play phase so guests don't see it
-        const safeDealer = (phase === 'play' && !G.holeRevealed && G.dealer.length >= 2)
+        const safeDealer = (spPhase === 'play' && !G.holeRevealed && G.dealer.length >= 2)
           ? [G.dealer[0], {r:'?',s:'?',_hidden:true}, ...G.dealer.slice(2)]
           : (G.dealer || []);
         await fetch(`${this._url}/mp/push`, {
@@ -11020,7 +11022,7 @@ const MP2 = {
           body: JSON.stringify({
             tableId:this.tableId, username:this._me,
             state: {
-              phase, dealerHand:safeDealer, dealerHidden:(phase==='play'&&!G.holeRevealed),
+              phase: workerPhase, dealerHand:safeDealer, dealerHidden:(spPhase==='play'&&!G.holeRevealed),
               roundNum: this._roundNum||0,
               players: { [this._me]: {hand:hand0, hand2:G.hands?.[1]||null, status, bet:G.mainBet||0, balance:G.balance||0, result:null, payout:0} },
             },

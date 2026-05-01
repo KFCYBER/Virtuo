@@ -4539,7 +4539,7 @@ function _afterInsurance(){
   // Now peek dealer hole card
   if(isBJ(G.dealer)){
     revealHole(); renderAll();
-    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH');setTimeout(()=>settle('push_guard'),500);return;}
+    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');setTimeout(()=>settle('push_guard'),500);return;}
     if(isBJ(G.hands[0])){msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;}
     sfx('dealer_bj'); msg('DEALER BLACKJACK','lose');setTimeout(()=>settle('dealer_bj'),500);return;
   }
@@ -6228,7 +6228,7 @@ function deal(){
     if(isBJ(G.hands[0])&&isBJ(G.dealer)){
       // Both BJ — no insurance needed, immediate push (both hands settle together)
       revealHole();
-      if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
+      if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
       msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;
     }
     // Hand 0 BJ — if second hand is live, advance to it before settling
@@ -6266,7 +6266,7 @@ function deal(){
   // No Ace showing — safe to check dealer BJ immediately
   if(isBJ(G.dealer)){
     revealHole();
-    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
+    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
     if(isBJ(G.hands[0])){msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;}
     sfx('dealer_bj'); msg('DEALER BLACKJACK','lose');renderAll();setTimeout(()=>settle('dealer_bj'),500);return;
   }
@@ -6394,7 +6394,7 @@ function onBonusCard(bc, cardIndex, handIdx){
     }
   }
 }
-function onDealerJester(isHole){ G.dealerJester=true; if(!isHole) notif('Dealer Jester — gains collected!'); }
+function onDealerJester(isHole){ G.dealerJester=true; if(!isHole) notif('Dealer Jester — gains collected!', 'win'); }
 function bonusToast(bc,extra){
   document.getElementById('bt-name').textContent=bc.label;
   document.getElementById('bt-desc').textContent=extra||bc.desc;
@@ -6785,7 +6785,7 @@ function settle(reason){
       // Net gain = payout − cost already paid; preDealBal had no prior insurance deduction
       G.preDealBal+=insPay-G.insuranceBet;
       G._bonusPayouts.push({label:'Insurance — paid 2:1',pl:insPay-G.insuranceBet,type:'gain'});
-      setTimeout(()=>notif('INSURANCE PAYS 2:1 — +'+fmtKFC(insPay-G.insuranceBet)),200);
+      setTimeout(()=>notif('INSURANCE PAYS 2:1 — +'+fmtKFC(insPay-G.insuranceBet), 'win'),200);
     } else {
       // Cost was already taken from G.balance; deduct from preDealBal so the formula keeps it
       G.preDealBal-=G.insuranceBet;
@@ -6887,7 +6887,7 @@ function settle(reason){
     mainPL-=plague;
     G._plagueDeducted=plague;
     updateBonusEntry('Plague',{label:'Plague Jester — took '+fmtKFC(plague),pl:-plague,type:'warn'});
-    setTimeout(()=>notif('Plague Jester — '+fmtKFC(plague)+' taken'),500);
+    setTimeout(()=>notif('Plague Jester — '+fmtKFC(plague)+' taken', 'win'),500);
   } else {
     G._plagueDeducted=0;
     // Plague was drawn but player lost — no deduction, update label
@@ -7008,10 +7008,10 @@ function settle(reason){
   _updateStreakBadge();
 
   // ── Streak bonus points ──
-  if(_streak === 3)  { _addPoints(5);  notif('🔥 3-win streak — ⭐+5 pts'); }
-  else if(_streak === 5)  { _addPoints(10); notif('🔥 5-win streak — ⭐+10 pts'); }
-  else if(_streak === 7)  { _addPoints(15); notif('🔥 7-win streak — ⭐+15 pts'); }
-  else if(_streak === -3) { _addPoints(3);  notif('🥶 Pity points — ⭐+3 pts'); }
+  if(_streak === 3)  { _addPoints(5);  notif('🔥 3-win streak — ⭐+5 pts', 'win'); }
+  else if(_streak === 5)  { _addPoints(10); notif('🔥 5-win streak — ⭐+10 pts', 'win'); }
+  else if(_streak === 7)  { _addPoints(15); notif('🔥 7-win streak — ⭐+15 pts', 'win'); }
+  else if(_streak === -3) { _addPoints(3);  notif('🥶 Pity points — ⭐+3 pts', 'win'); }
 
   // ── Personal best ──
   if(totalPLForDisplay > 0){
@@ -7866,7 +7866,7 @@ async function confirmCashout(){
     if(partialPts > 0){
       const _cw=_shoeLog.filter(e=>e.pl>0).length, _cb=_shoeLog.filter(e=>e.bj).length;
       _addPoints(partialPts);
-      notif('⭐ +'+partialPts+' points ('+_shoeHandCount+'h · '+_cw+'w · '+_cb+'bj)');
+      notif('⭐ +'+partialPts+' points ('+_shoeHandCount+'h · '+_cw+'w · '+_cb+'bj)', 'win');
     }
     _shoeHandCount = 0; _shoeLog = [];
   }
@@ -8187,17 +8187,19 @@ function toggleAutoSameBet(on){
 }
 
 // ── NOTIF STACK ────────────────────────────────────────
-function notif(txt){
+function notif(txt, type='info'){
   const stack = document.getElementById('notif-stack');
   if(!stack) return;
+  // Info-type: remove any existing non-win toast so they never pile up
+  if(type !== 'win'){
+    [...stack.querySelectorAll('.notif-item:not(.notif-win)')].forEach(e => e.remove());
+  }
   const el = document.createElement('div');
-  el.className = 'notif-item';
+  el.className = 'notif-item' + (type === 'win' ? ' notif-win' : '');
   el.textContent = txt;
   stack.appendChild(el);
-  // Force reflow then show
   void el.offsetWidth;
   el.classList.add('show');
-  // Auto-dismiss
   setTimeout(()=>{
     el.classList.remove('show');
     el.classList.add('hide');
@@ -9909,7 +9911,7 @@ const PM = (() => {
       G.balance += myTotal;
       updateUI();
       const mySpend = bets.filter(b=>b.mktId===mktId&&b.outcome===result).reduce((a,b)=>a+b.amount,0);
-      setTimeout(()=>notif('Market settled '+result+' — +'+fmtKFC(myTotal-mySpend)), 300);
+      setTimeout(()=>notif('Market settled '+result+' — +'+fmtKFC(myTotal-mySpend), 'win'), 300);
     }
 
     _saveMarkets();
@@ -10370,7 +10372,7 @@ const PM = (() => {
     _saveBets(bets);
     _saveMarkets();
     const pl = payout - bet.amount;
-    notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtKFC(pl));
+    notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtKFC(pl), 'win');
     _renderPortfolio();
     render();
   }
@@ -10786,6 +10788,10 @@ const MP2 = {
     this._mountOpponentsStrip();
     this._startPolling();
     this._renderReadyRow();
+    // If joining mid-round, show waiting banner immediately
+    if (!isHost && (table.phase === 'play' || table.phase === 'dealer')) {
+      this._showPhaseBanner('Waiting for next round…');
+    }
   },
 
   // ─── SP hooks ─────────────────────────────────────────────
@@ -10825,7 +10831,6 @@ const MP2 = {
         return mp2._origSameBet?.apply(this, arguments);
       }
       mp2._origSameBet?.apply(this, arguments);
-      setTimeout(() => mp2._markReady(), 50);
     };
   },
   _hookRenderAll() {
@@ -10918,6 +10923,19 @@ const MP2 = {
     // Kicked?
     if (table.players?.[this._me]?.kicked) { this._onKicked(); return; }
 
+    // Host promotion: if the worker made us host but we didn't know
+    if (!this._isHost && table.host === this._me) {
+      this._isHost = true;
+    }
+
+    // Stale host detection: if the host stopped pinging >90s ago, treat table as closed
+    if (!this._isHost) {
+      const hostP = table.players?.[table.host];
+      if (hostP && hostP.lastSeen && Date.now() - hostP.lastSeen > 90000) {
+        this._onTableClosed(); return;
+      }
+    }
+
     // Phase transitions
     if (newPhase !== prevPhase) {
       if (this._isHost && newPhase === 'betting') {
@@ -10929,6 +10947,19 @@ const MP2 = {
           (prevPhase === 'bet' || prevPhase === 'waiting' || prevPhase === 'betting' || prevPhase === 'done' || !prevPhase)) {
         this._onGuestRoundStart(table);
       }
+      // Guest: betting phase started — clear "waiting" banner so they can place a bet
+      if (!this._isHost && newPhase === 'betting') {
+        this._hidePhaseBanner();
+      }
+      // Guest: round ended — clear "waiting" banner if we sat it out
+      if (!this._isHost && newPhase === 'done' && G.phase !== 'play' && G.phase !== 'dealer') {
+        this._hidePhaseBanner();
+      }
+    }
+
+    // Show waiting banner if we joined mid-round and haven't played yet
+    if (!this._isHost && (newPhase === 'play' || newPhase === 'dealer') && !prev) {
+      this._showPhaseBanner('Waiting for next round…');
     }
 
     // Guest: dealer result arrived

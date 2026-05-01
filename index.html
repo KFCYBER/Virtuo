@@ -10607,6 +10607,7 @@ const MP2 = {
   _pushTimer:  null,
   _betTimerIv: null,
   _mp2DealNow:      false,
+  _roundStarting:   false,
   _roundNum:        0,
   _guestRoundNum:   0,
   _pendingRoundStart: false,
@@ -10913,10 +10914,12 @@ const MP2 = {
   },
   async _startRound() {
     if (!this._isHost) return;
+    if (this._roundStarting) return; // reentrancy guard — poll fires every 800ms, async fetch creates a window
+    this._roundStarting = true;
     this._clearBettingTimer();
     this._hidePhaseBanner();
     const myP = this._myPlayer;
-    if (!myP?.ready && (myP?.bet||0) <= 0) return;
+    if (!myP?.ready && (myP?.bet||0) <= 0) { this._roundStarting = false; return; }
     this._roundNum++;
     // Reset ready flags + bettingDeadline in worker before dealing
     // so next round's timer starts fresh from first mark-ready
@@ -10933,6 +10936,7 @@ const MP2 = {
         }),
       });
     } catch(e) {}
+    this._roundStarting = false;
     document.body.classList.remove('mp-bet-locked');
     this._mp2DealNow = true;
     if (typeof deal === 'function') deal();
@@ -10985,9 +10989,10 @@ const MP2 = {
         this._updateBettingTimer(table);
         this._checkAllReady(table);
       }
-      // Guest: new round started by host
+      // Guest: new round started by host — only trigger if guest is at bet/done phase locally
       if (!this._isHost && newPhase === 'play' &&
-          (prevPhase === 'bet' || prevPhase === 'waiting' || prevPhase === 'betting' || prevPhase === 'done' || !prevPhase)) {
+          (prevPhase === 'bet' || prevPhase === 'waiting' || prevPhase === 'betting' || prevPhase === 'done' || !prevPhase) &&
+          (G.phase === 'bet' || G.phase === 'done')) {
         this._onGuestRoundStart(table);
       }
       // Guest: betting phase started — clear "waiting" banner so they can place a bet
@@ -11039,7 +11044,8 @@ const MP2 = {
   },
   _checkAllReady(table) {
     if (!this._isHost) return;
-    const players = Object.values(table.players||{}).filter(p => !p.kicked);
+    // Exclude kicked players and players sitting this round out (joined mid-round, bet=0)
+    const players = Object.values(table.players||{}).filter(p => !p.kicked && p.status !== 'sitting_out');
     if (!players.length) return;
     if (players.every(p => p.ready)) this._startRound();
   },
@@ -11124,10 +11130,13 @@ const MP2 = {
           }),
         });
       } else {
+        // Don't overwrite stored bet when settling — SP zeroes G.mainBet at done phase
+        // but the worker still holds the bet placed this round (needed for next _onGuestRoundStart)
+        const guestUpdate = {hand:hand0, hand2:G.hands?.[1]||null, status, balance:G.balance||0, result:null, payout:0};
+        if (spPhase !== 'done') guestUpdate.bet = G.mainBet || 0;
         await fetch(`${this._url}/mp/update`, {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ tableId:this.tableId, username:this._me,
-            update: {hand:hand0, hand2:G.hands?.[1]||null, status, bet:G.mainBet||0, balance:G.balance||0, result:null, payout:0} }),
+          body: JSON.stringify({ tableId:this.tableId, username:this._me, update: guestUpdate }),
         });
       }
     } catch(e) {}
@@ -11153,7 +11162,7 @@ const MP2 = {
   },
   _onBettingTimerExpired(table) {
     if (!table) return;
-    for (const p of Object.values(table.players||{}).filter(p=>!p.kicked)) {
+    for (const p of Object.values(table.players||{}).filter(p=>!p.kicked && p.status !== 'sitting_out')) {
       if (!p.ready) {
         if ((p.bet||0) > 0) { p.ready = true; }
         else { this._applyAfkStrike(p.username || ''); }
@@ -11282,6 +11291,7 @@ const MP2 = {
     this._state           = null;
     this._isHost          = false;
     this._mp2DealNow      = false;
+    this._roundStarting     = false;
     this._guestRoundNum     = 0;
     this._pendingRoundStart = false;
     this._roundNum          = 0;

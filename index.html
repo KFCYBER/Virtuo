@@ -329,24 +329,34 @@ body:not(.betting) #betting-spacer { flex: 0; }
   margin-top: 8px;
 }
 @keyframes loginFadeUp {
-  from { opacity:0; transform:translateY(18px); }
-  to   { opacity:1; transform:translateY(0); }
+  from { opacity:0; transform:translateY(24px) scale(0.96); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
 }
 @keyframes logoGlow {
   0%,100% { box-shadow:0 0 24px rgba(201,168,76,0.08); }
   50%      { box-shadow:0 0 48px rgba(201,168,76,0.22), 0 0 80px rgba(201,168,76,0.08); }
 }
 @keyframes stepSlideIn {
-  from { opacity:0; transform:translateX(28px); }
-  to   { opacity:1; transform:translateX(0); }
+  from { opacity:0; transform:translateX(22px) scale(0.97); }
+  to   { opacity:1; transform:translateX(0) scale(1); }
 }
 @keyframes stepSlideInBack {
-  from { opacity:0; transform:translateX(-28px); }
-  to   { opacity:1; transform:translateX(0); }
+  from { opacity:0; transform:translateX(-22px) scale(0.97); }
+  to   { opacity:1; transform:translateX(0) scale(1); }
 }
-.login-wrap { animation: loginFadeUp .65s cubic-bezier(.16,1,.3,1) both; }
-.login-step-enter      { animation: stepSlideIn     .32s cubic-bezier(.16,1,.3,1) both; }
-.login-step-enter-back { animation: stepSlideInBack .32s cubic-bezier(.16,1,.3,1) both; }
+@keyframes stepSlideOut {
+  from { opacity:1; transform:translateX(0) scale(1); }
+  to   { opacity:0; transform:translateX(-18px) scale(0.97); }
+}
+@keyframes stepSlideOutBack {
+  from { opacity:1; transform:translateX(0) scale(1); }
+  to   { opacity:0; transform:translateX(18px) scale(0.97); }
+}
+.login-wrap { animation: loginFadeUp .75s cubic-bezier(.16,1,.3,1) both; }
+.login-step-enter      { animation: stepSlideIn     .4s cubic-bezier(.16,1,.3,1) both; }
+.login-step-enter-back { animation: stepSlideInBack .4s cubic-bezier(.16,1,.3,1) both; }
+.login-step-exit       { animation: stepSlideOut    .2s ease both; pointer-events:none; }
+.login-step-exit-back  { animation: stepSlideOutBack .2s ease both; pointer-events:none; }
 #login input:focus, #buyin-amount:focus {
   border-color: rgba(201,168,76,0.55) !important;
   box-shadow: 0 0 0 3px rgba(201,168,76,0.07) !important;
@@ -2170,7 +2180,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 #mp-game-overlay {
   position:fixed;inset:0;z-index:1100;
   display:none;align-items:center;justify-content:center;
-  background:var(--bg);
+  background:transparent;
   overflow-y:auto;
 }
 .mp-modal {
@@ -2198,7 +2208,7 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .mp-mode-btn.ghost{background:transparent;color:var(--white);}
 .mp-mode-btn.ghost:hover{border-color:var(--gold-lo);}
 /* lobby */
-.mp-lobby-inner{width:100%;max-width:680px;padding:32px 20px;margin:auto;}
+.mp-lobby-inner{width:100%;max-width:680px;padding:32px 20px;margin:auto;background:var(--bg);min-height:100%;}
 .mp-section-title{font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:12px;}
 .mp-card-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:24px;}
 .mp-table-card{
@@ -2963,8 +2973,9 @@ body.mp-bet-locked .all-sb-btn {
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: MODE SELECT
 ══════════════════════════════════════════════ -->
-<div id="mp-mode-select" style="display:none;position:fixed;inset:0;z-index:1100;align-items:center;justify-content:center;background:var(--bg);">
-  <div class="mp-modal" style="max-width:380px;text-align:center">
+<div id="mp-mode-select" style="display:none;position:fixed;inset:0;z-index:1100;align-items:center;justify-content:center;">
+  <canvas id="mp-mode-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+  <div class="mp-modal" style="max-width:380px;text-align:center;position:relative;z-index:1;">
     <div class="mp-title">SELECT MODE</div>
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
     <button class="mp-mode-btn primary" onclick="MP2._chooseSP()">&#9654; SINGLEPLAYER</button>
@@ -2975,8 +2986,9 @@ body.mp-bet-locked .all-sb-btn {
 <!-- ══════════════════════════════════════════════
    MULTIPLAYER: LOBBY
 ══════════════════════════════════════════════ -->
-<div id="mp-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:1100;background:var(--bg);overflow-y:auto;">
-  <div class="mp-lobby-inner">
+<div id="mp-lobby-overlay" style="display:none;position:fixed;inset:0;z-index:1100;overflow-y:auto;">
+  <canvas id="mp-lobby-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;"></canvas>
+  <div class="mp-lobby-inner" style="position:relative;z-index:1;">
     <!-- header -->
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:32px;border-bottom:1px solid var(--line);padding-bottom:16px;">
       <div>
@@ -4072,21 +4084,12 @@ function _setNowPlaying(name){
 }
 
 function startMusic(){
-  // Already playing synth track 0 — do nothing
-  if(MUSIC.mode === 'synth' && MUSIC.currentTrack === 0 && MUSIC.nodes.length > 0) return;
-  // An MP3 is playing — don't override the user's choice
+  // Clean Chips is already playing — do nothing
+  if(MUSIC.mode === 'mp3' && MUSIC.mp3Idx === 3 && _mp3El && !_mp3El.paused) return;
+  // A different MP3 is playing — don't override the user's choice
   if(MUSIC.mode === 'mp3' && _mp3El && !_mp3El.paused) return;
-  // Ensure music AudioContext is running before scheduling notes
-  try{
-    if(MUSIC.ctx && MUSIC.ctx.state === 'suspended'){
-      MUSIC.ctx.resume().catch(()=>{});
-      if(MUSIC.ctx.state !== 'running') return; // still suspended — will retry via poll
-    }
-  }catch(e){}
-  MUSIC.mode = 'synth';
-  MUSIC.currentTrack = 0;
-  _playTrack(0);
-  _setNowPlaying('Velvet Underground');
+  MUSIC.mode = 'mp3';
+  _playMp3(3); // default: Clean Chips
   _buildTrackList();
   const btn = document.getElementById('btn-music');
   if(btn) btn.style.color = MUSIC.muted ? 'var(--muted)' : 'var(--gold-hi)';
@@ -4132,22 +4135,37 @@ let _selectedStakeKey = null;
 
 function goLoginStep(step, back){
   const stepIds=['login-step1','login-step2','login-step-buyin'];
-  const cls = back ? 'login-step-enter-back' : 'login-step-enter';
-  // Hide all steps
-  stepIds.forEach(id=>{ const el=document.getElementById(id); if(el) el.style.display='none'; });
-  if(step===1){
-    const s1=document.getElementById('login-step1');
-    if(s1){ s1.style.display='block'; s1.classList.remove('login-step-enter','login-step-enter-back'); void s1.offsetWidth; s1.classList.add(cls); }
-    setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },50);
-  } else if(step===2){
-    buildLoginStakeList();
-    const s2=document.getElementById('login-step2');
-    if(s2){ s2.style.display='block'; s2.classList.remove('login-step-enter','login-step-enter-back'); void s2.offsetWidth; s2.classList.add(cls); }
-  } else if(step===3){
-    buildBuyInStep();
-    const s3=document.getElementById('login-step-buyin');
-    if(s3){ s3.style.display='block'; s3.classList.remove('login-step-enter','login-step-enter-back'); void s3.offsetWidth; s3.classList.add(cls); }
+  const inCls  = back ? 'login-step-enter-back' : 'login-step-enter';
+  const outCls = back ? 'login-step-exit-back'  : 'login-step-exit';
+  const targetId = step===1?'login-step1':step===2?'login-step2':'login-step-buyin';
+  const ALL_ANIM = ['login-step-enter','login-step-enter-back','login-step-exit','login-step-exit-back'];
+
+  // Pre-build content so it's ready immediately when the step appears
+  if(step===2) buildLoginStakeList();
+  if(step===3) buildBuyInStep();
+
+  // Find the currently visible step and animate it out
+  const cur = stepIds.map(id=>document.getElementById(id)).find(el=>el&&el.style.display!=='none');
+  const hasExit = cur && cur.id !== targetId;
+  const delay = hasExit ? 185 : 0;
+
+  if(hasExit){
+    cur.classList.remove(...ALL_ANIM);
+    void cur.offsetWidth;
+    cur.classList.add(outCls);
+    setTimeout(()=>cur.style.display='none', delay);
   }
+
+  setTimeout(()=>{
+    stepIds.forEach(id=>{ if(id!==targetId){ const el=document.getElementById(id); if(el) el.style.display='none'; } });
+    const target=document.getElementById(targetId);
+    if(!target) return;
+    target.style.display='block';
+    target.classList.remove(...ALL_ANIM);
+    void target.offsetWidth;
+    target.classList.add(inCls);
+    if(step===1) setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },50);
+  }, delay);
 }
 
 function buildLoginStakeList(){
@@ -5062,6 +5080,20 @@ window.onload=()=>{
   }catch(e){}
 
   setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
+
+  // Play the welcome chime on first user interaction with the login page
+  // (AudioContext requires a gesture — this fires on first touch/click/key before login)
+  (function(){
+    let _pagechimeDone=false;
+    function _playPageChime(){
+      if(_pagechimeDone) return;
+      _pagechimeDone=true;
+      try{ if(!G._audioReady) initAudio(); }catch(e){}
+      setTimeout(playWelcomeSound, 80);
+    }
+    document.addEventListener('pointerdown', _playPageChime, {once:true, capture:true});
+    document.addEventListener('keydown',     _playPageChime, {once:true, capture:true});
+  })();
 };
 
 function buildPinRows(){
@@ -9130,13 +9162,13 @@ function resetHand2State(){
   setTimeout(start,200);
 })();
 
-// ── Login page background: Vortex Spiral ──────────────────────
-(()=>{
-  const lc=document.getElementById('login-bg');
-  if(!lc) return;
-  const lx=lc.getContext('2d');
-  let lW=0,lH=0,lt=0,lAnim=null;
-  const gapX=48,gapY=44;
+// ── Login / MP overlay background: Vortex Spiral (shared renderer) ──
+function _startVortexAnim(canvasId, watchId) {
+  const lc = document.getElementById(canvasId);
+  if (!lc) return;
+  const lx = lc.getContext('2d');
+  let lW=0, lH=0, lt=0, lAnim=null;
+  const gapX=48, gapY=44;
 
   function lResize(){
     lW=window.innerWidth; lH=window.innerHeight;
@@ -9145,7 +9177,9 @@ function resetHand2State(){
   }
 
   function lFrame(){
-    lx.clearRect(0,0,lW,lH);
+    // Solid dark background so the canvas is self-contained (no overlay bg needed)
+    lx.fillStyle='rgba(10,11,13,1)';
+    lx.fillRect(0,0,lW,lH);
     lt+=0.012;
     const cx=lW/2, cy=lH/2;
     const cols=Math.ceil(lW/gapX)+1;
@@ -9156,7 +9190,6 @@ function resetHand2State(){
         const dx=x-cx, dy=y-cy;
         const dist=Math.sqrt(dx*dx+dy*dy);
         const angle=Math.atan2(dy,dx);
-        // Spiral wave: sin(t*0.8 - dist*0.09 + angle*1.5)
         const spiral=Math.sin(lt*0.8-dist*0.09+angle*1.5);
         const op=0.03+spiral*0.12;
         const dotR=Math.max(0.1,0.5+spiral*1.1);
@@ -9183,20 +9216,27 @@ function resetHand2State(){
 
   function lStart(){
     lResize(); lFrame();
-    // Stop animating when login is hidden (saves CPU)
+    // Pause animation when the parent overlay is hidden — saves GPU
     const obs=new MutationObserver(()=>{
-      const hidden=document.getElementById('login')?.style.display==='none';
+      const el=document.getElementById(watchId);
+      const hidden=!el||el.style.display==='none'||el.style.display==='';
       if(hidden&&lAnim){ cancelAnimationFrame(lAnim); lAnim=null; }
       else if(!hidden&&!lAnim){ lFrame(); }
     });
-    const loginEl=document.getElementById('login');
-    if(loginEl) obs.observe(loginEl,{attributes:true,attributeFilter:['style']});
+    const watchEl=document.getElementById(watchId);
+    if(watchEl) obs.observe(watchEl,{attributes:true,attributeFilter:['style']});
   }
 
   window.addEventListener('resize',()=>{ lResize(); });
-  document.addEventListener('DOMContentLoaded',()=>setTimeout(lStart,100));
   setTimeout(lStart,200);
-})();
+}
+
+// Wire all three login/MP screens
+_startVortexAnim('login-bg','login');
+document.addEventListener('DOMContentLoaded',()=>{
+  _startVortexAnim('mp-mode-bg','mp-mode-select');
+  _startVortexAnim('mp-lobby-bg','mp-lobby-overlay');
+});
 
 // ── PREDICTION MARKETS ────────────────────────────────────────────────────────
 const PM = (() => {

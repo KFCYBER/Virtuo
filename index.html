@@ -1022,12 +1022,13 @@ body.pass-player #felt-toggle-btn { display:flex; }
   #table-area {
     position: static;
     height: auto;
-    max-height: calc(100vh - 90px); /* cap at viewport, scroll internally */
+    /* 100svh accounts for mobile browser chrome; 110px covers tallest stacked topbar state */
+    max-height: calc(100svh - 110px);
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     min-height: 0;
-    padding: 8px 12px 6px;
+    padding: 8px 12px 24px; /* extra bottom padding so last button is never flush with edge */
     border-right: none;
     border-bottom: 1px solid var(--line);
     border-radius: 0;
@@ -1036,6 +1037,23 @@ body.pass-player #felt-toggle-btn { display:flex; }
   }
   /* Kill spacer on mobile — we don't need vertical centering */
   #betting-spacer { display: none !important; }
+
+  /* ── MP REMOTE STRIP (multiplayer opponent bar) ── */
+  #mp-remote-strip {
+    padding: 6px 8px;
+    margin: 0 0 6px;
+    gap: 5px;
+  }
+  #mp-remote-info { font-size: 9px; gap: 8px; min-height: 18px; }
+  #mp-remote-seats { gap: 6px; }
+  .mp-remote-seat {
+    min-width: 110px;
+    padding: 4px 7px;
+    font-size: 9px;
+  }
+  .mp-remote-seat .rs-name { font-size: 10px; }
+  .mp-remote-seat .rs-bal  { font-size: 8px; }
+  .mp-remote-seat .rs-mini-c { font-size: 8px; min-width: 15px; padding: 1px 3px; }
 
   /* ── SHOE ── */
   #shoe-area {
@@ -1394,10 +1412,11 @@ body:not(.betting) #betting-zone { opacity: 0; pointer-events: none; max-height:
   transition: opacity .32s cubic-bezier(.4,0,.2,1) .06s,
               transform .38s cubic-bezier(.4,0,.2,1) .06s,
               max-height .4s cubic-bezier(.4,0,.2,1);
-  overflow: hidden;
+  overflow: hidden; /* needed during max-height:0 animation */
 }
-body.betting  #playing-zone { opacity: 0; pointer-events: none; transform: translateY(8px); max-height: 0; }
-body:not(.betting) #playing-zone { opacity: 1; pointer-events: auto; transform: translateY(0); max-height: 1000px; }
+body.betting  #playing-zone { opacity: 0; pointer-events: none; transform: translateY(8px); max-height: 0; overflow: hidden; }
+/* overflow:visible after animation so action buttons are never clipped by the max-height ceiling */
+body:not(.betting) #playing-zone { opacity: 1; pointer-events: auto; transform: translateY(0); max-height: 2000px; overflow: visible; }
 
 #hands-wrap {
   display: flex; flex-direction: row; gap: 8px; align-items: flex-start;
@@ -10972,7 +10991,7 @@ const MP2 = {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tableId: this.tableId, username: this._me,
-          state: { bettingDeadline: null, roundNum: this._roundNum, players: resetPlayers },
+          state: { bettingDeadline: null, roundNum: this._roundNum, dealerHand: [], players: resetPlayers },
         }),
       });
     } catch(e) {}

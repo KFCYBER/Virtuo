@@ -10663,6 +10663,7 @@ const MP2 = {
   _state:      null,
   _isHost:     false,
   _pollTimer:  null,
+  _hbTimer:    null,
   _pushTimer:  null,
   _betTimerIv: null,
   _mp2DealNow:      false,
@@ -11006,9 +11007,11 @@ const MP2 = {
     this._stopPolling();
     this._doPoll();
     this._pollTimer = setInterval(() => this._doPoll(), 800);
+    this._hbTimer   = setInterval(() => { if (this.tableId) this._pushMyStatus(); }, 25000);
   },
   _stopPolling() {
     if (this._pollTimer) { clearInterval(this._pollTimer); this._pollTimer = null; }
+    if (this._hbTimer)   { clearInterval(this._hbTimer);   this._hbTimer   = null; }
   },
   async _doPoll() {
     if (!this.tableId) return;
@@ -11021,6 +11024,7 @@ const MP2 = {
     } catch(e) {}
   },
   _handlePoll(table) {
+    if (!this.tableId) return; // discard in-flight responses after cleanup
     const prev      = this._state;
     this._state     = table;
     const prevPhase = prev?.phase;

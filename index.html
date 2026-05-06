@@ -11474,6 +11474,14 @@ const MP2 = {
         // Warn player before they lose their session
         event.preventDefault();
         event.returnValue = '';
+        // Save session so _expireStaleSession writes a TX row on next load (same as SP)
+        if(G.player && !G.cashedOut && G._sessionActive){
+          saveSession();
+          try{
+            const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
+            if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
+          }catch(e){}
+        }
         try { navigator.sendBeacon(`${this._url}/mp/leave`, new Blob([JSON.stringify({tableId:this.tableId,username:this._me})],{type:'application/json'})); } catch(e) {}
       }
     };

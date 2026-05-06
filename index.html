@@ -10738,6 +10738,7 @@ const MP2 = {
   _guestRoundNum:   0,
   _pendingRoundStart: false,
   _lastStartedRound: -1,
+  _guestPendingReason: null,
   _lastPushedPhase: null,
   _lastPushTime:    0,
   _origDeal:        null,
@@ -11026,9 +11027,10 @@ const MP2 = {
           mp2._lastPushTime    = Date.now();
           mp2._pushMyStatus();
         } else {
-          // Guest: never settle early — BJ/surrender/bust all route here.
-          // Block settle, enter dealer-wait state so _runGuestDealerPhase
-          // calls the real settle with the correct reason once host pushes done.
+          // Guest: never settle early — BJ/surrender/bust/any path all route here.
+          // Store the SP reason so _runGuestDealerPhase can pass surrender through unchanged.
+          // All other reasons are recomputed from the real dealer hand once host pushes done.
+          mp2._guestPendingReason = reason;
           G.phase = 'dealer';
           if (typeof setActions === 'function') setActions(false);
           mp2._showPhaseBanner('Waiting for dealer…');
@@ -11247,13 +11249,13 @@ const MP2 = {
 
   // ─── guest dealer phase ───────────────────────────────────
   _runGuestDealerPhase(table) {
-    if (G.phase !== 'dealer') return; // already settled (BJ / surrender / etc.)
+    if (G.phase !== 'dealer') return; // re-entry guard: poll fires every 800ms, settle delay is 700ms
     const dealerHand = table.dealerHand || [];
     if (!dealerHand.length) return;
-    G.phase       = 'done'; // block re-entry: 800ms poll could fire again before 700ms settle timeout
-    G.dealer      = dealerHand;
+    G.phase        = 'done'; // block re-entry before setTimeout fires
+    G.dealer       = dealerHand;
     G.holeRevealed = true;
-    // Re-render dealer cards
+    // Re-render dealer cards with real host hand
     const dc = document.getElementById('dealer-cards');
     if (dc && typeof cardInner === 'function') {
       dc.innerHTML = '';
@@ -11266,8 +11268,21 @@ const MP2 = {
       });
     }
     if (typeof renderScores === 'function') renderScores();
+    const pendingReason = this._guestPendingReason;
+    this._guestPendingReason = null;
     setTimeout(() => {
-      const reason = (typeof isBJ === 'function' && isBJ(G.dealer)) ? 'dealer_bj' : 'normal';
+      let reason;
+      if (pendingReason === 'surrender') {
+        // Surrender payout is always -50% — independent of dealer's final hand
+        reason = 'surrender';
+      } else {
+        // Determine outcome from the real dealer hand.
+        // Use 'dealer_bj' only when dealer has BJ and NO player hand has BJ.
+        // When player also has BJ, use 'normal' — settle()'s pbj+normal path handles the push correctly.
+        const dealerBJ = typeof isBJ === 'function' && isBJ(G.dealer);
+        const playerBJ = dealerBJ && (G.hands || []).some(h => typeof isBJ === 'function' && isBJ(h));
+        reason = (dealerBJ && !playerBJ) ? 'dealer_bj' : 'normal';
+      }
       this._hidePhaseBanner();
       // Call _origSettle directly — window.settle is hooked and would re-enter dealer-wait
       this._origSettle?.call(window, reason);
@@ -11482,10 +11497,11 @@ const MP2 = {
     this._isHost          = false;
     this._mp2DealNow      = false;
     this._roundStarting     = false;
-    this._guestRoundNum     = 0;
-    this._pendingRoundStart = false;
-    this._lastStartedRound  = -1;
-    this._roundNum          = 0;
+    this._guestRoundNum      = 0;
+    this._pendingRoundStart  = false;
+    this._lastStartedRound   = -1;
+    this._guestPendingReason = null;
+    this._roundNum           = 0;
     this._lastPushedPhase   = null;
     this._lastPushTime      = 0;
     G.mpMode = false;

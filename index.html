@@ -2938,7 +2938,6 @@ body.mp-bet-locked .all-sb-btn {
       </div>
       <!-- Top Up option: shown when balance is low/zero — SP only -->
       <button id="co-topup-btn" class="btn-ghost" style="width:100%;border-color:rgba(63,185,80,0.5);color:var(--green);display:none" onclick="closeModal('cashout-modal');showTopUp()">⊕ Top Up & Continue</button>
-      <button class="btn-ghost" style="width:100%;margin-top:4px;border-color:rgba(248,81,73,0.4);color:var(--red)" onclick="if(G.mpMode){G._atCashout=false;closeModal('cashout-modal');}else{doLogout(G.balance<=0);closeModal('cashout-modal');}">Leave Without Syncing</button>
     </div>
     <!-- Post-confirm buttons (shown after sync) -->
     <div id="co-actions-post" style="display:none;flex-direction:column;gap:8px">
@@ -5035,9 +5034,12 @@ async function _autoSaveToSheet(){
 // Save session to localStorage when window/tab is closed
 // NOTE: We do NOT sync to Google Sheets here — sheet writes only happen on explicit cashout.
 // This prevents every page reload from creating a new session log entry.
-window.addEventListener('beforeunload', ()=>{
+window.addEventListener('beforeunload', (event)=>{
   // SP only — MP handles its own unload via the MP beforeunload handler below
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
+    // Show browser-native "Leave site?" dialog so the player is warned
+    event.preventDefault();
+    event.returnValue = '';
     saveSession();
     // Mark snap for auto-sync on next open — no restore, no browser confirm
     try{
@@ -7785,7 +7787,13 @@ function buildStakeList(){
   const c=document.getElementById('stake-list');
   if(!c)return;
   c.innerHTML='';
+  // In MP mode, only show stakes for the table's category
+  const _mpCat = G.mpMode ? (MP2._state?.category || 'standard') : null;
+  const _standardKeys = new Set(['low','mid','high','royale']);
+  const _vipKeys      = new Set(['legendary','mythic','highroller','champion']);
   Object.entries(STAKES).forEach(([key,s])=>{
+    if(_mpCat === 'standard' && !_standardKeys.has(key)) return;
+    if(_mpCat === 'vip'      && !_vipKeys.has(key))      return;
     const el=document.createElement('div');
     el.className='stake-item'+(key===G.stake?' cur':'');
     el.innerHTML=`<div><div class="stake-name">${s.label}</div><div class="stake-info">Min ${fmtKFC(s.min)}</div></div><div class="stake-info">Max ${fmtKFC(s.max)}</div>`;
@@ -7834,12 +7842,31 @@ function selectStake(key){
   }
 
   if(!confirm('Switch to '+s.label+' Stakes?\nMin bet: '+fmt(s.min)+' KFC\nAll power-ups will reset.')) return;
+
+  // Write TX row for the mini-session ending now, then start fresh
+  if(G.url && G._sessionActive && G.username && G._cachedPin){
+    const _stakePayload={
+      username:G.username, player:G.player||G.username,
+      balance:G.balance,
+      sessionPL:G.balance-(G.sessionStart||G.balance),
+      buyIn:G.sessionStart||G.balance,
+      date:new Date().toISOString(),
+      stake:G.s?G.s.label:G.stake,
+      pin:G._cachedPin||''
+    };
+    attemptSync(_stakePayload).catch(()=>{ storeSyncQueue(_stakePayload); });
+  }
+  G.sessionStart=G.balance; // new mini-session starts at current balance
+  resetSessionChart();
+
   G.stake=key; G.s=STAKES[key];
   G.puOwned.clear(); G.levCards=[]; G._levCardsPending=[];
   updateUI(); buildChips(); buildSideBets(); buildLevPanel(); buildPuPanel(); buildStakeList();
   closeModal('stake-modal');
   notif('Switched to '+s.label+' Stakes');
   if(typeof PM !== 'undefined') PM.onStakeReached(key);
+  // Push updated stake to MP worker so opponents see the change
+  if(G.mpMode && MP2.tableId) MP2._pushMyStatus();
 }
 
 // ── CASHOUT ──────────────────────────────────────────────
@@ -10710,6 +10737,7 @@ const MP2 = {
   _origDealerPlay:  null,
   _origSameBet:     null,
   _origRenderAll:   null,
+  _origSettle:      null,
   _unloadFn:        null,
   _pendingJoinId:   null,
   _pendingJoinCat:  null,
@@ -10899,6 +10927,7 @@ const MP2 = {
     this._hookDealerPlay();
     this._hookSameBet();
     this._hookRenderAll();
+    this._hookSettle();
     this._installBeforeUnload();
     this._mountReadyRow();
     this._mountOpponentsStrip();
@@ -10974,11 +11003,28 @@ const MP2 = {
       }
     };
   },
+  // settle() never calls renderAll(), so the renderAll hook never fires after the hand ends.
+  // The worker stays at phase:'play' forever and guests never receive the dealer result.
+  // This hook pushes 'done' + full dealer hand to the worker immediately after host settles.
+  _hookSettle() {
+    if (this._origSettle) return;
+    this._origSettle = window.settle;
+    const mp2 = this;
+    window.settle = function(reason) {
+      mp2._origSettle?.apply(this, arguments);
+      if (G.mpMode && mp2.tableId && mp2._isHost) {
+        mp2._lastPushedPhase = 'done';
+        mp2._lastPushTime    = Date.now();
+        mp2._pushMyStatus();
+      }
+    };
+  },
   _removeHooks() {
     if (this._origDeal)       { window.deal       = this._origDeal;       this._origDeal       = null; }
     if (this._origDealerPlay) { window.dealerPlay = this._origDealerPlay; this._origDealerPlay = null; }
     if (this._origSameBet)    { window.sameBet    = this._origSameBet;    this._origSameBet    = null; }
     if (this._origRenderAll)  { window.renderAll  = this._origRenderAll;  this._origRenderAll  = null; }
+    if (this._origSettle)     { window.settle     = this._origSettle;     this._origSettle     = null; }
     if (this._pushTimer)      { clearTimeout(this._pushTimer);            this._pushTimer      = null; }
   },
 
@@ -11177,9 +11223,9 @@ const MP2 = {
     if (G.phase !== 'dealer') return; // already settled (BJ / surrender / etc.)
     const dealerHand = table.dealerHand || [];
     if (!dealerHand.length) return;
+    G.phase       = 'done'; // block re-entry: 800ms poll could fire again before 700ms settle timeout
     G.dealer      = dealerHand;
     G.holeRevealed = true;
-    G.phase       = 'dealer';
     // Re-render dealer cards
     const dc = document.getElementById('dealer-cards');
     if (dc && typeof cardInner === 'function') {
@@ -11423,8 +11469,13 @@ const MP2 = {
     if (rr) rr.style.display = 'none';
   },
   _installBeforeUnload() {
-    this._unloadFn = () => {
-      if (this.tableId) try { navigator.sendBeacon(`${this._url}/mp/leave`, new Blob([JSON.stringify({tableId:this.tableId,username:this._me})],{type:'application/json'})); } catch(e) {}
+    this._unloadFn = (event) => {
+      if (this.tableId) {
+        // Warn player before they lose their session
+        event.preventDefault();
+        event.returnValue = '';
+        try { navigator.sendBeacon(`${this._url}/mp/leave`, new Blob([JSON.stringify({tableId:this.tableId,username:this._me})],{type:'application/json'})); } catch(e) {}
+      }
     };
     window.addEventListener('beforeunload', this._unloadFn);
   },

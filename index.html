@@ -5021,7 +5021,7 @@ async function _autoSaveToSheet(){
   if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
   if(++_autoSaveHandCount % 5 !== 0) return;
   const params=new URLSearchParams({
-    action:'updatebalance', username:G.username, player:G.player||G.username,
+    action:'updatebalance', username:G.username, player:G.username,
     balance:String(G.balance),
     sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),
@@ -10998,11 +10998,13 @@ const MP2 = {
       if (!G.mpMode || !mp2.tableId || mp2._pushTimer) return;
       const sp = G.phase || 'bet';
       const wp = sp === 'bet' ? 'betting' : (sp === 'play' || sp === 'dealer') ? 'play' : 'done';
-      // Push only on phase change, or when settling (done), or at most every 30s as a keepalive
+      // Push on phase change, settling, stale keepalive, or any card draw during play phase
+      // so the opponents strip stays current as players hit/double/split.
       const isPhaseChange = wp !== mp2._lastPushedPhase;
       const isSettling    = wp === 'done' && mp2._lastPushedPhase !== 'done';
       const isStale       = Date.now() - mp2._lastPushTime > 30000;
-      if (isPhaseChange || isSettling || isStale) {
+      const isPlaying     = wp === 'play'; // debounce (200ms below) keeps this cheap
+      if (isPhaseChange || isSettling || isStale || isPlaying) {
         mp2._pushTimer = setTimeout(() => {
           mp2._pushTimer = null;
           mp2._lastPushedPhase = G.phase === 'bet' ? 'betting' : (G.phase === 'play' || G.phase === 'dealer') ? 'play' : 'done';
@@ -11261,15 +11263,23 @@ const MP2 = {
     G.phase        = 'done'; // block re-entry before setTimeout fires
     G.dealer       = dealerHand;
     G.holeRevealed = true;
-    // Re-render dealer cards with real host hand
+    // Re-render dealer cards with real host hand (mirrors dealerPlay() rendering)
     const dc = document.getElementById('dealer-cards');
-    if (dc && typeof cardInner === 'function') {
+    if (dc) {
       dc.innerHTML = '';
       G.dealer.forEach(c => {
         const el = document.createElement('div');
-        const isRed = typeof RED !== 'undefined' && RED.includes(c.s);
-        el.className = 'card ' + (isRed ? 'red' : 'black') + ' up';
-        el.innerHTML = cardInner(c);
+        el.style.animationDelay = '0s';
+        if (c.bonus) {
+          el.className = 'card bonus';
+          el.dataset.bonusId = c.bonus.id;
+          if (typeof bonusCardInner === 'function') el.innerHTML = bonusCardInner(c.bonus, c.repIdx);
+          if (typeof applyBonusStyle === 'function') applyBonusStyle(el, c.bonus);
+        } else {
+          const isRed = typeof RED !== 'undefined' && RED.includes(c.s);
+          el.className = 'card ' + (isRed ? 'red' : 'black') + ' up';
+          if (typeof cardInner === 'function') el.innerHTML = cardInner(c);
+        }
         dc.appendChild(el);
       });
     }

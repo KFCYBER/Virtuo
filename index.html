@@ -10084,11 +10084,10 @@ const PM = (() => {
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance >= amount) return;
         const alreadyExists = _markets.some(m =>
-          m.type==='season' && m.condition &&
+          m.type==='season' && m.status==='open' && m.condition &&
           m.condition.type==='bankroll_milestone' &&
           m.condition.params && m.condition.params.player===pName &&
-          m.condition.params.amount===amount &&
-          m.condition.params.date===today
+          m.condition.params.amount===amount
         );
         if(alreadyExists) return;
         // Base bias from proximity × season history factor × time remaining
@@ -10261,8 +10260,6 @@ const PM = (() => {
         if(handsInWindow >= (c.params.hands||8)){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
       }
       if(c.type === 'push_streak'){
-        // Count pushes within this window only
-        const winPushes = (c.params._pushCount||0) + (playerPush ? 1 : 0);
         if(!m._pushCount) m._pushCount = 0;
         m._pushCount += (playerPush ? 1 : 0);
         if(m._pushCount >= (c.params.count||2)){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
@@ -10442,16 +10439,16 @@ const PM = (() => {
         // Live P&L + cashout for open race/season positions
         let cashoutHTML = '';
         if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
-          const pYES = Math.max(0, (mkt.pools.YES || 0) - (mkt.housePools.YES || 0));
-          const pNO  = Math.max(0, (mkt.pools.NO  || 0) - (mkt.housePools.NO  || 0));
-          const pOut = b.outcome === 'YES' ? pYES : pNO;
-          const pTot = pYES + pNO;
+          // Use outcome-keyed pool so race markets (pools keyed by player name) work correctly
+          const pOut = Math.max(0, (mkt.pools[b.outcome] || 0) - (mkt.housePools[b.outcome] || 0));
+          const pTot = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
           const impliedVal = pOut > 0 ? Math.round((b.amount / pOut) * pTot) : b.amount;
           const pl         = impliedVal - b.amount;
           const plCls      = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
+          const escOutcome = b.outcome.replace(/'/g, "\\'");
           cashoutHTML = `<div class="pm-port-cashout">
             <span class="pm-port-pl ${plCls}">Now: ${fmtKFC(impliedVal)} (${pl>=0?'+':''}${fmtKFC(pl)})</span>
-            <button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${b.outcome}',${b.ts})">Cash Out</button>
+            <button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${escOutcome}',${b.ts})">Cash Out</button>
           </div>`;
         }
         return `<div class="pm-portfolio-row">
@@ -10495,10 +10492,9 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
-    const playerYES = Math.max(0, (mkt.pools.YES || 0) - (mkt.housePools.YES || 0));
-    const playerNO  = Math.max(0, (mkt.pools.NO  || 0) - (mkt.housePools.NO  || 0));
-    const playerOut = outcome === 'YES' ? playerYES : playerNO;
-    const playerTotal = playerYES + playerNO;
+    // Use outcome-keyed pools directly — works for both YES/NO and race (player-name keyed) markets
+    const playerOut   = Math.max(0, (mkt.pools[outcome] || 0) - (mkt.housePools[outcome] || 0));
+    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
     if(playerOut <= 0){
       bet.payout = bet.amount;
       mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);

@@ -2942,6 +2942,7 @@ body.mp-bet-locked .all-sb-btn {
     <!-- Post-confirm buttons (shown after sync) -->
     <div id="co-actions-post" style="display:none;flex-direction:column;gap:8px">
       <div id="co-confirmed-badge" style="font-family:var(--mono);font-size:11px;color:var(--green);letter-spacing:1px;text-align:center;padding:8px 0">✓ Synced — ready to leave</div>
+      <div id="co-error-detail" style="display:none;font-family:var(--mono);font-size:10px;color:var(--red);text-align:center;padding:4px 0;opacity:0.85"></div>
       <button id="co-retry-btn" class="btn-primary" style="width:100%;display:none;background:var(--red);border-color:var(--red)">↺ Retry Sync</button>
       <button id="co-leave-btn" class="btn-primary" style="width:100%" onclick="doLogout(G.balance<=0);closeModal('cashout-modal')">Leave Table</button>
       <button id="co-stay-btn" class="btn-ghost" style="width:100%" onclick="if(!G.mpMode&&G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else if(!G.mpMode){G._atCashout=false;closeModal('cashout-modal');}else{notif('Return to lobby to play more');}">Stay &amp; Play More</button>
@@ -4956,7 +4957,7 @@ function clearSession(){
 // Auto-sync a stale session (>4h) to the sheet so chips aren't lost.
 // Fires silently in the background — player never sees this UI-side.
 async function _expireStaleSession(snap){
-  if(!snap||!snap.player||!snap.balance) return;
+  if(!snap||!snap.username||!snap.balance) return; // username required — player is display name only
   const url=localStorage.getItem('kfc_url')||G.url; // declare early — used in points sync below
   // Award loyalty points for the partial shoe before expiring
   if(snap.shoeHandCount > 0){
@@ -4972,7 +4973,7 @@ async function _expireStaleSession(snap){
       // Fire-and-forget sheet sync for the points
       const pParams = new URLSearchParams({
         action:   'updatepoints',
-        username: snap.username||snap.player,
+        username: snap.username,
         pin:      snap.cachedPin||'',
         points:   String(newPts)
       });
@@ -4983,8 +4984,8 @@ async function _expireStaleSession(snap){
   try{
     const params=new URLSearchParams({
       action:    'updatebalance',
-      username:  snap.username||snap.player,
-      player:    snap.player,
+      username:  snap.username,
+      player:    snap.player||'',
       balance:   String(snap.balance),
       sessionPL: String(snap.balance-(snap.sessionStart||snap.balance)),
       buyIn:     String(snap.sessionStart||snap.balance),
@@ -5000,7 +5001,7 @@ async function _expireStaleSession(snap){
     console.warn('[KFC] Stale session sync failed — queuing for retry',e);
     try{
       storeSyncQueue({
-        username: snap.username||snap.player, player: snap.player,
+        username: snap.username, player: snap.player||'',
         balance:  snap.balance,
         sessionPL: snap.balance-(snap.sessionStart||snap.balance),
         buyIn:    snap.sessionStart||snap.balance,
@@ -7937,10 +7938,11 @@ function getSyncQueue(){
 
 async function attemptSync(payload){
   if(!G.url) return {ok:false, local:true};
+  if(!payload.username) throw new Error('Missing username — cannot sync');
   const params=new URLSearchParams({
     action:'updatebalance',
-    username: String(payload.username||payload.player||''),
-    player:   String(payload.player||payload.username||''),
+    username: String(payload.username),
+    player:   String(payload.player||''),
     balance:  String(payload.balance),
     sessionPL:String(payload.sessionPL),
     buyIn:    String(payload.buyIn),
@@ -8006,6 +8008,7 @@ async function confirmCashout(){
   const post=document.getElementById('co-actions-post');
   post.style.display='flex';
   const badge=document.getElementById('co-confirmed-badge');
+  const errDetail=document.getElementById('co-error-detail');
   const leaveBtn=document.getElementById('co-leave-btn');
   const retryBtn=document.getElementById('co-retry-btn');
   const stayBtn=document.getElementById('co-stay-btn');
@@ -8021,12 +8024,12 @@ async function confirmCashout(){
   const newTotalBalance = (G._totalBalance||G.sessionStart) - G.sessionStart + G.balance;
 
   // Safety check — username must be set for sync to work
-  if(!(G.username||G.player)){
-    notif('Cannot sync — session identity lost. Please log out and back in.');
+  if(!G.username){
+    notif('Cannot sync — username missing. Please log out and back in.');
     return;
   }
   const payload={
-    username: G.username||G.player, player: G.player,
+    username: G.username, player: G.player||'',
     balance:   G.balance,
     sessionPL: sessionPL,
     buyIn:     G.sessionStart,
@@ -8038,6 +8041,7 @@ async function confirmCashout(){
   async function doSync(){
     badge.textContent='Syncing…';
     badge.style.color='var(--muted)';
+    if(errDetail){ errDetail.style.display='none'; errDetail.textContent=''; }
     setSyncBadge('','SYNCING');
     if(leaveBtn) leaveBtn.disabled=true;
     if(retryBtn) retryBtn.style.display='none';
@@ -8066,6 +8070,7 @@ async function confirmCashout(){
       setSyncBadge('live','SYNCED');
       badge.textContent='✓ Synced — chips returned to wallet';
       badge.style.color='var(--green)';
+      if(errDetail){ errDetail.style.display='none'; errDetail.textContent=''; }
       if(leaveBtn){ leaveBtn.disabled=false; leaveBtn.textContent='Leave Table'; }
       if(stayBtn) stayBtn.style.display='block';
       G.balance=0; updateUI();
@@ -8080,10 +8085,11 @@ async function confirmCashout(){
       setSyncBadge('error','FAILED');
       badge.textContent='⚠ Sync failed — must retry before leaving';
       badge.style.color='var(--red)';
+      if(errDetail){ errDetail.textContent=e.message||'Unknown error'; errDetail.style.display='block'; }
       if(leaveBtn){ leaveBtn.disabled=true; leaveBtn.textContent='Sync Required'; }
       if(retryBtn) retryBtn.style.display='block';
       if(stayBtn) stayBtn.style.display='none';
-      notif('Sync failed — retry required to leave');
+      notif('Sync failed: '+(e.message||'unknown error'));
     }
   }
 

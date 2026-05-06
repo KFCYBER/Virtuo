@@ -148,6 +148,7 @@ body:not(.mp-active) #mp-remote-strip { display: none !important; }
 }
 .mp-remote-seat .rs-mini-c.red { color:#B52020; }
 .mp-remote-seat .rs-mini-c.hidden { background:#0A1828; color:#5A8AB8; }
+.mp-remote-seat .rs-mini-c.bonus-card { background:#FFF8DC; color:#8B6914; border:1px solid #C9A84C; }
 
 /* ─────────────────────────────────────────────
    TOP BAR
@@ -11195,8 +11196,13 @@ const MP2 = {
       }
     }
 
-    // Guest: dealer result arrived
-    if (!this._isHost && G.phase === 'dealer' && newPhase === 'done') {
+    // Guest: dealer result arrived.
+    // Also fires on 'betting' because the host's _hookRenderAll debounce (200ms) may push
+    // 'betting' before the guest's 800ms poll sees 'done' — guest would freeze forever otherwise.
+    // Dealer hand is still populated during 'betting' until _startRound() clears it, which
+    // cannot happen while any player is still in playing/dealer-wait state.
+    if (!this._isHost && G.phase === 'dealer' &&
+        (newPhase === 'done' || (newPhase === 'betting' && (table.dealerHand||[]).length > 0))) {
       this._runGuestDealerPhase(table);
     }
 
@@ -11418,11 +11424,13 @@ const MP2 = {
     seats.innerHTML = others.map(([u,p]) => {
       const isActive = p.status === 'playing';
       const redSuits = ['♥','♦'];
-      const cards = (p.hand||[]).map(c =>
-        (c._hidden||(c.r==='?'&&c.s==='?'))
-          ? '<span class="rs-mini-c hidden">?</span>'
-          : `<span class="rs-mini-c${redSuits.includes(c.s)?' red':''}">${c.r}${c.s}</span>`
-      ).join('');
+      const cards = (p.hand||[]).map(c => {
+        if (c._hidden||(c.r==='?'&&c.s==='?')) return '<span class="rs-mini-c hidden">?</span>';
+        // Use cardRank/cardSuit helpers so bonus cards resolve their representative rank/suit
+        const r = (typeof cardRank==='function' ? cardRank(c) : null) || c.r || '?';
+        const s = (typeof cardSuit==='function' ? cardSuit(c) : null) || c.s || '';
+        return `<span class="rs-mini-c${redSuits.includes(s)?' red':''}${c.bonus?' bonus-card':''}">${r}${s}</span>`;
+      }).join('');
       const readyMark = p.ready ? '<span style="color:var(--green);font-size:9px"> ✓</span>' : '';
       return `<div class="mp-remote-seat${isActive?' active-turn':''}">
         <div class="rs-name">${p.displayName||u}${readyMark}</div>

@@ -11250,10 +11250,11 @@ const MP2 = {
     this._mp2DealNow = true;
     this._origDeal?.call(window);
     this._mp2DealNow = false;
-    // Fix dealer from relay: replace upcard, keep random hole card face-down
+    // Sync dealer hand from host: correct upcard + any jester extras (index 2+), keep local hole card face-down
     const dealerHand = table.dealerHand || [];
     if (dealerHand.length >= 1 && G.dealer.length >= 1) {
-      G.dealer[0] = dealerHand[0]; // replace with host's upcard
+      const localHole = G.dealer[1] || {r:'?', s:'?', _hidden:true};
+      G.dealer = [dealerHand[0], localHole, ...dealerHand.slice(2)];
       G.holeRevealed = false;
     }
     if (typeof renderAll === 'function') renderAll();

@@ -4993,11 +4993,43 @@ async function _expireStaleSession(snap){
       stake:     'AUTO-EXPIRE', // distinguishable from normal cashouts in the log
       pin:       snap.cachedPin||''
     });
-    await fetch(url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
-    console.log('[KFC] Stale session auto-expired and synced for',snap.player);
+    const _r2 = await fetch(url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
+    const _d2 = await _r2.json().catch(()=>({}));
+    if(!_d2.ok && !_d2.balance) throw new Error(_d2.error||'sync rejected');
+    console.log('[KFC] Stale session synced for',snap.player);
   }catch(e){
-    console.warn('[KFC] Stale session sync failed — balance may be unrecorded',e);
+    console.warn('[KFC] Stale session sync failed — queuing for retry',e);
+    try{
+      storeSyncQueue({
+        username: snap.username||snap.player, player: snap.player,
+        balance:  snap.balance,
+        sessionPL: snap.balance-(snap.sessionStart||snap.balance),
+        buyIn:    snap.sessionStart||snap.balance,
+        date:     new Date().toISOString(),
+        stake:    'AUTO-EXPIRE',
+        pin:      snap.cachedPin||''
+      });
+    }catch(_e){}
   }
+}
+
+// Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
+// Uses autosave=true so GAS skips TX row and games++ increment.
+let _autoSaveHandCount = 0;
+async function _autoSaveToSheet(){
+  if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
+  if(++_autoSaveHandCount % 5 !== 0) return;
+  const params=new URLSearchParams({
+    action:'updatebalance', username:G.username, player:G.player||G.username,
+    balance:String(G.balance),
+    sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+    buyIn:String(G.sessionStart||G.balance),
+    date:new Date().toISOString(),
+    stake:G.s?G.s.label:'auto',
+    pin:G._cachedPin||'',
+    autosave:'true'
+  });
+  try{ await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
 }
 
 // Save session to localStorage when window/tab is closed
@@ -5219,7 +5251,7 @@ function openApp(displayName, balance){
   if(!G.deck||G.deck.length===0) G.deck=buildShoe();
   msg('PLACE YOUR BET');
   // Reset streak and shoe log on fresh session (not restore)
-  if(!G._sessionActive){ _streak=0; _shoeLog=[]; _shoeHandCount=0; }
+  if(!G._sessionActive){ _streak=0; _shoeLog=[]; _shoeHandCount=0; _autoSaveHandCount=0; }
   _updatePassUI(); // crown badge, chip glow, hot/cold, PU panel
   _updatePointsBadge(undefined, false); // show current points in topbar
   _initLeaderboard(); // fetch league table from sheet
@@ -5271,7 +5303,7 @@ function openApp(displayName, balance){
   document.addEventListener('keydown',     _doWelcome, {once:true});
   const db2=document.getElementById('btn-deal'); if(db2) db2.disabled=true;
   // Retry any previously failed sync in background
-  if(G.url){ const q=getSyncQueue(); if(q){ setTimeout(async()=>{ try{ await attemptSync(q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){} },2000); } }
+  if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{ try{ await attemptSync(_q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){ storeSyncQueue(_q); setSyncBadge('error','FAILED'); notif('Auto-sync failed — open cashout to retry'); } },2000); } }
   // Set initial betting phase
   G.phase='bet';
   document.body.classList.add('betting');
@@ -7123,6 +7155,7 @@ function settle(reason){
     const _extraHands = Math.max(0, _handResults.length - 1);           // hands beyond first
     setTimeout(()=>PM.onHandEnd(_dbForPM, _anyBJForPM, _wonForPM, _pushForPM, _extraHands), 0);
   }
+  if(G.url && G._sessionActive) _autoSaveToSheet();
 }
 
 // ── REAL SIDE BET EVALUATION ──────────────────────────────
@@ -11326,6 +11359,12 @@ const MP2 = {
 
   // ─── leave / cleanup ──────────────────────────────────────
   leaveTable() {
+    const _pl = G.balance - (G.sessionStart || G.balance);
+    if (G.url && G._sessionActive && _pl !== 0) {
+      if (typeof showCashout === 'function') showCashout();
+      notif('Sync your balance before leaving the table');
+      return;
+    }
     const modal = document.getElementById('mp-leave-modal');
     if (!modal) return;
     const s = document.getElementById('mp-leave-summary');
@@ -11335,6 +11374,20 @@ const MP2 = {
   _cancelLeave() { document.getElementById('mp-leave-modal').style.display = 'none'; },
   async _doLeave() {
     document.getElementById('mp-leave-modal').style.display = 'none';
+    // Zero-P&L path — silent autosave (nonzero path went through cashout modal)
+    if(G.url && G._sessionActive && G.username && G._cachedPin && !G.cashedOut){
+      const _lp=new URLSearchParams({
+        action:'updatebalance', username:G.username, player:G.player||G.username,
+        balance:String(G.balance),
+        sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+        buyIn:String(G.sessionStart||G.balance),
+        date:new Date().toISOString(),
+        stake:G.s?G.s.label:'auto',
+        pin:G._cachedPin||'',
+        autosave:'true'
+      });
+      try{ await fetch(G.url+'?'+_lp.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+    }
     try { await fetch(`${this._url}/mp/leave`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me})}); } catch(e) {}
     this._cleanup();
     this._openLobby();

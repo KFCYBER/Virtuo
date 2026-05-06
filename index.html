@@ -2328,7 +2328,7 @@ body.mp-bet-locked .all-sb-btn {
       <div class="tb-player" id="tb-name">—</div>
       <span id="tb-pass-badge" title="21 Club Pass">👑</span>
       <div class="tb-balance" id="tb-bal">0</div>
-      <div class="badge" id="tb-stake">LOW</div>
+      <div class="badge" id="tb-stake" style="cursor:pointer" title="Change Stake" onclick="if(G.phase==='bet'||!G._sessionActive){buildStakeList();openModal('stake-modal');}else{notif('Finish the current hand first');}">LOW</div>
       <span id="tb-points" title="Loyalty points">⭐ 0</span>
       <span id="streak-badge"></span>
     </div>
@@ -5053,12 +5053,16 @@ window.addEventListener('beforeunload', (event)=>{
 
 // pagehide fires on mobile when page is hidden/navigated away (more reliable than beforeunload)
 window.addEventListener('pagehide', ()=>{
-  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
+  if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
     saveSession();
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
     }catch(e){}
+    // MP: also send leave beacon so the table slot is freed (mirrors the beforeunload handler)
+    if(G.mpMode && MP2.tableId && MP2._url && MP2._me){
+      try{ navigator.sendBeacon(`${MP2._url}/mp/leave`, new Blob([JSON.stringify({tableId:MP2.tableId,username:MP2._me})],{type:'application/json'})); }catch(e){}
+    }
   }
 });
 
@@ -7848,7 +7852,7 @@ function selectStake(key){
   // Write TX row for the mini-session ending now, then start fresh
   if(G.url && G._sessionActive && G.username && G._cachedPin){
     const _stakePayload={
-      username:G.username, player:G.player||G.username,
+      username:G.username, player:G.username,
       balance:G.balance,
       sessionPL:G.balance-(G.sessionStart||G.balance),
       buyIn:G.sessionStart||G.balance,

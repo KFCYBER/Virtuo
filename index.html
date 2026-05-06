@@ -10737,6 +10737,7 @@ const MP2 = {
   _roundNum:        0,
   _guestRoundNum:   0,
   _pendingRoundStart: false,
+  _lastStartedRound: -1,
   _lastPushedPhase: null,
   _lastPushTime:    0,
   _origDeal:        null,
@@ -11017,12 +11018,26 @@ const MP2 = {
     this._origSettle = window.settle;
     const mp2 = this;
     window.settle = function(reason) {
-      mp2._origSettle?.apply(this, arguments);
-      if (G.mpMode && mp2.tableId && mp2._isHost) {
-        mp2._lastPushedPhase = 'done';
-        mp2._lastPushTime    = Date.now();
-        mp2._pushMyStatus();
+      if (G.mpMode && mp2.tableId) {
+        if (mp2._isHost) {
+          // Host settles normally then pushes phase:'done' to the worker
+          mp2._origSettle?.apply(this, arguments);
+          mp2._lastPushedPhase = 'done';
+          mp2._lastPushTime    = Date.now();
+          mp2._pushMyStatus();
+        } else {
+          // Guest: never settle early — BJ/surrender/bust all route here.
+          // Block settle, enter dealer-wait state so _runGuestDealerPhase
+          // calls the real settle with the correct reason once host pushes done.
+          G.phase = 'dealer';
+          if (typeof setActions === 'function') setActions(false);
+          mp2._showPhaseBanner('Waiting for dealer…');
+          mp2._pushMyStatus();
+        }
+        return;
       }
+      // SP mode — run normally
+      mp2._origSettle?.apply(this, arguments);
     };
   },
   _removeHooks() {
@@ -11200,6 +11215,12 @@ const MP2 = {
 
   // ─── guest round start ────────────────────────────────────
   _onGuestRoundStart(table) {
+    // Guard: both the phase-change path and the roundNum path can fire this in the same
+    // _handlePoll tick — only execute once per round number to prevent a double deal.
+    const thisRound = table.roundNum || 0;
+    if (thisRound > 0 && thisRound === this._lastStartedRound) return;
+    this._lastStartedRound = thisRound;
+
     const me = table.players?.[this._me];
     if (!me || (me.bet||0) <= 0 || me.status === 'sitting_out') {
       this._showPhaseBanner('Sitting this round out…');
@@ -11248,7 +11269,8 @@ const MP2 = {
     setTimeout(() => {
       const reason = (typeof isBJ === 'function' && isBJ(G.dealer)) ? 'dealer_bj' : 'normal';
       this._hidePhaseBanner();
-      if (typeof settle === 'function') settle(reason);
+      // Call _origSettle directly — window.settle is hooked and would re-enter dealer-wait
+      this._origSettle?.call(window, reason);
     }, 700);
   },
 
@@ -11429,7 +11451,7 @@ const MP2 = {
     // Zero-P&L path — silent autosave (nonzero path went through cashout modal)
     if(G.url && G._sessionActive && G.username && G._cachedPin && !G.cashedOut){
       const _lp=new URLSearchParams({
-        action:'updatebalance', username:G.username, player:G.player||G.username,
+        action:'updatebalance', username:G.username, player:G.player||'',
         balance:String(G.balance),
         sessionPL:String(G.balance-(G.sessionStart||G.balance)),
         buyIn:String(G.sessionStart||G.balance),
@@ -11462,6 +11484,7 @@ const MP2 = {
     this._roundStarting     = false;
     this._guestRoundNum     = 0;
     this._pendingRoundStart = false;
+    this._lastStartedRound  = -1;
     this._roundNum          = 0;
     this._lastPushedPhase   = null;
     this._lastPushTime      = 0;

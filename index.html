@@ -11253,6 +11253,11 @@ const MP2 = {
       G.dealer = [dealerHand[0], localHole, ...dealerHand.slice(2)];
       G.holeRevealed = false;
     }
+    // deal() already rendered dealer cards with a random upcard — clear the container
+    // so renderAll() is forced to do a full re-render with the correct host upcard.
+    // Without this, renderAll() skips the dealer zone because child count matches G.dealer.length.
+    const _dc = document.getElementById('dealer-cards');
+    if (_dc) _dc.innerHTML = '';
     if (typeof renderAll === 'function') renderAll();
   },
 

@@ -2339,7 +2339,6 @@ body.mp-bet-locked .all-sb-btn {
       <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
       <button class="btn-ghost" onclick="openModal('settings-modal')" style="font-size:13px;padding:6px 10px;letter-spacing:1px" title="Settings">⚙</button>
-      <div class="badge" id="sync-badge">LOCAL</div>
       <button class="btn-ghost" onclick="showTopUp()" style="border-color:rgba(63,185,80,0.4);color:var(--green)" id="btn-topup">Top Up</button>
       <button class="btn-ghost" onclick="showCashout()">Leave Table</button>
     </div>
@@ -5662,6 +5661,7 @@ function updateUI(){
 
 function setSyncBadge(cls,txt){
   const el=document.getElementById('sync-badge');
+  if(!el) return;
   el.className='badge'+(cls?' '+cls:'');
   el.textContent=txt;
 }
@@ -11984,6 +11984,7 @@ const MP2 = {
       });
       try{ await fetch(G.url+'?'+_lp.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
     }
+    await _syncPtsToSheet(true); // flush any pending points before leaving
     _sendTgNotif(); // fire-and-forget session report
     try { await fetch(`${this._url}/mp/leave`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tableId:this.tableId,username:this._me})}); } catch(e) {}
     this._cleanup();

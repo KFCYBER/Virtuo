@@ -9884,8 +9884,18 @@ const PM = (() => {
         const [bg, bs] = _WO[b.condition && b.condition.type] || [9, 9];
         return ag !== bg ? ag - bg : as - bs;
       });
+      // Sort whole-shoe: bust_range bands first (ascending min), then everything else
+      const sortedWhole = [...whole].sort((a, b) => {
+        const at = a.condition && a.condition.type;
+        const bt = b.condition && b.condition.type;
+        if(at === 'dealer_bust_range' && bt === 'dealer_bust_range')
+          return ((a.condition.params&&a.condition.params.min)||0) - ((b.condition.params&&b.condition.params.min)||0);
+        if(at === 'dealer_bust_range') return -1;
+        if(bt === 'dealer_bust_range') return 1;
+        return 0;
+      });
       let shoeHTML = '';
-      if(whole.length)        shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
+      if(sortedWhole.length)  shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + sortedWhole.map(_renderMkt).join('');
       if(sortedWindow.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + sortedWindow.map(_renderMkt).join('');
       shoeEl.innerHTML = shoeHTML || '<div class="pm-empty">No shoe markets</div>';
     }
@@ -11053,34 +11063,44 @@ const PM = (() => {
       const hasActiveBet = _loadBets().some(b => b.mktId===m.id && b.payout==null);
       return hasActiveBet; // keep only if a player has money on it
     });
-    // Deduplicate open shoe markets — keep only the newest instance of each logical market.
-    // Duplicates accumulate when old shoe IDs are re-injected by poll() from GAS.
+    // Deduplicate open markets across all types — keep only the newest instance per logical key.
+    // Shoe duplicates: old IDs re-injected by poll() from GAS.
+    // Season/race duplicates: player name inconsistency between sessions bypasses alreadyExists check.
     (()=>{
-      const seen = new Map(); // key → newest market so far
-      _markets.forEach(m => {
-        if(m.type !== 'shoe' || m.status !== 'open') return;
-        const ct = m.condition && m.condition.type;
-        if(!ct) return;
-        let key = ct;
-        if(ct === 'dealer_bust_range'){
-          const p = m.condition.params;
-          key = ct + '_' + (p ? p.min+'_'+p.max : '');
-        }
-        const existing = seen.get(key);
-        if(!existing || (m.createdAt||0) > (existing.createdAt||0)){
-          seen.set(key, m);
-        }
-      });
-      const keepIds = new Set([...seen.values()].map(m => m.id));
       const savedBets = _loadBets();
-      _markets = _markets.filter(m => {
-        if(m.type !== 'shoe' || m.status !== 'open') return true; // never touch settled/non-shoe
-        const ct = m.condition && m.condition.type;
-        if(!ct) return true;
-        if(keepIds.has(m.id)) return true;
-        // Only drop a duplicate if no player has an open bet on it (refund if they do)
-        const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
-        return hasBet;
+      const dedupType = (mtype, keyFn) => {
+        const seen = new Map();
+        _markets.forEach(m => {
+          if(m.type !== mtype || m.status !== 'open') return;
+          const key = keyFn(m);
+          if(!key) return;
+          const existing = seen.get(key);
+          if(!existing || (m.createdAt||0) > (existing.createdAt||0)) seen.set(key, m);
+        });
+        const keepIds = new Set([...seen.values()].map(m => m.id));
+        _markets = _markets.filter(m => {
+          if(m.type !== mtype || m.status !== 'open') return true;
+          const key = keyFn(m);
+          if(!key) return true; // no key → keep
+          if(keepIds.has(m.id)) return true;
+          return savedBets.some(b => b.mktId === m.id && b.payout == null); // keep if bet on it
+        });
+      };
+      // Shoe: key = condition type (+ band params for bust_range)
+      dedupType('shoe', m => {
+        const ct = m.condition && m.condition.type; if(!ct) return null;
+        if(ct === 'dealer_bust_range'){ const p = m.condition.params; return ct+'_'+(p?p.min+'_'+p.max:''); }
+        return ct;
+      });
+      // Season: key = player (lowercased) + milestone amount
+      dedupType('season', m => {
+        const p = m.condition && m.condition.params; if(!p) return null;
+        return (p.player||'').toLowerCase()+'_'+(p.amount||'');
+      });
+      // Race: key = player (lowercased) + target amount
+      dedupType('race', m => {
+        const p = m.condition && m.condition.params; if(!p) return null;
+        return (p.player||'').toLowerCase()+'_'+(p.amount||'');
       });
     })();
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate

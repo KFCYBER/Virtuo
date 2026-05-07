@@ -10371,7 +10371,6 @@ const PM = (() => {
     });
     _markets.push(_yn('Natural Blackjack in the next 8 hands?',         {type:'natural_bj',          params:{hands:8,  startHand:0}}));
     _markets.push(_yn('2+ ties (push) in the next 8 hands?',            {type:'push_streak',         params:{count:2,  hands:8,  startHand:0}}));
-    _markets.push(_yn('Dealer busts in the next 5 hands?',              {type:'dealer_bust_window',  params:{hands:5,  startHand:0}}));
     _markets.push(_yn('Player wins 3 in a row in the next 8 hands?',    {type:'win_streak_window',   params:{streak:3, hands:8,  startHand:0}}));
     _markets.push(_yn('Player wins 5 hands in a row this shoe?',        {type:'player_hot_streak',   params:{streak:5}}));
     _markets.push(_yn('Two consecutive blackjacks this shoe?',          {type:'consec_bj',           params:{count:2}}));
@@ -10588,13 +10587,11 @@ const PM = (() => {
     let changed = false;
     const hasNatBJ    = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='natural_bj');
     const hasPushStr  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='push_streak');
-    const hasBustWin  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='dealer_bust_window');
     const hasWinStr   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='win_streak_window');
     const hasQuickBJ  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='quick_bj_window');
     const hasNoBust   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='dealer_no_bust_window');
     const hasMajWins  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='majority_wins_window');
     const winHands = Math.min(8, handsLeft);
-    const bustHands = Math.min(5, handsLeft);
     if(!hasNatBJ){
       const cond = {type:'natural_bj', params:{hands:winHands, startHand:_pmShoeHands}};
       const m = _makeMarket('shoe', 'Natural Blackjack in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
@@ -10604,12 +10601,6 @@ const PM = (() => {
     if(!hasPushStr){
       const cond = {type:'push_streak', params:{count:2, hands:winHands, startHand:_pmShoeHands}};
       const m = _makeMarket('shoe', '2+ ties (push) in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
-      _markets.push(m);
-      changed = true;
-    }
-    if(!hasBustWin){
-      const cond = {type:'dealer_bust_window', params:{hands:bustHands, startHand:_pmShoeHands}};
-      const m = _makeMarket('shoe', 'Dealer busts in the next '+bustHands+' hands?', cond, _deckProb(cond)/100);
       _markets.push(m);
       changed = true;
     }
@@ -11042,6 +11033,12 @@ const PM = (() => {
       return m.housePools.YES !== m.housePools.NO; // keep only if already calibrated
     });
     _cleanupOrphanBets(); // refund any open bets whose markets were just purged
+    // Retire dealer_bust_window — superseded by cold_dealer_window (purge if no active bets)
+    _markets = _markets.filter(m => {
+      if(!(m.type==='shoe' && m.condition && m.condition.type==='dealer_bust_window')) return true;
+      const hasActiveBet = _loadBets().some(b => b.mktId===m.id && b.payout==null);
+      return hasActiveBet; // keep only if a player has money on it
+    });
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){
@@ -11069,7 +11066,6 @@ const PM = (() => {
       if(!_existTypes.has('player_hot_streak'))      { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
       if(!_existTypes.has('consec_bj'))              { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
       if(!_existTypes.has('natural_bj'))             { _markets.push(_bf('Natural Blackjack in the next 8 hands?',{type:'natural_bj',params:{hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
-      if(!_existTypes.has('dealer_bust_window'))     { _markets.push(_bf('Dealer busts in the next 5 hands?',{type:'dealer_bust_window',params:{hands:5,startHand:_pmShoeHands}})); _backfilled=true; }
       if(!_existTypes.has('win_streak_window'))      { _markets.push(_bf('Player wins 3 in a row in the next 8 hands?',{type:'win_streak_window',params:{streak:3,hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
       if(!_existTypes.has('quick_bj_window'))        { _markets.push(_bf('Blackjack in the next 3 hands?',{type:'quick_bj_window',params:{hands:3,startHand:_pmShoeHands}})); _backfilled=true; }
       if(!_existTypes.has('dealer_no_bust_window'))  { _markets.push(_bf('Dealer stays pat (no bust) for 4 straight hands?',{type:'dealer_no_bust_window',params:{hands:4,startHand:_pmShoeHands}})); _backfilled=true; }

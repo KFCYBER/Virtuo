@@ -5273,6 +5273,8 @@ function _logSessionToSheet(stakeLabel){
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
 }
 
+let _unloadFired = false; // guard against beforeunload + pagehide both firing
+
 // Save session to localStorage when window/tab is closed
 window.addEventListener('beforeunload', (event)=>{
   // SP only — MP handles its own unload via the MP beforeunload handler below
@@ -5280,8 +5282,7 @@ window.addEventListener('beforeunload', (event)=>{
     event.preventDefault();
     event.returnValue = '';
     saveSession();
-    _sendTgBeacon();
-    _logSessionToSheet('RELOAD-EXIT');
+    if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
   }
 });
 
@@ -5289,8 +5290,7 @@ window.addEventListener('beforeunload', (event)=>{
 window.addEventListener('pagehide', ()=>{
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
     saveSession();
-    _sendTgBeacon();
-    _logSessionToSheet('RELOAD-EXIT');
+    if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

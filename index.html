@@ -3501,6 +3501,7 @@ function fmt(n){
   return n.toLocaleString();
 }
 function fmtKFC(n){ return fmt(n)+' KFC'; }
+function fmtFull(n){ return Math.round(n).toLocaleString()+' KFC'; }
 
 // ── BOOT ──────────────────────────────────────────────
 
@@ -5186,22 +5187,33 @@ function _sendTgBeacon(){
   try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
 }
 
+// Log session to GAS sheet on unload — keepalive ensures delivery even as page closes
+function _logSessionToSheet(stakeLabel){
+  if(!G.url || !G.username || !G._cachedPin) return;
+  const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
+  const params = new URLSearchParams({
+    action:    'updatebalance',
+    username:  G.username,
+    player:    G.player || G.username,
+    balance:   String(safeBalance),
+    sessionPL: String(safeBalance - (G.sessionStart || safeBalance)),
+    buyIn:     String(G.sessionStart || safeBalance),
+    date:      new Date().toISOString(),
+    stake:     stakeLabel || 'RELOAD-EXIT',
+    pin:       G._cachedPin
+  });
+  try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
+}
+
 // Save session to localStorage when window/tab is closed
-// NOTE: We do NOT sync to Google Sheets here — sheet writes only happen on explicit cashout.
-// This prevents every page reload from creating a new session log entry.
 window.addEventListener('beforeunload', (event)=>{
   // SP only — MP handles its own unload via the MP beforeunload handler below
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive && !G.mpMode){
-    // Show browser-native "Leave site?" dialog so the player is warned
     event.preventDefault();
     event.returnValue = '';
     saveSession();
     _sendTgBeacon();
-    // Mark snap for auto-sync on next open — no restore, no browser confirm
-    try{
-      const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
-      if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
-    }catch(e){}
+    _logSessionToSheet('RELOAD-EXIT');
   }
 });
 
@@ -5210,6 +5222,7 @@ window.addEventListener('pagehide', ()=>{
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
     saveSession();
     _sendTgBeacon();
+    _logSessionToSheet('RELOAD-EXIT');
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
@@ -9867,7 +9880,7 @@ const PM = (() => {
   // ── Render ─────────────────────────────────────────────────────────────────
   function render(){
     const balEl = document.getElementById('pm-modal-bal');
-    if(balEl) balEl.textContent = fmtKFC(G.balance||0);
+    if(balEl) balEl.textContent = fmtFull(G.balance||0);
 
     // Show HISTORY tab only to creator accounts
     const histTab = document.getElementById('pm-tab-history');
@@ -9934,7 +9947,7 @@ const PM = (() => {
       .sort(([a],[b]) => Number(a)-Number(b))
       .map(([amount, mkts]) => {
         const key = 'race_'+amount;
-        const fmtAmt = fmtKFC(Number(amount));
+        const fmtAmt = fmtFull(Number(amount));
         const openCount = mkts.filter(m=>m.status==='open').length;
         const settled = mkts.length - openCount;
         const countTxt = openCount+' open'+(settled?', '+settled+' settled':'');
@@ -9963,14 +9976,14 @@ const PM = (() => {
       const pay   = myBets.reduce((a,b)=>a+(b.payout||0),0);
       if(spend > 0){
         const pl = pay-spend;
-        settledHTML = `<div class="pm-settled-result ${pl>0?'win':pl<0?'loss':'push'}">Result: ${mkt.result||'—'} — You: ${pl>=0?'+':''}${fmtKFC(pl)}</div>`;
+        settledHTML = `<div class="pm-settled-result ${pl>0?'win':pl<0?'loss':'push'}">Result: ${mkt.result||'—'} — You: ${pl>=0?'+':''}${fmtFull(pl)}</div>`;
       } else {
         settledHTML = `<div class="pm-settled-result push">Settled: ${mkt.result||'—'}</div>`;
       }
     }
 
     const myBetHTML = myBets.length
-      ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtKFC(b.amount)).join(' / ')}</div>`
+      ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtFull(b.amount)).join(' / ')}</div>`
       : '';
 
     const liveHTML = isOpen
@@ -10008,7 +10021,7 @@ const PM = (() => {
     const me = (G.username||G.player||'').toLowerCase();
 
     const myBetHTML = myBets.length
-      ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtKFC(b.amount)).join(' / ')}</div>`
+      ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtFull(b.amount)).join(' / ')}</div>`
       : '';
     let settledHTML = '';
     if(!isOpen){
@@ -10016,7 +10029,7 @@ const PM = (() => {
       const pay   = myBets.reduce((a,b)=>a+(b.payout||0),0);
       if(spend > 0){
         const pl = pay - spend;
-        settledHTML = `<div class="pm-settled-result ${pl>0?'win':pl<0?'loss':'push'}">Result: ${mkt.result||'—'} — You: ${pl>=0?'+':''}${fmtKFC(pl)}</div>`;
+        settledHTML = `<div class="pm-settled-result ${pl>0?'win':pl<0?'loss':'push'}">Result: ${mkt.result||'—'} — You: ${pl>=0?'+':''}${fmtFull(pl)}</div>`;
       } else {
         settledHTML = `<div class="pm-settled-result push">Settled: ${mkt.result||'—'}</div>`;
       }
@@ -10135,7 +10148,7 @@ const PM = (() => {
       if(mySpend > 0){
         const profit = myPayout - mySpend;
         const cls = profit>0?'win':profit<0?'loss':'push';
-        settledHTML = `<div class="pm-settled-result ${cls}">Result: ${mkt.result||'—'} — You: ${profit>=0?'+':''}${fmtKFC(profit)}</div>`;
+        settledHTML = `<div class="pm-settled-result ${cls}">Result: ${mkt.result||'—'} — You: ${profit>=0?'+':''}${fmtFull(profit)}</div>`;
       } else {
         settledHTML = `<div class="pm-settled-result push">Settled: ${mkt.result||'—'}</div>`;
       }
@@ -10144,8 +10157,8 @@ const PM = (() => {
     let myBetHTML = '';
     if(myY > 0 || myN > 0){
       const parts = [];
-      if(myY > 0) parts.push('YES '+fmtKFC(myY));
-      if(myN > 0) parts.push('NO '+fmtKFC(myN));
+      if(myY > 0) parts.push('YES '+fmtFull(myY));
+      if(myN > 0) parts.push('NO '+fmtFull(myN));
       myBetHTML = `<div class="pm-my-bet">Your bets: ${parts.join(' / ')}</div>`;
     }
 
@@ -10205,7 +10218,7 @@ const PM = (() => {
 
     if(n) n.textContent = mkt.desc;
     if(t) t.textContent = (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE') + ' MARKET';
-    if(w) w.textContent = fmtKFC(G.balance||0);
+    if(w) w.textContent = fmtFull(G.balance||0);
     if(a) a.value = '';
 
     if(btnRow){
@@ -10259,8 +10272,8 @@ const PM = (() => {
     const adjPay = amt + profit * mult;
     const adjProfit = Math.round(adjPay - amt);
     const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
-    pEl.textContent = 'Est. ' + (adjProfit >= 0 ? '+' : '') + fmtKFC(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '%)';
-    if(sEl) sEl.textContent = mult > 1 ? 'Stake ×'+fmt(mult)+' bonus on profit' : 'Odds at current price — final payout shifts as others bet';
+    pEl.textContent = (adjProfit >= 0 ? '+' : '') + fmtFull(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '%) — locked at these odds';
+    if(sEl) sEl.textContent = mult > 1 ? 'Stake ×'+fmt(mult)+' bonus on profit' : 'Odds locked at placement — you get exactly this';
   }
 
   function _confirmBet(){
@@ -10268,9 +10281,15 @@ const PM = (() => {
     const rawAmt = (document.getElementById('pm-bet-amount')||{}).value||'';
     const amount = Math.floor(parseFloat(rawAmt.replace(/,/g,''))||0);
     if(amount <= 0){ notif('Enter bet amount'); return; }
-    if(amount > G.balance){ notif('Insufficient balance ('+fmtKFC(G.balance)+')'); return; }
+    if(amount > G.balance){ notif('Insufficient balance ('+fmtFull(G.balance)+')'); return; }
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
+
+    // Lock the displayed payout at bet time — settlement uses this regardless of later pool changes
+    const _rawPay = _rawPayoutIfWin(mkt, _betOutcome, amount);
+    const _profit = _rawPay - amount;
+    const _mult = _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
+    const lockedPayout = Math.round(amount + _profit * _mult);
 
     // Deduct from main balance
     G.balance -= amount;
@@ -10279,12 +10298,12 @@ const PM = (() => {
     mkt.pools[_betOutcome] += amount;
 
     const bets = _loadBets();
-    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, mktDesc: mkt.desc, mktType: mkt.type });
+    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, mktDesc: mkt.desc, mktType: mkt.type });
     _saveBets(bets);
     _saveMarkets();
 
     closeModal('pm-bet-modal');
-    notif('Bet '+fmtKFC(amount)+' on '+_betOutcome);
+    notif('Bet '+fmtFull(amount)+' on '+_betOutcome);
     render();
 
     if(G.url && G.username){
@@ -10305,11 +10324,16 @@ const PM = (() => {
     bets.forEach(bet => {
       if(bet.mktId !== mktId) return;
       if(bet.outcome !== result){ bet.payout = 0; return; }
-      const _tp = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
-      const rawPay = (bet.amount / mkt.pools[result]) * _tp;
-      const profit = rawPay - bet.amount;
-      const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
-      bet.payout = Math.round(bet.amount + profit * mult);
+      // Use locked odds from bet time if available — guarantees player gets what was shown
+      if(bet.lockedPayout !== undefined){
+        bet.payout = bet.lockedPayout;
+      } else {
+        const _tp = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
+        const rawPay = (bet.amount / mkt.pools[result]) * _tp;
+        const profit = rawPay - bet.amount;
+        const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
+        bet.payout = Math.round(bet.amount + profit * mult);
+      }
       myTotal += bet.payout;
     });
     _saveBets(bets);
@@ -10318,7 +10342,7 @@ const PM = (() => {
       G.balance += myTotal;
       updateUI();
       const mySpend = bets.filter(b=>b.mktId===mktId&&b.outcome===result).reduce((a,b)=>a+b.amount,0);
-      setTimeout(()=>notif('Market settled '+result+' — +'+fmtKFC(myTotal-mySpend), 'win'), 300);
+      setTimeout(()=>notif('Market settled '+result+' — +'+fmtFull(myTotal-mySpend), 'win'), 300);
     }
 
     _saveMarkets();
@@ -10354,7 +10378,7 @@ const PM = (() => {
         const baseBias = 0.15 + 0.70 * ratio;
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance) * _timeFactor()));
         _markets.push(_makeMarket('season',
-          'Will '+pName+' reach '+fmtKFC(amount)+' this season?',
+          'Will '+pName+' reach '+fmtFull(amount)+' this season?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
           yesBias
         ));
@@ -10457,7 +10481,7 @@ const PM = (() => {
         const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0) * _timeFactor()));
         _markets.push(_makeMarket('race',
-          'Will '+pName+' be first to reach '+fmtKFC(amount)+'?',
+          'Will '+pName+' be first to reach '+fmtFull(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
           yesBias, 'season'
         ));
@@ -10794,10 +10818,14 @@ const PM = (() => {
             bets.forEach(bet => {
               if(bet.mktId!==sm.id || bet.payout!==null) return;
               if(bet.outcome !== sm.result){ bet.payout=0; return; }
-              const _stp = Object.values(sm.pools).reduce((a,b)=>a+b,0);
-              const rawPay = (bet.amount / sm.pools[sm.result]) * _stp;
-              const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
-              bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
+              if(bet.lockedPayout !== undefined){
+                bet.payout = bet.lockedPayout;
+              } else {
+                const _stp = Object.values(sm.pools).reduce((a,b)=>a+b,0);
+                const rawPay = (bet.amount / sm.pools[sm.result]) * _stp;
+                const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
+                bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
+              }
               credit += bet.payout;
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); }
@@ -10840,7 +10868,7 @@ const PM = (() => {
           const plCls      = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
           const escOutcome = b.outcome.replace(/'/g, "\\'");
           cashoutHTML = `<div class="pm-port-cashout">
-            <span class="pm-port-pl ${plCls}">Now: ${fmtKFC(impliedVal)} (${pl>=0?'+':''}${fmtKFC(pl)})</span>
+            <span class="pm-port-pl ${plCls}">Now: ${fmtFull(impliedVal)} (${pl>=0?'+':''}${fmtFull(pl)})</span>
             <button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${escOutcome}',${b.ts})">Cash Out</button>
           </div>`;
         }
@@ -10848,7 +10876,7 @@ const PM = (() => {
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
-            <span class="pm-port-amt">Staked ${fmtKFC(b.amount)}</span>
+            <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
             ${pct ? `<span class="pm-port-odds">${pct}% implied</span>` : ''}
             ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
           </div>
@@ -10868,12 +10896,12 @@ const PM = (() => {
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
-            <span class="pm-port-amt">Staked ${fmtKFC(b.amount)}</span>
-            <span class="pm-port-pl ${pl>0?'pos':pl<0?'neg':'zero'}">${pl>=0?'+':''}${fmtKFC(pl)}</span>
+            <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
+            <span class="pm-port-pl ${pl>0?'pos':pl<0?'neg':'zero'}">${pl>=0?'+':''}${fmtFull(pl)}</span>
           </div>
         </div>`;
       }).join('');
-      html += `<div class="pm-port-total">Net P&L: <span class="${totalPL>=0?'pos':'neg'}">${totalPL>=0?'+':''}${fmtKFC(totalPL)}</span></div>`;
+      html += `<div class="pm-port-total">Net P&L: <span class="${totalPL>=0?'pos':'neg'}">${totalPL>=0?'+':''}${fmtFull(totalPL)}</span></div>`;
     }
     el.innerHTML = html;
   }
@@ -10909,7 +10937,7 @@ const PM = (() => {
     _saveBets(bets);
     _saveMarkets();
     const pl = payout - bet.amount;
-    notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtKFC(pl), 'win');
+    notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtFull(pl), 'win');
     _renderPortfolio();
     render();
   }
@@ -10937,7 +10965,7 @@ const PM = (() => {
     const hasHist = Object.keys(_seasonHist).length > 0;
     let inputRows = players.length
       ? players.map(p => {
-          const histVal = _seasonHist[p] ? fmtKFC(_seasonHist[p]) : '';
+          const histVal = _seasonHist[p] ? fmtFull(_seasonHist[p]) : '';
           return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
             <span style="font-family:var(--mono);font-size:10px;color:var(--white);min-width:90px;text-transform:capitalize">${p}</span>
             <input type="text" class="pm-hist-input" data-player="${p}"
@@ -12034,6 +12062,8 @@ const MP2 = {
         // Save session so _expireStaleSession writes a TX row on next load (same as SP)
         if(G.player && !G.cashedOut && G._sessionActive){
           saveSession();
+          _sendTgBeacon();
+          _logSessionToSheet('RELOAD-EXIT');
           try{
             const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
             if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

@@ -11053,6 +11053,36 @@ const PM = (() => {
       const hasActiveBet = _loadBets().some(b => b.mktId===m.id && b.payout==null);
       return hasActiveBet; // keep only if a player has money on it
     });
+    // Deduplicate open shoe markets — keep only the newest instance of each logical market.
+    // Duplicates accumulate when old shoe IDs are re-injected by poll() from GAS.
+    (()=>{
+      const seen = new Map(); // key → newest market so far
+      _markets.forEach(m => {
+        if(m.type !== 'shoe' || m.status !== 'open') return;
+        const ct = m.condition && m.condition.type;
+        if(!ct) return;
+        let key = ct;
+        if(ct === 'dealer_bust_range'){
+          const p = m.condition.params;
+          key = ct + '_' + (p ? p.min+'_'+p.max : '');
+        }
+        const existing = seen.get(key);
+        if(!existing || (m.createdAt||0) > (existing.createdAt||0)){
+          seen.set(key, m);
+        }
+      });
+      const keepIds = new Set([...seen.values()].map(m => m.id));
+      const savedBets = _loadBets();
+      _markets = _markets.filter(m => {
+        if(m.type !== 'shoe' || m.status !== 'open') return true; // never touch settled/non-shoe
+        const ct = m.condition && m.condition.type;
+        if(!ct) return true;
+        if(keepIds.has(m.id)) return true;
+        // Only drop a duplicate if no player has an open bet on it (refund if they do)
+        const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
+        return hasBet;
+      });
+    })();
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){

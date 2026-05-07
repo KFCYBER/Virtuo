@@ -5106,54 +5106,101 @@ async function _sendTgNotif(){
   const _pick = arr => arr[Math.floor(Math.random()*arr.length)];
 
   let header, quip;
-  if(pnlPct >= 50){
+  if(pnlPct >= 100){
+    header = '💎 *CHAD REPORT — ABSOLUTE UNIT*';
+    quip = _pick([
+      `${name} doubled the money. At a blackjack table. Chad is speechless.`,
+      `${name} walked in with €${buyFmt} and walked out with €${balFmt}. This is not normal.`,
+      `${name} just robbed the house in broad daylight. Legally. Barely.`,
+      `${name} up ${abspct}%. The casino is reviewing the footage.`,
+      `${name} didn't play blackjack tonight. ${name} committed financial violence.`,
+      `€${abspl} profit. Chad is taking notes and reconsidering his career.`,
+      `${name} came, saw, and absolutely dismantled the house. Historic.`,
+      `Up ${abspct}% at KFC. Frame this. It does not happen twice.`
+    ]);
+  } else if(pnlPct >= 50){
     header = '🏆 *CHAD REPORT — LEGENDARY SESSION*';
     quip = _pick([
       `${name} just went FULL SAVAGE at KFC. That's not gambling, that's theft. Book a table at Nobu.`,
       `${name} absolutely dismantled the house. I'm not even mad. I'm in awe.`,
-      `${name} walked in with €${buyFmt} and walked out like a hedge fund. Actual scenes.`
+      `${name} walked in with €${buyFmt} and walked out like a hedge fund. Actual scenes.`,
+      `+${abspct}% for ${name}. The dealer needs a moment.`,
+      `${name} up €${abspl}. Clean, ruthless, and completely undeserved. Respect.`,
+      `${name} played ${hands} hands and left the table in pieces. Legendary session.`,
+      `${name} didn't come to play. ${name} came to collect.`,
+      `€${abspl} in profit. Chad is standing. Slow clap.`
     ]);
   } else if(pnlPct >= 15){
     header = '📈 *CHAD REPORT — SOLID WIN*';
     quip = _pick([
       `${name} put in the work and the cards cooperated. Respect.`,
       `${name} had a proper session. Clean, disciplined, profitable. I'll allow it.`,
-      `${name} came, played, and left richer. That's how it's done.`
+      `${name} came, played, and left richer. That's how it's done.`,
+      `+${abspct}% for ${name}. Not flashy. Just effective.`,
+      `${name} walked away up €${abspl}. The house took note.`,
+      `${hands} hands, +${abspct}%. ${name} knows what they're doing.`,
+      `Solid work from ${name}. Green, clean, and out the door.`,
+      `${name} up €${abspl}. Chad nods. Reluctantly, but he nods.`
     ]);
   } else if(pnlPct >= 1){
     header = '🃏 *CHAD REPORT — MARGINAL WIN*';
     quip = _pick([
       `${name} scraped together a win. Not exactly inspiring, but green is green.`,
       `${name} left with slightly more than they arrived with. Chad approves. Barely.`,
-      `${name} grinds out a small one. Consistent? Maybe. Exciting? Absolutely not.`
+      `${name} grinds out a small one. Consistent? Maybe. Exciting? Absolutely not.`,
+      `Up ${abspct}%, ${name}. It counts. Chad supposes.`,
+      `€${abspl} profit. Not a story you'll tell at dinner. But not a lie either.`,
+      `${name} survived and left slightly richer. The KFC special.`,
+      `Marginal green for ${name}. Profit is profit. Don't overthink it.`,
+      `${name} up €${abspl}. Green by a thread. Classic KFC energy.`
     ]);
   } else if(pnlPct > -1){
     header = '😐 *CHAD REPORT — BREAKEVEN*';
     quip = _pick([
       `${name} played for ${durStr} and ended up exactly where they started. Could've stayed home.`,
       `${name}: €${buyFmt} in, €${balFmt} out. The definition of a nothing session.`,
-      `${name} achieved perfect equilibrium. The universe remains balanced. Boring.`
+      `${name} achieved perfect equilibrium. The universe remains balanced. Boring.`,
+      `${hands} hands for ${name}. Zero gain, zero loss. A complete waste of everyone's time.`,
+      `${name} played ${durStr} and broke exactly even. The cards gave nothing. Neither did ${name}.`,
+      `Not a loss. Not a win. ${name} just… existed at the table for a bit.`,
+      `${name}: in with €${buyFmt}, out with €${balFmt}. This session never happened. Move on.`,
+      `${durStr} at the table and ${name} has absolutely nothing to show for it. Remarkable.`
     ]);
   } else if(pnlPct >= -20){
     header = '😏 *CHAD REPORT — TAKING THE L*';
     quip = _pick([
       `${name} fed the table again. At least tip the dealer.`,
       `${name} gave it a go. The house gave less back. Classic.`,
-      `Down ${abspct}%, ${name}. Not catastrophic. Just… disappointing. Better luck next time. (You'll need it.)`
+      `Down ${abspct}%, ${name}. Not catastrophic. Just… disappointing. Better luck next time. (You'll need it.)`,
+      `€${abspl} left at the table. The house thanks ${name} for their contribution.`,
+      `${name} down ${abspct}%. It happens. To everyone. Repeatedly. To some more than others.`,
+      `${name} walked away down €${abspl}. Could've been worse. It also could've been better. It wasn't.`,
+      `${hands} hands and a loss for ${name}. Walk it off. Hydrate. Do not open the app again tonight.`,
+      `Down ${abspct}% for ${name}. The cards were not your friends. They were never your friends.`
     ]);
   } else if(pnlPct >= -50){
     header = '😬 *CHAD REPORT — ROUGH NIGHT*';
     quip = _pick([
       `${name} got properly cooked. That's not a bad run, that's a pattern.`,
       `Down ${abspct}%? ${name}, we need to have a serious conversation about your relationship with this game.`,
-      `${name} left €${abspl} on the table. Literally. The dealer says thanks.`
+      `${name} left €${abspl} on the table. Literally. The dealer says thanks.`,
+      `${name} down ${abspct}%. Chad is concerned. Not enough to help. But concerned.`,
+      `€${abspl} gone. ${name}, take a break. A long one. Chad insists.`,
+      `${name} played ${hands} hands and the table won every argument. Rough.`,
+      `Down €${abspl} for ${name}. This is what variance looks like. It's not pretty.`,
+      `${name} down ${abspct}%. The table won this round. Try not to make it a habit.`
     ]);
   } else {
     header = '💀 *CHAD REPORT — DISASTER*';
     quip = _pick([
       `${name}. Mate. We need to talk. The casino called. They said thank you.`,
       `${name} down ${abspct}%. At this point the casino should name a chair after them.`,
-      `Chad has seen some sessions. This was not a session. This was a crime scene. ${name} was the victim.`
+      `Chad has seen some sessions. This was not a session. This was a crime scene. ${name} was the victim.`,
+      `Down €${abspl}. ${name}, Chad has no words. Only silence and a slowly shaking head.`,
+      `${name} down ${abspct}%. The casino lit a candle for you. Respectfully.`,
+      `€${abspl} gone in ${durStr}. This is not rock bottom. But you can see it from here.`,
+      `${name} played ${hands} hands. The table played ${name}. It wasn't close.`,
+      `Down ${abspct}% for ${name}. Some lessons cost money. This one cost a lot of it.`
     ]);
   }
 
@@ -5192,16 +5239,18 @@ function _sendTgBeacon(){
   const dur     = G._sessionStartTs ? Math.round((Date.now()-G._sessionStartTs)/60000) : 0;
   const h = Math.floor(dur/60), mn = dur%60;
   const durStr  = h ? `${h}h ${mn}m` : `${mn}m`;
-  let header;
-  if(pnlPct>=50) header='🏆 *CHAD REPORT — LEGENDARY SESSION*';
-  else if(pnlPct>=15) header='📈 *CHAD REPORT — SOLID WIN*';
-  else if(pnlPct>=1) header='🃏 *CHAD REPORT — MARGINAL WIN*';
-  else if(pnlPct>-1) header='😐 *CHAD REPORT — BREAKEVEN*';
-  else if(pnlPct>=-20) header='😏 *CHAD REPORT — TAKING THE L*';
-  else if(pnlPct>=-50) header='😬 *CHAD REPORT — ROUGH NIGHT*';
-  else header='💀 *CHAD REPORT — DISASTER*';
+  const _p = arr => arr[Math.floor(Math.random()*arr.length)];
+  let header, quip;
+  if(pnlPct>=100){ header='💎 *CHAD REPORT — ABSOLUTE UNIT*'; quip=_p([`${name} doubled the money. At a blackjack table. Chad is speechless.`,`${name} walked in with €${buyFmt} and walked out with €${balFmt}. This is not normal.`,`${name} just robbed the house in broad daylight. Legally. Barely.`,`${name} up ${abspct}%. The casino is reviewing the footage.`,`${name} didn't play blackjack tonight. ${name} committed financial violence.`,`€${abspl} profit. Chad is taking notes and reconsidering his career.`,`${name} came, saw, and absolutely dismantled the house. Historic.`,`Up ${abspct}% at KFC. Frame this. It does not happen twice.`]); }
+  else if(pnlPct>=50){ header='🏆 *CHAD REPORT — LEGENDARY SESSION*'; quip=_p([`${name} just went FULL SAVAGE at KFC. That's not gambling, that's theft. Book a table at Nobu.`,`${name} absolutely dismantled the house. I'm not even mad. I'm in awe.`,`${name} walked in with €${buyFmt} and walked out like a hedge fund. Actual scenes.`,`+${abspct}% for ${name}. The dealer needs a moment.`,`${name} up €${abspl}. Clean, ruthless, and completely undeserved. Respect.`,`${name} played ${hands} hands and left the table in pieces. Legendary session.`,`${name} didn't come to play. ${name} came to collect.`,`€${abspl} in profit. Chad is standing. Slow clap.`]); }
+  else if(pnlPct>=15){ header='📈 *CHAD REPORT — SOLID WIN*'; quip=_p([`${name} put in the work and the cards cooperated. Respect.`,`${name} had a proper session. Clean, disciplined, profitable. I'll allow it.`,`${name} came, played, and left richer. That's how it's done.`,`+${abspct}% for ${name}. Not flashy. Just effective.`,`${name} walked away up €${abspl}. The house took note.`,`${hands} hands, +${abspct}%. ${name} knows what they're doing.`,`Solid work from ${name}. Green, clean, and out the door.`,`${name} up €${abspl}. Chad nods. Reluctantly, but he nods.`]); }
+  else if(pnlPct>=1){ header='🃏 *CHAD REPORT — MARGINAL WIN*'; quip=_p([`${name} scraped together a win. Not exactly inspiring, but green is green.`,`${name} left with slightly more than they arrived with. Chad approves. Barely.`,`${name} grinds out a small one. Consistent? Maybe. Exciting? Absolutely not.`,`Up ${abspct}%, ${name}. It counts. Chad supposes.`,`€${abspl} profit. Not a story you'll tell at dinner. But not a lie either.`,`${name} survived and left slightly richer. The KFC special.`,`Marginal green for ${name}. Profit is profit. Don't overthink it.`,`${name} up €${abspl}. Green by a thread. Classic KFC energy.`]); }
+  else if(pnlPct>-1){ header='😐 *CHAD REPORT — BREAKEVEN*'; quip=_p([`${name} played for ${durStr} and ended up exactly where they started. Could've stayed home.`,`${name}: €${buyFmt} in, €${balFmt} out. The definition of a nothing session.`,`${name} achieved perfect equilibrium. The universe remains balanced. Boring.`,`${hands} hands for ${name}. Zero gain, zero loss. A complete waste of everyone's time.`,`${name} played ${durStr} and broke exactly even. The cards gave nothing. Neither did ${name}.`,`Not a loss. Not a win. ${name} just… existed at the table for a bit.`,`${name}: in with €${buyFmt}, out with €${balFmt}. This session never happened. Move on.`,`${durStr} at the table and ${name} has absolutely nothing to show for it. Remarkable.`]); }
+  else if(pnlPct>=-20){ header='😏 *CHAD REPORT — TAKING THE L*'; quip=_p([`${name} fed the table again. At least tip the dealer.`,`${name} gave it a go. The house gave less back. Classic.`,`Down ${abspct}%, ${name}. Not catastrophic. Just… disappointing. Better luck next time. (You'll need it.)`,`€${abspl} left at the table. The house thanks ${name} for their contribution.`,`${name} down ${abspct}%. It happens. To everyone. Repeatedly. To some more than others.`,`${name} walked away down €${abspl}. Could've been worse. It also could've been better. It wasn't.`,`${hands} hands and a loss for ${name}. Walk it off. Hydrate. Do not open the app again tonight.`,`Down ${abspct}% for ${name}. The cards were not your friends. They were never your friends.`]); }
+  else if(pnlPct>=-50){ header='😬 *CHAD REPORT — ROUGH NIGHT*'; quip=_p([`${name} got properly cooked. That's not a bad run, that's a pattern.`,`Down ${abspct}%? ${name}, we need to have a serious conversation about your relationship with this game.`,`${name} left €${abspl} on the table. Literally. The dealer says thanks.`,`${name} down ${abspct}%. Chad is concerned. Not enough to help. But concerned.`,`€${abspl} gone. ${name}, take a break. A long one. Chad insists.`,`${name} played ${hands} hands and the table won every argument. Rough.`,`Down €${abspl} for ${name}. This is what variance looks like. It's not pretty.`,`${name} down ${abspct}%. The table won this round. Try not to make it a habit.`]); }
+  else { header='💀 *CHAD REPORT — DISASTER*'; quip=_p([`${name}. Mate. We need to talk. The casino called. They said thank you.`,`${name} down ${abspct}%. At this point the casino should name a chair after them.`,`Chad has seen some sessions. This was not a session. This was a crime scene. ${name} was the victim.`,`Down €${abspl}. ${name}, Chad has no words. Only silence and a slowly shaking head.`,`${name} down ${abspct}%. The casino lit a candle for you. Respectfully.`,`€${abspl} gone in ${durStr}. This is not rock bottom. But you can see it from here.`,`${name} played ${hands} hands. The table played ${name}. It wasn't close.`,`Down ${abspct}% for ${name}. Some lessons cost money. This one cost a lot of it.`]); }
   const stats = [`👤 ${name}`,`💰 P&L: *${sign}€${abspl}* (${sign}${abspct}%)`,`🏦 Buy-in: €${buyFmt} → Out: €${balFmt}`,`🎯 Hands: ${hands}`,`⏱ Duration: ${durStr}`,`📊 Stake: ${stake}`].join('\n');
-  const message = `${header} _(left/reloaded)_\n\n${stats}`;
+  const message = `${header} _(left/reloaded)_\n_${quip}_\n\n${stats}`;
   const params = new URLSearchParams({action:'telegramNotify', message, pin: G._cachedPin||''});
   try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
 }

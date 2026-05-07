@@ -4565,15 +4565,26 @@ function evaluateEarlySideBets(){
 }
 
 function offerInsurance(){
+  // In MP guest mode, the insurance prompt fires 500ms after _origDeal() which used a RANDOM
+  // hole card — so the upcard that triggered this call may not be the host's real upcard.
+  // By the time this fires, _onGuestRoundStart() has already corrected G.dealer[0].
+  // Re-evaluate: if real upcard isn't an Ace, suppress the prompt; if it is, deduplicate.
+  if(G.mpMode && !MP2._isHost){
+    const upcard = G.dealer?.[0];
+    const isRealAce = upcard && !upcard._hidden && upcard.r === 'A';
+    if(!isRealAce){ _afterInsurance(); return; } // random Ace was spurious — auto-decline
+    if(MP2._guestInsuranceOffered) return;        // our own scheduled call already handled it
+    MP2._guestInsuranceOffered = true;            // SP's call arrived first — mark as handled
+  }
   const maxIns=Math.floor(G.mainBet/2);
   document.getElementById('ins-amount').textContent=fmtKFC(maxIns);
   openModal('insurance-modal');
 }
 function takeInsurance(){
   const maxIns=Math.floor(G.mainBet/2);
+  if(G.balance<maxIns){notif('Not enough balance'); return;}
   closeModal('insurance-modal');
-  if(G.balance<maxIns){notif('Not enough balance');}
-  else { G.balance-=maxIns; G.insuranceBet=maxIns; updateUI(); notif('Insurance placed — '+fmtKFC(maxIns)); }
+  G.balance-=maxIns; G.insuranceBet=maxIns; updateUI(); notif('Insurance placed — '+fmtKFC(maxIns));
   _afterInsurance();
 }
 function declineInsurance(){
@@ -4877,6 +4888,7 @@ function saveSession(){
       walletBalAtLogin: G._walletBalAtLogin,
       originalSessionStart: G._originalSessionStart,
       topUpTotal: G._topUpTotal||0,
+      sessionStartTs: G._sessionStartTs||0,
       ts:Date.now()
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
@@ -4928,6 +4940,7 @@ function restoreSession(lastUser){
     G._walletBalAtLogin = snap.walletBalAtLogin !== undefined ? snap.walletBalAtLogin : (snap.totalBalance||snap.balance);
     G._originalSessionStart = snap.originalSessionStart !== undefined ? snap.originalSessionStart : (snap.sessionStart||snap.balance);
     G._topUpTotal = snap.topUpTotal||0;
+    G._sessionStartTs = snap.sessionStartTs||snap.ts||Date.now();
     // Restore chart points
     if(snap.chartPts&&snap.chartPts.length>0){
       _chartPts.length=0;
@@ -5118,12 +5131,20 @@ async function _sendTgNotif(){
 
   const message = `${header}\n_${quip}_\n\n${stats}`;
 
-  const params = new URLSearchParams({
+  // POST the message so emojis + newlines don't hit GAS's 2048-char GET URL limit
+  const body = new URLSearchParams({
     action: 'telegramNotify',
     message,
     pin: G._cachedPin || ''
   });
-  try{ await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+  try{
+    await fetch(G.url, {
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString(),
+      redirect:'follow', cache:'no-store'
+    });
+  }catch(e){}
 }
 
 // Save session to localStorage when window/tab is closed
@@ -10453,7 +10474,7 @@ const PM = (() => {
         if(m._mwWins >= needed){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
         const remaining = total - handsInWindow;
         if(needed - m._mwWins > remaining){ settle(m.id,'NO'); _scheduleWindowRespawn(); return; }
-        if(handsInWindow >= total){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+        if(handsInWindow >= total){ settle(m.id,'NO'); _scheduleWindowRespawn(); return; }
       }
     });
 
@@ -10932,9 +10953,15 @@ const PM = (() => {
         });
         _backfilled = true;
       }
-      if(!_existTypes.has('push_streak'))       { _markets.push(_bf('2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8}})); _backfilled=true; }
-      if(!_existTypes.has('player_hot_streak')) { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
-      if(!_existTypes.has('consec_bj'))         { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
+      if(!_existTypes.has('push_streak'))            { _markets.push(_bf('2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('player_hot_streak'))      { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
+      if(!_existTypes.has('consec_bj'))              { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
+      if(!_existTypes.has('natural_bj'))             { _markets.push(_bf('Natural Blackjack in the next 8 hands?',{type:'natural_bj',params:{hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('dealer_bust_window'))     { _markets.push(_bf('Dealer busts in the next 5 hands?',{type:'dealer_bust_window',params:{hands:5,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('win_streak_window'))      { _markets.push(_bf('Player wins 3 in a row in the next 8 hands?',{type:'win_streak_window',params:{streak:3,hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('quick_bj_window'))        { _markets.push(_bf('Blackjack in the next 3 hands?',{type:'quick_bj_window',params:{hands:3,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('dealer_no_bust_window'))  { _markets.push(_bf('Dealer stays pat (no bust) for 4 straight hands?',{type:'dealer_no_bust_window',params:{hands:4,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('majority_wins_window'))   { _markets.push(_bf('Player wins 3+ of next 5 hands?',{type:'majority_wins_window',params:{wins:3,hands:5,startHand:_pmShoeHands}})); _backfilled=true; }
       if(_backfilled) _saveMarkets();
     }
     render();
@@ -10967,8 +10994,10 @@ const MP2 = {
   _guestRoundNum:   0,
   _pendingRoundStart: false,
   _lastStartedRound: -1,
-  _guestPendingReason: null,
+  _guestPendingReason:     null,
   _suppressSpuriousSettle: false,
+  _guestInsuranceNeeded:   false,
+  _guestInsuranceOffered:  false,
   _lastPushedPhase: null,
   _lastPushTime:    0,
   _origDeal:        null,
@@ -11265,7 +11294,9 @@ const MP2 = {
           if (mp2._suppressSpuriousSettle && (reason === 'dealer_bj' || reason === 'push_guard')) return;
           // Store the SP reason so _runGuestDealerPhase can pass surrender through unchanged.
           // All other reasons are recomputed from the real dealer hand once host pushes done.
-          mp2._guestPendingReason = reason;
+          // Only set if not already set — surrender always wins (it's always correct),
+          // but don't let a late spurious call overwrite a legitimate reason already stored.
+          if (!mp2._guestPendingReason || reason === 'surrender') mp2._guestPendingReason = reason;
           G.phase = 'dealer';
           if (typeof setActions === 'function') setActions(false);
           mp2._showPhaseBanner('Waiting for dealer…');
@@ -11494,11 +11525,30 @@ const MP2 = {
     const _dc = document.getElementById('dealer-cards');
     if (_dc) _dc.innerHTML = '';
     if (typeof renderAll === 'function') renderAll();
-    // If deal() took the early-return dealer-BJ path (random hole made a fake dealer BJ),
-    // setActions(true) was never called — restore play state so the guest can act.
-    if (G.phase === 'play') {
-      if (typeof setActions === 'function') setActions(true);
-      if (typeof msg === 'function') msg('YOUR TURN');
+    // Correct insurance offer based on HOST's real upcard, not the random card _origDeal() saw.
+    // _origDeal() may have scheduled offerInsurance() (random Ace) or skipped it (random non-Ace).
+    // We override that decision here using G.dealer[0] which is now the host's real upcard.
+    const _hostAce = G.dealer[0] && !G.dealer[0]._hidden && G.dealer[0].r === 'A';
+    const _guestBJ  = typeof isBJ === 'function' && isBJ(G.hands?.[0] || []);
+    this._guestInsuranceNeeded  = _hostAce && !_guestBJ;
+    this._guestInsuranceOffered = false;
+    if (this._guestInsuranceNeeded) {
+      // Lock actions while we wait for the insurance prompt
+      if (typeof setActions === 'function') setActions(false);
+      // Schedule our own call 520ms out — after SP's 500ms call (if any) fires first.
+      // offerInsurance() will deduplicate if SP's call already handled it.
+      setTimeout(() => {
+        if (!this._guestInsuranceOffered) {
+          this._guestInsuranceOffered = true;
+          if (typeof offerInsurance === 'function') offerInsurance();
+        }
+      }, 520);
+    } else {
+      // No insurance — restore play state (SP may have locked actions for a random Ace upcard)
+      if (G.phase === 'play') {
+        if (typeof setActions === 'function') setActions(true);
+        if (typeof msg === 'function') msg('YOUR TURN');
+      }
     }
     // Clear suppress flag after deal()'s 500ms settle timers have fired (+ 100ms buffer)
     setTimeout(() => { this._suppressSpuriousSettle = false; }, 600);
@@ -11767,8 +11817,10 @@ const MP2 = {
     this._guestRoundNum      = 0;
     this._pendingRoundStart  = false;
     this._lastStartedRound   = -1;
-    this._guestPendingReason = null;
+    this._guestPendingReason     = null;
     this._suppressSpuriousSettle = false;
+    this._guestInsuranceNeeded   = false;
+    this._guestInsuranceOffered  = false;
     this._roundNum           = 0;
     this._lastPushedPhase   = null;
     this._lastPushTime      = 0;

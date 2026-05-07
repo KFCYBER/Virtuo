@@ -2975,27 +2975,15 @@ body.mp-bet-locked .all-sb-btn {
 
 <!-- SETTINGS -->
 <div class="overlay" id="settings-modal">
-  <div class="modal" style="min-width:380px;max-height:80vh;overflow-y:auto">
+  <div class="modal" style="min-width:320px">
     <div style="font-size:11px;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:24px">Settings</div>
-    <div class="field-row">
-      <label>Apps Script URL</label>
-      <input type="text" id="cfg-url" placeholder="https://virtuo-proxy.kfcstaffco.workers.dev">
-    </div>
-    <div class="section-div"></div>
-    <div style="font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">Player PINs</div>
-    <div id="pin-rows"></div>
-    <div class="section-div"></div>
-    <div style="font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase;margin-bottom:14px">Notifications</div>
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <span style="font-family:var(--mono);font-size:12px;color:var(--white);letter-spacing:1px">Telegram session reports</span>
       <button id="tg-notif-toggle" onclick="_tgToggle()"
         style="font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:4px 12px;background:transparent;border:1px solid var(--green);border-radius:var(--radius);cursor:pointer;color:var(--green);transition:color .15s,border-color .15s">ON</button>
     </div>
-    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:20px;letter-spacing:1px">Push session results to Telegram on every leave / cashout</div>
-    <div style="display:flex;gap:8px;margin-top:20px">
-      <button class="btn-primary" style="flex:1" onclick="saveSettings()">Save</button>
-      <button class="btn-ghost" onclick="closeModal('settings-modal')">Cancel</button>
-    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:24px;letter-spacing:1px">Push session results to Telegram on every leave / cashout</div>
+    <button class="btn-ghost" style="width:100%" onclick="closeModal('settings-modal')">Close</button>
   </div>
 </div>
 

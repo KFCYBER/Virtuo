@@ -2162,8 +2162,12 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-tab { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 8px 18px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; text-transform: uppercase; }
 .pm-tab:hover { color: var(--white); }
 .pm-tab.active { color: var(--gold-hi); border-bottom-color: var(--gold); }
-.pm-portfolio-row { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+.pm-portfolio-row { padding: 10px 10px; border-bottom: 1px solid var(--line); transition: background .4s; }
 .pm-portfolio-row:last-child { border-bottom: none; }
+.pm-portfolio-row.settle-win  { animation: pm-settle-win  .7s ease forwards; }
+.pm-portfolio-row.settle-loss { animation: pm-settle-loss .7s ease forwards; }
+@keyframes pm-settle-win  { 0%{background:rgba(63,185,80,.25)} 100%{background:transparent} }
+@keyframes pm-settle-loss { 0%{background:rgba(220,53,69,.20)} 100%{background:transparent} }
 .pm-port-name { font-size: 11px; color: var(--white); margin-bottom: 4px; line-height: 1.3; }
 .pm-port-meta { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .pm-port-outcome { font-family: var(--mono); font-size: 9px; color: var(--gold-lo); letter-spacing: 1px; border: 1px solid rgba(201,168,76,.3); padding: 1px 6px; border-radius: 2px; }
@@ -2173,10 +2177,25 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-port-pl.pos { color: var(--green); }
 .pm-port-pl.neg { color: var(--red); }
 .pm-port-pl.zero { color: var(--muted); }
+.pm-port-to-win { font-family: var(--mono); font-size: 10px; font-weight: 700; color: var(--green); }
+.pm-port-live-pl { font-family: var(--mono); font-size: 9px; font-weight: 700; }
+.pm-port-live-pl.pos { color: var(--green); }
+.pm-port-live-pl.neg { color: var(--red); }
+.pm-port-live-pl.zero { color: var(--muted); }
+.pm-port-odds-move { font-family: var(--mono); font-size: 9px; font-weight: 700; letter-spacing: 0.5px; }
+.pm-port-odds-move.up   { color: var(--green); }
+.pm-port-odds-move.down { color: var(--red); }
 .pm-port-total { font-family: var(--mono); font-size: 10px; text-align: right; padding: 8px 10px; border-top: 1px solid var(--line2); }
 .pm-port-total .pos { color: var(--green); }
 .pm-port-total .neg { color: var(--red); }
 .pm-port-cashout { display:flex; justify-content:space-between; align-items:center; margin-top:6px; padding-top:6px; border-top:1px solid var(--line); gap:8px; }
+.pm-summary-bar { display:flex; gap:0; border-bottom:1px solid var(--line2); margin-bottom:2px; }
+.pm-summary-cell { flex:1; padding:8px 10px; text-align:center; border-right:1px solid var(--line2); }
+.pm-summary-cell:last-child { border-right:none; }
+.pm-summary-label { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:3px; }
+.pm-summary-val { font-family:var(--mono); font-size:11px; font-weight:700; color:var(--white); }
+.pm-summary-val.pos { color:var(--green); }
+.pm-summary-val.neg { color:var(--red); }
 .pm-cashout-btn { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:var(--gold-lo); background:rgba(201,168,76,.08); border:1px solid rgba(201,168,76,.3); border-radius:2px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
 .pm-cashout-btn:hover { background:rgba(201,168,76,.18); color:var(--gold-hi); }
 .pm-odds-delta { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
@@ -10290,6 +10309,7 @@ const PM = (() => {
     const _profit = _rawPay - amount;
     const _mult = _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
     const lockedPayout = Math.round(amount + _profit * _mult);
+    const entryOdds = _pct(mkt, _betOutcome); // implied % at entry — for odds movement indicator
 
     // Deduct from main balance
     G.balance -= amount;
@@ -10298,7 +10318,7 @@ const PM = (() => {
     mkt.pools[_betOutcome] += amount;
 
     const bets = _loadBets();
-    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, mktDesc: mkt.desc, mktType: mkt.type });
+    bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, entryOdds, mktDesc: mkt.desc, mktType: mkt.type });
     _saveBets(bets);
     _saveMarkets();
 
@@ -10338,15 +10358,25 @@ const PM = (() => {
     });
     _saveBets(bets);
 
-    if(myTotal > 0){
+    const mySpend = bets.filter(b=>b.mktId===mktId).reduce((a,b)=>a+b.amount,0);
+    const won = myTotal > 0;
+    const hadBet = mySpend > 0;
+
+    if(won){
       G.balance += myTotal;
       updateUI();
-      const mySpend = bets.filter(b=>b.mktId===mktId&&b.outcome===result).reduce((a,b)=>a+b.amount,0);
       setTimeout(()=>notif('Market settled '+result+' — +'+fmtFull(myTotal-mySpend), 'win'), 300);
     }
 
+    // Flash portfolio rows before re-render
+    if(hadBet){
+      document.querySelectorAll('.pm-portfolio-row[data-mkt="'+mktId+'"]').forEach(row => {
+        row.classList.add(won ? 'settle-win' : 'settle-loss');
+      });
+    }
+
     _saveMarkets();
-    render();
+    setTimeout(()=>render(), hadBet ? 750 : 0);
 
     if(G.url && G.username){
       const p = new URLSearchParams({ action:'pmSettle', mktId, result, settledBy: G.username||G.player||'' });
@@ -10849,41 +10879,95 @@ const PM = (() => {
     const open   = bets.filter(b => b.payout === null);
     const closed = [...bets.filter(b => b.payout !== null)].reverse();
     let html = '';
+
+    // ── Summary bar ──────────────────────────────────────────────
+    if(open.length){
+      let totalExposure = 0, totalToWin = 0, totalLivePL = 0;
+      open.forEach(b => {
+        const mkt = _markets.find(m => m.id === b.mktId);
+        totalExposure += b.amount;
+        totalToWin += b.lockedPayout !== undefined ? (b.lockedPayout - b.amount) : 0;
+        if(mkt && (mkt.type === 'race' || mkt.type === 'season')){
+          const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
+          const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+          const cur = pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount;
+          totalLivePL += cur - b.amount;
+        }
+      });
+      const liveCls = totalLivePL > 0 ? 'pos' : totalLivePL < 0 ? 'neg' : '';
+      html += `<div class="pm-summary-bar">
+        <div class="pm-summary-cell">
+          <div class="pm-summary-label">Exposure</div>
+          <div class="pm-summary-val">${fmtFull(totalExposure)}</div>
+        </div>
+        <div class="pm-summary-cell">
+          <div class="pm-summary-label">To Win</div>
+          <div class="pm-summary-val pos">+${fmtFull(totalToWin)}</div>
+        </div>
+        <div class="pm-summary-cell">
+          <div class="pm-summary-label">Live P&L</div>
+          <div class="pm-summary-val ${liveCls}">${totalLivePL>=0?'+':''}${fmtFull(totalLivePL)}</div>
+        </div>
+      </div>`;
+    }
+
+    // ── Open positions ────────────────────────────────────────────
     if(open.length){
       html += '<div class="pm-section-title">Open Positions</div>';
       html += open.map(b => {
         const mkt  = _markets.find(m => m.id === b.mktId);
         const name = mkt ? mkt.desc : (b.mktDesc || '(market removed)');
-        const pct  = mkt ? _pct(mkt, b.outcome) : 0;
+        const curPct = mkt ? _pct(mkt, b.outcome) : 0;
         const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE')
                         : (b.mktType ? b.mktType.toUpperCase() : '');
-        // Live P&L + cashout for open race/season positions
-        let cashoutHTML = '';
-        if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
-          // Use outcome-keyed pool so race markets (pools keyed by player name) work correctly
-          const pOut = Math.max(0, (mkt.pools[b.outcome] || 0) - (mkt.housePools[b.outcome] || 0));
-          const pTot = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
-          const impliedVal = pOut > 0 ? Math.round((b.amount / pOut) * pTot) : b.amount;
-          const pl         = impliedVal - b.amount;
-          const plCls      = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
-          const escOutcome = b.outcome.replace(/'/g, "\\'");
-          cashoutHTML = `<div class="pm-port-cashout">
-            <span class="pm-port-pl ${plCls}">Now: ${fmtFull(impliedVal)} (${pl>=0?'+':''}${fmtFull(pl)})</span>
-            <button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${escOutcome}',${b.ts})">Cash Out</button>
-          </div>`;
+
+        // To Win (locked)
+        const toWin = b.lockedPayout !== undefined ? b.lockedPayout - b.amount : null;
+        const toWinHTML = toWin !== null
+          ? `<span class="pm-port-to-win">To Win: +${fmtFull(toWin)}</span>`
+          : '';
+
+        // Odds movement indicator
+        let oddsHTML = '';
+        if(curPct && b.entryOdds != null){
+          const diff = curPct - b.entryOdds;
+          if(Math.abs(diff) >= 1){
+            const dir = diff > 0 ? 'up' : 'down';
+            oddsHTML = `<span class="pm-port-odds-move ${dir}">${diff>0?'▲':'▼'}${Math.abs(diff)}%</span>`;
+          }
         }
-        return `<div class="pm-portfolio-row">
+        const oddsLabel = curPct ? `<span class="pm-port-odds">${curPct}% implied</span>` : '';
+
+        // Live P&L + cashout (race/season only)
+        let liveHTML = '', cashoutBtn = '';
+        if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
+          const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
+          const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+          const cur  = pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount;
+          const livePL = cur - b.amount;
+          const liveCls = livePL > 0 ? 'pos' : livePL < 0 ? 'neg' : 'zero';
+          liveHTML = `<span class="pm-port-live-pl ${liveCls}">Live: ${livePL>=0?'+':''}${fmtFull(livePL)}</span>`;
+          const esc = b.outcome.replace(/'/g,"\\'");
+          cashoutBtn = `<button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${esc}',${b.ts})">Cash Out</button>`;
+        }
+
+        const hasCashout = cashoutBtn !== '';
+        return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
             <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
-            ${pct ? `<span class="pm-port-odds">${pct}% implied</span>` : ''}
+            ${toWinHTML}
+            ${oddsLabel}${oddsHTML}
+            ${liveHTML}
             ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
           </div>
-          ${cashoutHTML}
+          ${hasCashout ? `<div class="pm-port-cashout" style="justify-content:flex-end">${cashoutBtn}</div>` : ''}
         </div>`;
       }).join('');
     }
+
+    // ── History ───────────────────────────────────────────────────
     if(closed.length){
       let totalPL = 0;
       closed.forEach(b=>{ totalPL += (b.payout||0) - b.amount; });
@@ -10892,7 +10976,7 @@ const PM = (() => {
         const mkt  = _markets.find(m => m.id === b.mktId);
         const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
         const pl   = (b.payout||0) - b.amount;
-        return `<div class="pm-portfolio-row">
+        return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>

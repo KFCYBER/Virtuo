@@ -5021,7 +5021,7 @@ async function _autoSaveToSheet(){
   if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
   if(++_autoSaveHandCount % 5 !== 0) return;
   const params=new URLSearchParams({
-    action:'updatebalance', username:G.username, player:G.username,
+    action:'updatebalance', username:G.username, player:G.player||G.username,
     balance:String(G.balance),
     sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),
@@ -5029,6 +5029,99 @@ async function _autoSaveToSheet(){
     stake:G.s?G.s.label:'auto',
     pin:G._cachedPin||'',
     autosave:'true'
+  });
+  try{ await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+}
+
+// Send a session-end Telegram notification via GAS proxy.
+// Chad composes the message client-side based on P&L %; GAS just proxies to Telegram.
+// Bot token + chat ID live in GAS Script Properties (TG_TOKEN, TG_CHAT_ID) — never in client.
+async function _sendTgNotif(){
+  if(!G.url || !G.username) return;
+  const pl      = G.balance - (G.sessionStart || G.balance);
+  const buyIn   = G.sessionStart || G.balance || 1;
+  const pnlPct  = Math.round((pl / buyIn) * 100);
+  const abspl   = Math.abs(pl).toFixed(0);
+  const abspct  = Math.abs(pnlPct);
+  const sign    = pl >= 0 ? '+' : '-';
+  const name    = G.player || G.username;
+  const balFmt  = G.balance.toFixed(0);
+  const buyFmt  = buyIn.toFixed(0);
+  const stake   = G.s ? G.s.label : '';
+  const hands   = G.log ? G.log.length : 0;
+  const dur     = G._sessionStartTs ? Math.round((Date.now()-G._sessionStartTs)/60000) : 0;
+  const h = Math.floor(dur/60), mn = dur%60;
+  const durStr  = h ? `${h}h ${mn}m` : `${mn}m`;
+
+  const _pick = arr => arr[Math.floor(Math.random()*arr.length)];
+
+  let header, quip;
+  if(pnlPct >= 50){
+    header = '🏆 *CHAD REPORT — LEGENDARY SESSION*';
+    quip = _pick([
+      `${name} just went FULL SAVAGE at KFC. That's not gambling, that's theft. Book a table at Nobu.`,
+      `${name} absolutely dismantled the house. I'm not even mad. I'm in awe.`,
+      `${name} walked in with €${buyFmt} and walked out like a hedge fund. Actual scenes.`
+    ]);
+  } else if(pnlPct >= 15){
+    header = '📈 *CHAD REPORT — SOLID WIN*';
+    quip = _pick([
+      `${name} put in the work and the cards cooperated. Respect.`,
+      `${name} had a proper session. Clean, disciplined, profitable. I'll allow it.`,
+      `${name} came, played, and left richer. That's how it's done.`
+    ]);
+  } else if(pnlPct >= 1){
+    header = '🃏 *CHAD REPORT — MARGINAL WIN*';
+    quip = _pick([
+      `${name} scraped together a win. Not exactly inspiring, but green is green.`,
+      `${name} left with slightly more than they arrived with. Chad approves. Barely.`,
+      `${name} grinds out a small one. Consistent? Maybe. Exciting? Absolutely not.`
+    ]);
+  } else if(pnlPct > -1){
+    header = '😐 *CHAD REPORT — BREAKEVEN*';
+    quip = _pick([
+      `${name} played for ${durStr} and ended up exactly where they started. Could've stayed home.`,
+      `${name}: €${buyFmt} in, €${balFmt} out. The definition of a nothing session.`,
+      `${name} achieved perfect equilibrium. The universe remains balanced. Boring.`
+    ]);
+  } else if(pnlPct >= -20){
+    header = '😏 *CHAD REPORT — TAKING THE L*';
+    quip = _pick([
+      `${name} fed the table again. At least tip the dealer.`,
+      `${name} gave it a go. The house gave less back. Classic.`,
+      `Down ${abspct}%, ${name}. Not catastrophic. Just… disappointing. Better luck next time. (You'll need it.)`
+    ]);
+  } else if(pnlPct >= -50){
+    header = '😬 *CHAD REPORT — ROUGH NIGHT*';
+    quip = _pick([
+      `${name} got properly cooked. That's not a bad run, that's a pattern.`,
+      `Down ${abspct}%? ${name}, we need to have a serious conversation about your relationship with this game.`,
+      `${name} left €${abspl} on the table. Literally. The dealer says thanks.`
+    ]);
+  } else {
+    header = '💀 *CHAD REPORT — DISASTER*';
+    quip = _pick([
+      `${name}. Mate. We need to talk. The casino called. They said thank you.`,
+      `${name} down ${abspct}%. At this point the casino should name a chair after them.`,
+      `Chad has seen some sessions. This was not a session. This was a crime scene. ${name} was the victim.`
+    ]);
+  }
+
+  const stats = [
+    `👤 ${name}`,
+    `💰 P&L: *${sign}€${abspl}* (${sign}${abspct}%)`,
+    `🏦 Buy-in: €${buyFmt} → Out: €${balFmt}`,
+    `🎯 Hands: ${hands}`,
+    `⏱ Duration: ${durStr}`,
+    `📊 Stake: ${stake}`
+  ].join('\n');
+
+  const message = `${header}\n_${quip}_\n\n${stats}`;
+
+  const params = new URLSearchParams({
+    action: 'telegramNotify',
+    message,
+    pin: G._cachedPin || ''
   });
   try{ await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
 }
@@ -5239,7 +5332,7 @@ function openApp(displayName, balance){
   G.balance=balance;
   // Only reset sessionStart on a fresh login — on session restore it's already set correctly
   // by restoreSession() and must NOT be overwritten (it represents the original buy-in)
-  if(!G._sessionActive) G.sessionStart=balance;
+  if(!G._sessionActive) { G.sessionStart=balance; G._sessionStartTs=Date.now(); }
   document.getElementById('login').style.display='none';
   document.getElementById('app').style.display='flex';
   document.getElementById('app').style.flexDirection='column';
@@ -8080,6 +8173,7 @@ async function confirmCashout(){
       if(stayBtn) stayBtn.style.display='block';
       G.balance=0; updateUI();
       notif('Session saved — balance returned to wallet');
+      _sendTgNotif(); // fire-and-forget Telegram session summary
       // Refresh leaderboard now that this player's balance has updated on the sheet
       setTimeout(()=>_fetchLeaderboard(true), 1500);
     }catch(e){
@@ -9481,7 +9575,7 @@ const PM = (() => {
 
   function _isWindowShoeType(mkt){
     const t = mkt.condition && mkt.condition.type;
-    return ['natural_bj','push_streak'].includes(t);
+    return ['natural_bj','push_streak','dealer_bust_window','win_streak_window','quick_bj_window','dealer_no_bust_window','majority_wins_window'].includes(t);
   }
 
   // Live probability based on actual game state (balance/deck), not pool ratio.
@@ -9626,6 +9720,52 @@ const PM = (() => {
       let p = 0;
       for(let k=lo; k<=Math.min(hi, 30); k++) p += _binom(hLeft, k, bustP);
       return Math.round(Math.min(95, Math.max(5, p * 100)));
+    }
+
+    if(condition.type === 'dealer_bust_window'){
+      const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
+      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
+      const pAtLeastOne = 1 - Math.pow(1 - bustP, handsN);
+      return Math.round(Math.min(95, Math.max(5, pAtLeastOne * 100)));
+    }
+
+    if(condition.type === 'win_streak_window'){
+      const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
+      const aces = rem.filter(c => _cardRank(c) === 'A').length;
+      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
+      const streak = condition.params.streak || 3;
+      const handsN = Math.min(condition.params.hands || 8, Math.floor(tot / 6));
+      const windows = Math.max(1, handsN - streak + 1);
+      const pSuccess = 1 - Math.pow(1 - Math.pow(winP, streak), windows);
+      return Math.round(Math.min(88, Math.max(4, pSuccess * 100)));
+    }
+
+    if(condition.type === 'quick_bj_window'){
+      const aces = rem.filter(c => _cardRank(c) === 'A').length;
+      const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
+      const pBJHand = Math.min(0.5, 2 * (aces/tot) * (tens/tot));
+      const handsN = Math.min(condition.params.hands || 3, Math.floor(tot / 6));
+      return Math.round(Math.min(88, Math.max(3, (1 - Math.pow(1 - pBJHand, handsN)) * 100)));
+    }
+
+    if(condition.type === 'dealer_no_bust_window'){
+      const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
+      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      const handsN = Math.min(condition.params.hands || 4, Math.floor(tot / 6));
+      const pNoBust = Math.pow(1 - bustP, handsN);
+      return Math.round(Math.min(90, Math.max(5, pNoBust * 100)));
+    }
+
+    if(condition.type === 'majority_wins_window'){
+      const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
+      const aces = rem.filter(c => _cardRank(c) === 'A').length;
+      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
+      const needed = condition.params.wins || 3;
+      const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
+      let p = 0;
+      for(let k=needed; k<=handsN; k++) p += _binom(handsN, k, winP);
+      return Math.round(Math.min(88, Math.max(5, p * 100)));
     }
 
     return 50;
@@ -10149,10 +10289,15 @@ const PM = (() => {
     BUST_RANGES.forEach(r => {
       _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
     });
-    _markets.push(_yn('Natural Blackjack in the next 8 hands?',    {type:'natural_bj',        params:{hands:8, startHand:0}}));
-    _markets.push(_yn('2+ ties (push) in the next 8 hands?',       {type:'push_streak',       params:{count:2, hands:8, startHand:0}}));
-    _markets.push(_yn('Player wins 5 hands in a row this shoe?',   {type:'player_hot_streak', params:{streak:5}}));
-    _markets.push(_yn('Two consecutive blackjacks this shoe?',     {type:'consec_bj',         params:{count:2}}));
+    _markets.push(_yn('Natural Blackjack in the next 8 hands?',         {type:'natural_bj',          params:{hands:8,  startHand:0}}));
+    _markets.push(_yn('2+ ties (push) in the next 8 hands?',            {type:'push_streak',         params:{count:2,  hands:8,  startHand:0}}));
+    _markets.push(_yn('Dealer busts in the next 5 hands?',              {type:'dealer_bust_window',  params:{hands:5,  startHand:0}}));
+    _markets.push(_yn('Player wins 3 in a row in the next 8 hands?',    {type:'win_streak_window',   params:{streak:3, hands:8,  startHand:0}}));
+    _markets.push(_yn('Player wins 5 hands in a row this shoe?',        {type:'player_hot_streak',   params:{streak:5}}));
+    _markets.push(_yn('Two consecutive blackjacks this shoe?',          {type:'consec_bj',           params:{count:2}}));
+    _markets.push(_yn('Blackjack in the next 3 hands?',                 {type:'quick_bj_window',     params:{hands:3,  startHand:0}}));
+    _markets.push(_yn('Dealer stays pat (no bust) for 4 straight hands?', {type:'dealer_no_bust_window', params:{hands:4, startHand:0}}));
+    _markets.push(_yn('Player wins 3+ of next 5 hands?',               {type:'majority_wins_window', params:{wins:3,  hands:5,  startHand:0}}));
     if(_markets.length > 80) _markets = _markets.slice(-80);
     _saveMarkets();
   }
@@ -10276,6 +10421,40 @@ const PM = (() => {
         if(playerBJ && prevLastBJ){ settle(m.id,'YES'); return; }
         if(handsLeft < 2) settle(m.id,'NO');
       }
+      if(c.type === 'dealer_bust_window'){
+        if(dealerBusted){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        if(handsInWindow >= (c.params.hands||5)){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+      }
+      if(c.type === 'win_streak_window'){
+        if(!m._winStreak) m._winStreak = 0;
+        if(playerWon) m._winStreak++; else m._winStreak = 0;
+        if(m._winStreak >= (c.params.streak||3)){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        const needed = (c.params.streak||3) - m._winStreak;
+        if(handsInWindow >= (c.params.hands||8) || handsLeft < needed){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+      }
+      if(c.type === 'quick_bj_window'){
+        if(playerBJ){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        if(handsInWindow >= (c.params.hands||3)){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+      }
+      if(c.type === 'dealer_no_bust_window'){
+        if(dealerBusted){ settle(m.id,'NO'); _scheduleWindowRespawn(); return; }
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        if(handsInWindow >= (c.params.hands||4)){ settle(m.id,'YES'); _scheduleWindowRespawn(); }
+      }
+      if(c.type === 'majority_wins_window'){
+        if(!m._mwWins) m._mwWins = 0;
+        if(playerWon) m._mwWins++;
+        const handsInWindow = _pmShoeHands - (c.params.startHand||0);
+        const needed = c.params.wins || 3;
+        const total = c.params.hands || 5;
+        if(m._mwWins >= needed){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
+        const remaining = total - handsInWindow;
+        if(needed - m._mwWins > remaining){ settle(m.id,'NO'); _scheduleWindowRespawn(); return; }
+        if(handsInWindow >= total){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+      }
     });
 
     render();
@@ -10293,9 +10472,15 @@ const PM = (() => {
     const handsLeft = Math.floor(deckLeft / 6);
     if(handsLeft < 4) return; // not enough shoe left
     let changed = false;
-    const hasNatBJ   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='natural_bj');
-    const hasPushStr = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='push_streak');
+    const hasNatBJ    = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='natural_bj');
+    const hasPushStr  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='push_streak');
+    const hasBustWin  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='dealer_bust_window');
+    const hasWinStr   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='win_streak_window');
+    const hasQuickBJ  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='quick_bj_window');
+    const hasNoBust   = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='dealer_no_bust_window');
+    const hasMajWins  = _markets.some(m => m.type==='shoe' && m.status==='open' && m.condition && m.condition.type==='majority_wins_window');
     const winHands = Math.min(8, handsLeft);
+    const bustHands = Math.min(5, handsLeft);
     if(!hasNatBJ){
       const cond = {type:'natural_bj', params:{hands:winHands, startHand:_pmShoeHands}};
       const m = _makeMarket('shoe', 'Natural Blackjack in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
@@ -10305,6 +10490,37 @@ const PM = (() => {
     if(!hasPushStr){
       const cond = {type:'push_streak', params:{count:2, hands:winHands, startHand:_pmShoeHands}};
       const m = _makeMarket('shoe', '2+ ties (push) in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasBustWin){
+      const cond = {type:'dealer_bust_window', params:{hands:bustHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Dealer busts in the next '+bustHands+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasWinStr){
+      const cond = {type:'win_streak_window', params:{streak:3, hands:winHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Player wins 3 in a row in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasQuickBJ && handsLeft >= 2){
+      const cond = {type:'quick_bj_window', params:{hands:Math.min(3,handsLeft), startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Blackjack in the next '+Math.min(3,handsLeft)+' hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasNoBust){
+      const cond = {type:'dealer_no_bust_window', params:{hands:Math.min(4,handsLeft), startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Dealer stays pat (no bust) for '+Math.min(4,handsLeft)+' straight hands?', cond, _deckProb(cond)/100);
+      _markets.push(m);
+      changed = true;
+    }
+    if(!hasMajWins){
+      const mwHands = Math.min(5, handsLeft);
+      const cond = {type:'majority_wins_window', params:{wins:Math.max(2,Math.ceil(mwHands*0.6)), hands:mwHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', 'Player wins '+cond.params.wins+'+ of next '+mwHands+' hands?', cond, _deckProb(cond)/100);
       _markets.push(m);
       changed = true;
     }
@@ -10391,8 +10607,20 @@ const PM = (() => {
       if(d && Array.isArray(d.markets)){
         d.markets.forEach(sm => {
           const local = _markets.find(m => m.id===sm.id);
-          if(!local){ _markets.push(sm); }
-          else if(sm.status==='settled' && local.status==='open'){
+          if(!local){
+            // Skip logical duplicates — in MP both host and guest create markets independently
+            // with different IDs. Match by type+condition so only one copy exists per market.
+            const sp = sm.condition && sm.condition.params;
+            const logicDup = sp && _markets.some(m => {
+              if (m.type !== sm.type || m.status !== 'open' || sm.status !== 'open') return false;
+              if (!m.condition || m.condition.type !== sm.condition.type) return false;
+              const mp = m.condition.params;
+              if ((sm.type === 'season' || sm.type === 'race') && mp && sp)
+                return mp.player === sp.player && mp.amount === sp.amount;
+              return false;
+            });
+            if (!logicDup) _markets.push(sm);
+          } else if(sm.status==='settled' && local.status==='open'){
             Object.assign(local, sm);
             // Credit won bets to main balance
             const bets = _loadBets();
@@ -10740,6 +10968,7 @@ const MP2 = {
   _pendingRoundStart: false,
   _lastStartedRound: -1,
   _guestPendingReason: null,
+  _suppressSpuriousSettle: false,
   _lastPushedPhase: null,
   _lastPushTime:    0,
   _origDeal:        null,
@@ -11031,6 +11260,9 @@ const MP2 = {
           mp2._pushMyStatus();
         } else {
           // Guest: never settle early — BJ/surrender/bust/any path all route here.
+          // Suppress dealer-side reasons fired from _origDeal() with a random hole card —
+          // the suppress flag is set during the deal-and-fix window in _onGuestRoundStart.
+          if (mp2._suppressSpuriousSettle && (reason === 'dealer_bj' || reason === 'push_guard')) return;
           // Store the SP reason so _runGuestDealerPhase can pass surrender through unchanged.
           // All other reasons are recomputed from the real dealer hand once host pushes done.
           mp2._guestPendingReason = reason;
@@ -11242,6 +11474,9 @@ const MP2 = {
     if ((me.bet||0) > 0) { G.mainBet = me.bet; G.bet = me.bet; }
     // Force back to bet phase so deal() runs without bailing
     if (G.phase !== 'bet') { G.phase = 'bet'; document.body.classList.add('betting'); }
+    // Suppress any dealer-BJ settle that deal() schedules from its random hole card.
+    // The settle fires 500ms later; flag clears at 600ms after we've already re-rendered correctly.
+    this._suppressSpuriousSettle = true;
     // Call real deal() directly — bypass hook, reset flag immediately after
     this._mp2DealNow = true;
     this._origDeal?.call(window);
@@ -11259,6 +11494,14 @@ const MP2 = {
     const _dc = document.getElementById('dealer-cards');
     if (_dc) _dc.innerHTML = '';
     if (typeof renderAll === 'function') renderAll();
+    // If deal() took the early-return dealer-BJ path (random hole made a fake dealer BJ),
+    // setActions(true) was never called — restore play state so the guest can act.
+    if (G.phase === 'play') {
+      if (typeof setActions === 'function') setActions(true);
+      if (typeof msg === 'function') msg('YOUR TURN');
+    }
+    // Clear suppress flag after deal()'s 500ms settle timers have fired (+ 100ms buffer)
+    setTimeout(() => { this._suppressSpuriousSettle = false; }, 600);
   },
 
   // ─── guest dealer phase ───────────────────────────────────
@@ -11332,14 +11575,14 @@ const MP2 = {
             state: {
               phase: workerPhase, dealerHand:safeDealer, dealerHidden:(spPhase==='play'&&!G.holeRevealed),
               roundNum: this._roundNum||0,
-              players: { [this._me]: {hand:hand0, hand2:G.hands?.[1]||null, status, bet:G.mainBet||0, balance:G.balance||0, result:null, payout:0} },
+              players: { [this._me]: {hand:hand0, hand2:G.hands?.[1]||null, hand3:G.hands?.[2]||null, status, bet:G.mainBet||0, balance:G.balance||0, result:null, payout:0} },
             },
           }),
         });
       } else {
         // Don't overwrite stored bet when settling — SP zeroes G.mainBet at done phase
         // but the worker still holds the bet placed this round (needed for next _onGuestRoundStart)
-        const guestUpdate = {hand:hand0, hand2:G.hands?.[1]||null, status, balance:G.balance||0, result:null, payout:0};
+        const guestUpdate = {hand:hand0, hand2:G.hands?.[1]||null, hand3:G.hands?.[2]||null, status, balance:G.balance||0, result:null, payout:0};
         if (spPhase !== 'done') guestUpdate.bet = G.mainBet || 0;
         await fetch(`${this._url}/mp/update`, {
           method:'POST', headers:{'Content-Type':'application/json'},
@@ -11525,6 +11768,7 @@ const MP2 = {
     this._pendingRoundStart  = false;
     this._lastStartedRound   = -1;
     this._guestPendingReason = null;
+    this._suppressSpuriousSettle = false;
     this._roundNum           = 0;
     this._lastPushedPhase   = null;
     this._lastPushTime      = 0;

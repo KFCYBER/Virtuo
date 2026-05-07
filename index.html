@@ -9872,9 +9872,21 @@ const PM = (() => {
       const open = _markets.filter(m => m.type==='shoe' && m.status==='open');
       const whole      = open.filter(m => !_isWindowShoeType(m));
       const windowMkts = open.filter(m =>  _isWindowShoeType(m));
+      // Group: 0=Dealer, 1=Blackjack, 2=Player wins, 3=Other — then ascending window size within group
+      const _WO = {
+        'dealer_no_bust_window': [0, 4], 'cold_dealer_window':   [0, 5],
+        'quick_bj_window':       [1, 3], 'natural_bj':           [1, 8],
+        'no_loss_window':        [2, 3], 'majority_wins_window': [2, 5], 'win_streak_window': [2, 8],
+        'push_streak':           [3, 8], 'comeback_window':      [3, 5],
+      };
+      const sortedWindow = [...windowMkts].sort((a, b) => {
+        const [ag, as] = _WO[a.condition && a.condition.type] || [9, 9];
+        const [bg, bs] = _WO[b.condition && b.condition.type] || [9, 9];
+        return ag !== bg ? ag - bg : as - bs;
+      });
       let shoeHTML = '';
-      if(whole.length)      shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
-      if(windowMkts.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + windowMkts.map(_renderMkt).join('');
+      if(whole.length)        shoeHTML += '<div class="pm-section-title">Whole-Shoe — bet at shoe start only</div>' + whole.map(_renderMkt).join('');
+      if(sortedWindow.length) shoeHTML += '<div class="pm-section-title">Next-N-Hands — bet any time</div>' + sortedWindow.map(_renderMkt).join('');
       shoeEl.innerHTML = shoeHTML || '<div class="pm-empty">No shoe markets</div>';
     }
     if(portPane && portPane.style.display !== 'none') _renderPortfolio();
@@ -10732,8 +10744,10 @@ const PM = (() => {
         d.markets.forEach(sm => {
           const local = _markets.find(m => m.id===sm.id);
           if(!local){
-            // Skip logical duplicates — in MP both host and guest create markets independently
-            // with different IDs. Match by type+condition so only one copy exists per market.
+            // Shoe markets are purely local — never import from GAS (old shoe IDs would re-appear as duplicates)
+            if(sm.type === 'shoe') return;
+            // Skip logical duplicates for season/race — in MP both host and guest create markets
+            // independently with different IDs; match by type+condition so only one copy exists.
             const sp = sm.condition && sm.condition.params;
             const logicDup = sp && _markets.some(m => {
               if (m.type !== sm.type || m.status !== 'open' || sm.status !== 'open') return false;

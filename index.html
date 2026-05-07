@@ -5149,19 +5149,9 @@ async function _sendTgNotif(){
 
   const message = `${header}\n_${quip}_\n\n${stats}`;
 
-  // POST the message so emojis + newlines don't hit GAS's 2048-char GET URL limit
-  const body = new URLSearchParams({
-    action: 'telegramNotify',
-    message,
-    pin: G._cachedPin || ''
-  });
+  const params = new URLSearchParams({ action: 'telegramNotify', message, pin: G._cachedPin || '' });
   try{
-    await fetch(G.url, {
-      method:'POST',
-      headers:{'Content-Type':'application/x-www-form-urlencoded'},
-      body: body.toString(),
-      redirect:'follow', cache:'no-store'
-    });
+    await fetch(G.url + '?' + params.toString(), { method:'GET', redirect:'follow', cache:'no-store' });
   }catch(e){}
 }
 
@@ -5193,8 +5183,8 @@ function _sendTgBeacon(){
   else header='💀 *CHAD REPORT — DISASTER*';
   const stats = [`👤 ${name}`,`💰 P&L: *${sign}€${abspl}* (${sign}${abspct}%)`,`🏦 Buy-in: €${buyFmt} → Out: €${balFmt}`,`🎯 Hands: ${hands}`,`⏱ Duration: ${durStr}`,`📊 Stake: ${stake}`].join('\n');
   const message = `${header} _(left/reloaded)_\n\n${stats}`;
-  const body = new URLSearchParams({action:'telegramNotify', message, pin: G._cachedPin||''});
-  try{ navigator.sendBeacon(G.url, new Blob([body.toString()],{type:'application/x-www-form-urlencoded'})); }catch(e){}
+  const params = new URLSearchParams({action:'telegramNotify', message, pin: G._cachedPin||''});
+  try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
 }
 
 // Save session to localStorage when window/tab is closed

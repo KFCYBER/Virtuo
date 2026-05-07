@@ -2338,6 +2338,7 @@ body.mp-bet-locked .all-sb-btn {
       <button class="btn-ghost" id="btn-music" onclick="toggleMusicPanel()" style="font-size:13px;padding:6px 10px;letter-spacing:1px;position:relative" title="Music">♪</button>
       <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
+      <button class="btn-ghost" onclick="openModal('settings-modal')" style="font-size:13px;padding:6px 10px;letter-spacing:1px" title="Settings">⚙</button>
       <div class="badge" id="sync-badge">LOCAL</div>
       <button class="btn-ghost" onclick="showTopUp()" style="border-color:rgba(63,185,80,0.4);color:var(--green)" id="btn-topup">Top Up</button>
       <button class="btn-ghost" onclick="showCashout()">Leave Table</button>
@@ -2988,7 +2989,7 @@ body.mp-bet-locked .all-sb-btn {
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
       <span style="font-family:var(--mono);font-size:12px;color:var(--white);letter-spacing:1px">Telegram session reports</span>
       <button id="tg-notif-toggle" onclick="_tgToggle()"
-        style="font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:4px 12px;background:transparent;border:1px solid var(--line2);border-radius:var(--radius);cursor:pointer;color:var(--muted);transition:color .15s,border-color .15s">OFF</button>
+        style="font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:4px 12px;background:transparent;border:1px solid var(--green);border-radius:var(--radius);cursor:pointer;color:var(--green);transition:color .15s,border-color .15s">ON</button>
     </div>
     <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:20px;letter-spacing:1px">Push session results to Telegram on every leave / cashout</div>
     <div style="display:flex;gap:8px;margin-top:20px">
@@ -5059,12 +5060,12 @@ async function _autoSaveToSheet(){
 // Bot token + chat ID live in GAS Script Properties (TG_TOKEN, TG_CHAT_ID) — never in client.
 function _tgNotifEnabled(){
   if(!G.username) return false;
-  return localStorage.getItem('kfc_tg_notify_'+G.username.toLowerCase()) === '1';
+  return localStorage.getItem('kfc_tg_notify_'+G.username.toLowerCase()) !== '0';
 }
 function _tgToggle(){
   if(!G.username) return;
   const key = 'kfc_tg_notify_'+G.username.toLowerCase();
-  const on = localStorage.getItem(key) !== '1';
+  const on = localStorage.getItem(key) === '0'; // was OFF, now turning ON
   localStorage.setItem(key, on ? '1' : '0');
   _refreshTgToggle();
 }
@@ -10059,7 +10060,11 @@ const PM = (() => {
     });
 
     seasonEl.innerHTML = sortedKeys.map(player => {
-      const mkts = groups[player];
+      const mkts = groups[player].slice().sort((a, b) => {
+        const am = a.condition && a.condition.params && a.condition.params.amount || 0;
+        const bm = b.condition && b.condition.params && b.condition.params.amount || 0;
+        return am - bm;
+      });
       const key = player.toLowerCase().replace(/[^a-z0-9]/g,'_');
       const isMe = player.toLowerCase() === me;
       const openCount = mkts.filter(m => m.status==='open').length;
@@ -11004,8 +11009,6 @@ const PM = (() => {
   }
 
   function _openModal(){
-    const meKey = (G.username || G.player || '').toLowerCase().replace(/[^a-z0-9]/g,'_');
-    if(meKey) _expandedGroups.add(meKey);
     _switchTab('markets');
     openModal('pm-modal');
     render();

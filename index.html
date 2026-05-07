@@ -5165,6 +5165,38 @@ async function _sendTgNotif(){
   }catch(e){}
 }
 
+// Synchronous beacon version of _sendTgNotif — safe to call from beforeunload/pagehide
+function _sendTgBeacon(){
+  if(!G.url || !G.username || !G._sessionActive || G.cashedOut) return;
+  if(!_tgNotifEnabled()) return;
+  const pl      = G.balance - (G.sessionStart || G.balance);
+  const buyIn   = G.sessionStart || G.balance || 1;
+  const pnlPct  = Math.round((pl / buyIn) * 100);
+  const abspl   = Math.abs(pl).toFixed(0);
+  const abspct  = Math.abs(pnlPct);
+  const sign    = pl >= 0 ? '+' : '-';
+  const name    = G.player || G.username;
+  const balFmt  = G.balance.toFixed(0);
+  const buyFmt  = buyIn.toFixed(0);
+  const stake   = G.s ? G.s.label : '';
+  const hands   = G.log ? G.log.length : 0;
+  const dur     = G._sessionStartTs ? Math.round((Date.now()-G._sessionStartTs)/60000) : 0;
+  const h = Math.floor(dur/60), mn = dur%60;
+  const durStr  = h ? `${h}h ${mn}m` : `${mn}m`;
+  let header;
+  if(pnlPct>=50) header='🏆 *CHAD REPORT — LEGENDARY SESSION*';
+  else if(pnlPct>=15) header='📈 *CHAD REPORT — SOLID WIN*';
+  else if(pnlPct>=1) header='🃏 *CHAD REPORT — MARGINAL WIN*';
+  else if(pnlPct>-1) header='😐 *CHAD REPORT — BREAKEVEN*';
+  else if(pnlPct>=-20) header='😏 *CHAD REPORT — TAKING THE L*';
+  else if(pnlPct>=-50) header='😬 *CHAD REPORT — ROUGH NIGHT*';
+  else header='💀 *CHAD REPORT — DISASTER*';
+  const stats = [`👤 ${name}`,`💰 P&L: *${sign}€${abspl}* (${sign}${abspct}%)`,`🏦 Buy-in: €${buyFmt} → Out: €${balFmt}`,`🎯 Hands: ${hands}`,`⏱ Duration: ${durStr}`,`📊 Stake: ${stake}`].join('\n');
+  const message = `${header} _(left/reloaded)_\n\n${stats}`;
+  const body = new URLSearchParams({action:'telegramNotify', message, pin: G._cachedPin||''});
+  try{ navigator.sendBeacon(G.url, new Blob([body.toString()],{type:'application/x-www-form-urlencoded'})); }catch(e){}
+}
+
 // Save session to localStorage when window/tab is closed
 // NOTE: We do NOT sync to Google Sheets here — sheet writes only happen on explicit cashout.
 // This prevents every page reload from creating a new session log entry.
@@ -5175,6 +5207,7 @@ window.addEventListener('beforeunload', (event)=>{
     event.preventDefault();
     event.returnValue = '';
     saveSession();
+    _sendTgBeacon();
     // Mark snap for auto-sync on next open — no restore, no browser confirm
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
@@ -5187,6 +5220,7 @@ window.addEventListener('beforeunload', (event)=>{
 window.addEventListener('pagehide', ()=>{
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
     saveSession();
+    _sendTgBeacon();
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

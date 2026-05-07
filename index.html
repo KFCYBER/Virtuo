@@ -5289,7 +5289,7 @@ window.addEventListener('beforeunload', (event)=>{
 // pagehide fires on mobile when page is hidden/navigated away (more reliable than beforeunload)
 window.addEventListener('pagehide', ()=>{
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
-    saveSession();
+    if(!G.mpMode) saveSession(); // MP already called saveSession() in its beforeunload handler
     if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
@@ -11279,6 +11279,25 @@ const PM = (() => {
         return (p.player||'').toLowerCase()+'_'+(p.amount||'');
       });
     })();
+    // Refund all open shoe-market bets — shoe state is gone after reload, bets can never settle
+    (()=>{
+      const bets = _loadBets();
+      let refundTotal = 0;
+      bets.forEach(b => {
+        if(b.payout !== null && b.payout !== undefined) return;
+        const mkt = _markets.find(m => m.id === b.mktId);
+        if(!mkt || mkt.type !== 'shoe') return;
+        b.payout = b.amount; // refund stake
+        refundTotal += b.amount;
+      });
+      if(refundTotal > 0){
+        _saveBets(bets);
+        G.balance += refundTotal;
+        setTimeout(()=>notif('⟳ '+fmtFull(refundTotal)+' refunded — shoe markets reset', 'win'), 800);
+      }
+      _markets = _markets.filter(m => !(m.type === 'shoe' && m.status === 'open'));
+      _saveMarkets();
+    })();
     // Season markets are created per-player when leaderboard data arrives via onLeaderboardUpdate
     const _openShoe = _markets.filter(m => m.type==='shoe' && m.status==='open');
     if(!_openShoe.length){
@@ -12195,8 +12214,7 @@ const MP2 = {
         // Save session so _expireStaleSession writes a TX row on next load (same as SP)
         if(G.player && !G.cashedOut && G._sessionActive){
           saveSession();
-          _sendTgBeacon();
-          _logSessionToSheet('RELOAD-EXIT');
+          if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
           try{
             const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
             if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

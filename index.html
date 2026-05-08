@@ -2158,6 +2158,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-bust-bar-fill { height: 100%; background: var(--gold-lo); border-radius: 2px; transition: width .4s; }
 .pm-bust-pct { font-family: var(--mono); font-size: 9px; color: var(--gold-hi); min-width: 28px; text-align: right; }
 .pm-bust-live { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
+.pm-tracker { font-family: var(--mono); font-size: 8px; color: var(--muted2); letter-spacing: 1px; text-align: center; margin-bottom: 5px; padding: 3px 6px; background: rgba(255,255,255,.04); border-radius: 4px; }
+.pm-tracker b { color: var(--gold-hi); font-weight: 700; }
 .pm-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 0; gap: 2px; }
 .pm-tab { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 8px 18px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; text-transform: uppercase; }
 .pm-tab:hover { color: var(--white); }
@@ -10054,9 +10056,7 @@ const PM = (() => {
       ? `<div class="pm-my-bet">Your bets: ${myBets.map(b=>b.outcome+' '+fmtFull(b.amount)).join(' / ')}</div>`
       : '';
 
-    const liveHTML = isOpen
-      ? `<div class="pm-bust-live">Live: ${_pmShoeBusts} bust${_pmShoeBusts===1?'':'s'} so far this shoe</div>`
-      : '';
+    const liveHTML = isOpen ? _trackerHTML(mkt) : '';
 
     const rowsHTML = outcomes.map(o => {
       const pct = _pct(mkt, o);
@@ -10240,10 +10240,12 @@ const PM = (() => {
     const selfNote = isSelfMarket ? `<div class="pm-self-note">You can't bet on yourself</div>` : '';
     const lockNote = wholeLocked ? `<div class="pm-self-note">Betting locked — shoe already in progress</div>` : '';
 
+    const trackerHTML = _trackerHTML(mkt);
+
     return `<div class="pm-market">
       <div class="pm-market-label ${lblCls}">${isOpen?lbl:'SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
-      ${gameOddsHTML}${selfNote}${lockNote}
+      ${trackerHTML}${gameOddsHTML}${selfNote}${lockNote}
       <div class="pm-odds-row">
         <button class="pm-outcome-btn pm-yes${myY>0?' pm-user-bet':''}${isSelfMarket?' pm-self-bet':''}" ${yClick} ${dis}>
           <div class="pm-lbl">YES</div>
@@ -10256,6 +10258,76 @@ const PM = (() => {
       </div>
       ${myBetHTML}${settledHTML}
     </div>`;
+  }
+
+  // ── Market trackers ────────────────────────────────────────────────────────
+  function _trackerHTML(mkt){
+    if(!mkt || mkt.type !== 'shoe' || mkt.status !== 'open') return '';
+    const c = mkt.condition; if(!c) return '';
+    const h = _pmShoeHands;
+    const win = (start, total) => { const p = h - (start||0); return `<b>${p}</b>/<b>${total}</b>`; };
+
+    if(c.type === 'dealer_bust_range'){
+      const {min, max} = c.params;
+      const rangeStr = max >= 9999 ? min+'+ busts' : min+'–'+max+' busts';
+      return `<div class="pm-tracker">💥 Dealer busts so far: <b>${_pmShoeBusts}</b> &nbsp;·&nbsp; Target: ${rangeStr}</div>`;
+    }
+    if(c.type === 'player_hot_streak'){
+      const need = c.params.streak || 5;
+      return `<div class="pm-tracker">🔥 Win streak: <b>${_pmShoeConsec}</b> in a row &nbsp;·&nbsp; Best: <b>${_pmShoeMaxConsec}</b> &nbsp;·&nbsp; Need: <b>${need}</b></div>`;
+    }
+    if(c.type === 'consec_bj'){
+      return `<div class="pm-tracker">🃏 BJs this shoe: <b>${_pmShoeBJCount}</b> &nbsp;·&nbsp; Last hand BJ: <b>${_pmShoeLastBJ ? '✓' : '✗'}</b></div>`;
+    }
+    if(c.type === 'natural_bj'){
+      const total = c.params.hands || 8;
+      return `<div class="pm-tracker">🃏 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; BJs this shoe: <b>${_pmShoeBJCount}</b></div>`;
+    }
+    if(c.type === 'quick_bj_window'){
+      const total = c.params.hands || 3;
+      return `<div class="pm-tracker">🃏 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; BJs this shoe: <b>${_pmShoeBJCount}</b></div>`;
+    }
+    if(c.type === 'push_streak'){
+      const total = c.params.hands || 8;
+      const need  = c.params.count || 2;
+      const got   = mkt._pushCount || 0;
+      return `<div class="pm-tracker">🤝 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; Pushes: <b>${got}</b>/<b>${need}</b></div>`;
+    }
+    if(c.type === 'win_streak_window'){
+      const total = c.params.hands || 8;
+      const need  = c.params.streak || 3;
+      const got   = mkt._winStreak || 0;
+      return `<div class="pm-tracker">🏆 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; Streak: <b>${got}</b>/<b>${need}</b></div>`;
+    }
+    if(c.type === 'dealer_no_bust_window'){
+      const total = c.params.hands || 4;
+      const played = h - (c.params.startHand || 0);
+      return `<div class="pm-tracker">🛡 Window: <b>${played}</b>/<b>${total}</b> hands &nbsp;·&nbsp; Clean so far ✓</div>`;
+    }
+    if(c.type === 'majority_wins_window'){
+      const total = c.params.hands || 5;
+      const need  = c.params.wins  || 3;
+      const got   = mkt._mwWins || 0;
+      return `<div class="pm-tracker">🏆 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; Wins: <b>${got}</b>/<b>${need}</b></div>`;
+    }
+    if(c.type === 'no_loss_window'){
+      const total = c.params.hands || 3;
+      const played = h - (c.params.startHand || 0);
+      return `<div class="pm-tracker">✨ Window: <b>${played}</b>/<b>${total}</b> hands &nbsp;·&nbsp; No losses yet ✓</div>`;
+    }
+    if(c.type === 'cold_dealer_window'){
+      const total = c.params.hands || 5;
+      const need  = c.params.busts || 2;
+      const got   = mkt._cdBusts || 0;
+      return `<div class="pm-tracker">❄️ Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; Dealer busts: <b>${got}</b>/<b>${need}</b></div>`;
+    }
+    if(c.type === 'comeback_window'){
+      const total = c.params.hands || 5;
+      const played = h - (c.params.startHand || 0);
+      const state  = mkt._cbActive ? `after loss: <b>${mkt._cbWins||0}/2</b> wins` : 'waiting for loss';
+      return `<div class="pm-tracker">🔄 Window: <b>${played}</b>/<b>${total}</b> hands &nbsp;·&nbsp; ${state}</div>`;
+    }
+    return '';
   }
 
   // ── Bet modal ──────────────────────────────────────────────────────────────

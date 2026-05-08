@@ -508,13 +508,13 @@ body.pass-player #topbar {
   opacity: 0;
   transition: opacity .4s ease, background .4s ease;
 }
-body.felt-green    #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(6,26,13,0.45) 0%, rgba(4,15,8,0.52) 55%, rgba(2,7,5,0.58) 100%); }
+body.felt-green    #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(6,26,13,0.70) 0%, rgba(4,15,8,0.78) 55%, rgba(2,7,5,0.85) 100%); }
 body.felt-green    .felt-logo  { filter: hue-rotate(60deg) saturate(0.5); }
-body.felt-burgundy #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(26,6,8,0.45) 0%, rgba(15,4,5,0.52) 55%, rgba(7,2,3,0.58) 100%); }
+body.felt-burgundy #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(26,6,8,0.70) 0%, rgba(15,4,5,0.78) 55%, rgba(7,2,3,0.85) 100%); }
 body.felt-burgundy .felt-logo  { filter: hue-rotate(320deg) saturate(0.5); }
-body.felt-purple   #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(18,7,26,0.45) 0%, rgba(11,4,15,0.52) 55%, rgba(6,2,7,0.58) 100%); }
+body.felt-purple   #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(18,7,26,0.70) 0%, rgba(11,4,15,0.78) 55%, rgba(6,2,7,0.85) 100%); }
 body.felt-purple   .felt-logo  { filter: hue-rotate(250deg) saturate(0.5); }
-body.felt-blue     #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(6,16,26,0.45) 0%, rgba(4,11,15,0.52) 55%, rgba(2,5,7,0.58) 100%); }
+body.felt-blue     #table-area::before { opacity:1; background: radial-gradient(ellipse at 50% 40%, rgba(6,16,26,0.70) 0%, rgba(4,11,15,0.78) 55%, rgba(2,5,7,0.85) 100%); }
 body.felt-blue     .felt-logo  { filter: hue-rotate(180deg) saturate(0.5); }
 
 /* ── CARD BACK GEOMETRIC PATTERN ── */
@@ -4303,10 +4303,10 @@ function _playTrack(idx){
 
 // ── MP3 TRACK LIST — add filenames here when you upload to /music/ ──────────
 const MP3_TRACKS = [
+  { name: 'Clean Chips', file: 'music/KingsCasino.mp3' },
   { name: 'Crazy Rap', file: 'music/Crazy Rap (Colt 45 & 2 Zig Zags).mp3' },
   { name: 'KFC Royale', file: 'music/KFC Anthem.mp3' },
   { name: 'Clair de Lune', file: 'music/Clair de Lune (Studio Version).mp3' },
-  { name: 'Clean Chips', file: 'music/KingsCasino.mp3' },
   { name: 'Cigar Smoke', file: 'music/Cigar Smoke.mp3' },
   { name: 'Revelation Dub', file: 'music/Revelation Dub.mp3' },
 ];
@@ -4317,40 +4317,49 @@ let _mp3El = null; // <Audio> element for MP3 playback
 
 // Mode: 'synth' = Velvet Underground, 'mp3' = playing an MP3 file
 MUSIC.mode = 'synth';
-MUSIC.mp3Idx = -1; // which MP3 is active (-1 = none)
+MUSIC.mp3Idx = -1;   // which MP3 is active (-1 = none)
+MUSIC.mp3Loop = false; // true when playing a track in infinite-loop mode
 
 function _buildTrackList(){
   const list = document.getElementById('music-track-list');
   if(!list) return;
   list.innerHTML = '';
 
-  // Built-in synth track
+  // ── Infinite loop section ──────────────────────────────────
   const vu = document.createElement('div');
   vu.className = 'mtrack-btn' + (MUSIC.mode==='synth' ? ' active' : '');
-  vu.textContent = 'Velvet Underground';
+  vu.textContent = 'Velvet Underground ∞';
   vu.onclick = () => selectMusicTrack('synth', -1);
   list.appendChild(vu);
 
-  // MP3 section — only shown if there are tracks
+  // Clean Chips — infinite loop version (index 0)
+  const ccLoop = document.createElement('div');
+  ccLoop.className = 'mtrack-btn' + (MUSIC.mode==='mp3' && MUSIC.mp3Idx===0 && MUSIC.mp3Loop ? ' active' : '');
+  ccLoop.textContent = 'Clean Chips ∞';
+  ccLoop.onclick = () => selectMusicTrack('mp3', 0, true);
+  list.appendChild(ccLoop);
+
+  // ── Playlist section ──────────────────────────────────────
   if(MP3_TRACKS.length > 0){
     const div = document.createElement('div');
     div.className = 'mtrack-divider';
-    div.textContent = '— uploads —';
+    div.textContent = '— playlist —';
     list.appendChild(div);
 
     MP3_TRACKS.forEach((t, i) => {
       const btn = document.createElement('div');
-      btn.className = 'mtrack-btn' + (MUSIC.mode==='mp3' && MUSIC.mp3Idx===i ? ' active' : '');
+      btn.className = 'mtrack-btn' + (MUSIC.mode==='mp3' && MUSIC.mp3Idx===i && !MUSIC.mp3Loop ? ' active' : '');
       btn.textContent = t.name;
-      btn.onclick = () => selectMusicTrack('mp3', i);
+      btn.onclick = () => selectMusicTrack('mp3', i, false);
       list.appendChild(btn);
     });
   }
 }
 
-function selectMusicTrack(mode, idx){
+function selectMusicTrack(mode, idx, loop){
   MUSIC.mode = mode;
   MUSIC.mp3Idx = idx;
+  MUSIC.mp3Loop = !!loop;
 
   if(mode === 'synth'){
     // Stop any MP3, start synth
@@ -4364,7 +4373,7 @@ function selectMusicTrack(mode, idx){
     // Stop synth, start MP3
     _stopMusic();
     MUSIC.currentTrack = -1;
-    _playMp3(idx);
+    _playMp3(idx, !!loop);
   }
 
   _buildTrackList();
@@ -4372,22 +4381,28 @@ function selectMusicTrack(mode, idx){
   if(btn) btn.style.color = MUSIC.muted ? 'var(--muted)' : 'var(--gold-hi)';
 }
 
-function _playMp3(idx){
+function _playMp3(idx, loop){
   _stopMp3();
   if(!MP3_TRACKS[idx]) return;
   // URL-encode each path segment so filenames with spaces work correctly
   const encoded = MP3_TRACKS[idx].file.split('/').map(encodeURIComponent).join('/');
   _mp3El = new Audio(encoded);
   _mp3El.volume = MUSIC.muted ? 0 : MUSIC.volume;
+  if(loop){
+    // Infinite loop — native HTML5 audio loop attribute, no onended needed
+    _mp3El.loop = true;
+  } else {
+    // Playlist mode — auto-advance to next track when done
+    _mp3El.onended = () => {
+      const next = (idx + 1) % MP3_TRACKS.length;
+      MUSIC.mp3Idx = next;
+      MUSIC.mp3Loop = false;
+      _buildTrackList();
+      _playMp3(next, false);
+      _setNowPlaying(MP3_TRACKS[next].name);
+    };
+  }
   _mp3El.play().catch(()=>{});
-  _mp3El.onended = () => {
-    // Auto-advance to next MP3, or loop back to start
-    const next = (idx + 1) % MP3_TRACKS.length;
-    MUSIC.mp3Idx = next;
-    _buildTrackList();
-    _playMp3(next);
-    _setNowPlaying(MP3_TRACKS[next].name);
-  };
   _setNowPlaying(MP3_TRACKS[idx].name);
 }
 
@@ -4402,11 +4417,13 @@ function _setNowPlaying(name){
 
 function startMusic(){
   // Clean Chips is already playing — do nothing
-  if(MUSIC.mode === 'mp3' && MUSIC.mp3Idx === 3 && _mp3El && !_mp3El.paused) return;
+  if(MUSIC.mode === 'mp3' && MUSIC.mp3Idx === 0 && _mp3El && !_mp3El.paused) return;
   // A different MP3 is playing — don't override the user's choice
   if(MUSIC.mode === 'mp3' && _mp3El && !_mp3El.paused) return;
   MUSIC.mode = 'mp3';
-  _playMp3(3); // default: Clean Chips
+  MUSIC.mp3Idx = 0;
+  MUSIC.mp3Loop = true;
+  _playMp3(0, true); // default: Clean Chips in infinite loop
   _buildTrackList();
   const btn = document.getElementById('btn-music');
   if(btn) btn.style.color = MUSIC.muted ? 'var(--muted)' : 'var(--gold-hi)';

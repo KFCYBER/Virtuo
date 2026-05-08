@@ -10350,8 +10350,40 @@ const PM = (() => {
     }, 60);
   }
 
+  // ── Pre-render settle pass ─────────────────────────────────────────────────
+  // Settle any open race markets where we already know the balance (via _currBalances or G.balance),
+  // so they never appear as open in the UI after the threshold has been crossed.
+  function _settleKnownRaceMarkets(){
+    const myNames = [G.username, G.player].filter(Boolean);
+    let changed = false;
+    MILESTONE_AMOUNTS.forEach(amount => {
+      const openForAmount = _markets.filter(m =>
+        m.type==='race' && m.status==='open' &&
+        m.condition && m.condition.type==='bankroll_race_player' &&
+        m.condition.params && m.condition.params.amount===amount
+      );
+      if(!openForAmount.length) return;
+      openForAmount.forEach(m => {
+        const player = m.condition.params.player;
+        // Check local player directly
+        const isMe = myNames.includes(player);
+        const bal  = isMe ? G.balance : (_currBalances[(player||'').toLowerCase()]||0);
+        if(bal < amount) return;
+        // This player has crossed the threshold — settle YES for them, NO for others
+        const winner = openForAmount.find(om => om.condition.params.player === player);
+        if(!winner || winner.status !== 'open') return;
+        settle(winner.id, 'YES');
+        openForAmount.filter(om => om.id !== winner.id && om.status === 'open')
+                     .forEach(om => settle(om.id, 'NO'));
+        changed = true;
+      });
+    });
+    if(changed){ _saveMarkets(); _syncBalanceAfterPM(); }
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   function render(){
+    _settleKnownRaceMarkets();
     const balEl = document.getElementById('pm-modal-bal');
     if(balEl) balEl.textContent = fmtFull(G.balance||0);
 

@@ -504,7 +504,7 @@ body.pass-player #topbar {
   position: absolute; inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  z-index: 0;
+  z-index: -1;
   opacity: 0;
   transition: opacity .4s ease, background .4s ease;
 }
@@ -11414,7 +11414,7 @@ const PM = (() => {
           const liveCls = livePL > 0 ? 'pos' : livePL < 0 ? 'neg' : 'zero';
           liveHTML = `<span class="pm-port-live-pl ${liveCls}">Live: ${livePL>=0?'+':''}${fmtFull(livePL)}</span>`;
           const esc = b.outcome.replace(/'/g,"\\'");
-          cashoutBtn = `<button class="pm-cashout-btn" onclick="PM._cashOutBet('${b.mktId}','${esc}',${b.ts})">Cash Out</button>`;
+          cashoutBtn = `<button class="pm-cashout-btn" onclick="PM._promptCashOut('${b.mktId}','${esc}',${b.ts})">Cash Out</button>`;
         }
 
         const hasCashout = cashoutBtn !== '';
@@ -11444,11 +11444,15 @@ const PM = (() => {
         const mkt  = _markets.find(m => m.id === b.mktId);
         const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
         const pl   = (b.payout||0) - b.amount;
+        const cashoutBadge = b.cashoutEarly
+          ? `<span class="pm-port-type" style="color:var(--muted)">cashed out @ ${b.cashoutOdds??'?'}% implied</span>`
+          : '';
         return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
           <div class="pm-port-name">${name}</div>
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
             <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
+            ${cashoutBadge}
             <span class="pm-port-pl ${pl>0?'pos':pl<0?'neg':'zero'}">${pl>=0?'+':''}${fmtFull(pl)}</span>
           </div>
         </div>`;
@@ -11456,6 +11460,47 @@ const PM = (() => {
       html += `<div class="pm-port-total">Net P&L: <span class="${totalPL>=0?'pos':'neg'}">${totalPL>=0?'+':''}${fmtFull(totalPL)}</span></div>`;
     }
     el.innerHTML = html;
+  }
+
+  let _pendingCashOut = null;
+
+  function _promptCashOut(mktId, outcome, ts){
+    const bets = _loadBets();
+    const bet  = bets.find(b => b.mktId === mktId && b.outcome === outcome && b.ts === ts && b.payout === null);
+    if(!bet){ notif('Position not found'); return; }
+    const mkt = _markets.find(m => m.id === mktId);
+    if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
+    if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
+
+    const playerOut   = Math.max(0, (mkt.pools[outcome]||0) - (mkt.housePools[outcome]||0));
+    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
+    const payout = playerOut > 0 ? Math.round((bet.amount / playerOut) * playerTotal) : bet.amount;
+    const pl     = payout - bet.amount;
+    const curOdds = _pct(mkt, outcome);
+
+    document.getElementById('pm-co-type').textContent = mkt.type === 'race' ? 'RACE MARKET' : 'SEASON MARKET';
+    document.getElementById('pm-co-name').textContent = mkt.desc;
+    document.getElementById('pm-co-outcome').textContent = outcome;
+    document.getElementById('pm-co-odds').textContent = curOdds + '% implied';
+    document.getElementById('pm-co-staked').textContent = fmtFull(bet.amount);
+    const payoutEl = document.getElementById('pm-co-payout');
+    payoutEl.textContent = fmtFull(payout);
+    payoutEl.className = '';
+    payoutEl.style.color = pl > 0 ? 'var(--green)' : pl < 0 ? 'var(--red)' : 'var(--white)';
+    const plLine = document.getElementById('pm-co-pl-line');
+    plLine.textContent = pl >= 0 ? `+${fmtFull(pl)} profit` : `${fmtFull(pl)} loss`;
+    plLine.style.color = pl > 0 ? 'var(--green)' : pl < 0 ? 'var(--red)' : 'var(--muted)';
+
+    _pendingCashOut = { mktId, outcome, ts };
+    openModal('pm-cashout-confirm-modal');
+  }
+
+  function _confirmCashOut(){
+    closeModal('pm-cashout-confirm-modal');
+    if(!_pendingCashOut) return;
+    const { mktId, outcome, ts } = _pendingCashOut;
+    _pendingCashOut = null;
+    _cashOutBet(mktId, outcome, ts);
   }
 
   function _cashOutBet(mktId, outcome, ts){
@@ -11468,8 +11513,11 @@ const PM = (() => {
     // Use outcome-keyed pools directly — works for both YES/NO and race (player-name keyed) markets
     const playerOut   = Math.max(0, (mkt.pools[outcome] || 0) - (mkt.housePools[outcome] || 0));
     const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
+    const curOdds = _pct(mkt, outcome);
     if(playerOut <= 0){
       bet.payout = bet.amount;
+      bet.cashoutEarly = true;
+      bet.cashoutOdds  = curOdds;
       mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
       G.balance += bet.amount;
       updateUI();
@@ -11481,7 +11529,9 @@ const PM = (() => {
       return;
     }
     const payout = Math.round((bet.amount / playerOut) * playerTotal);
-    bet.payout   = payout;
+    bet.payout       = payout;
+    bet.cashoutEarly = true;
+    bet.cashoutOdds  = curOdds;
     // Remove stake from pool (floor at house pool to keep liquidity)
     mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
     G.balance += payout;
@@ -11764,7 +11814,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
 })();
 
 
@@ -12809,6 +12859,41 @@ const MP2 = {
     <div style="display:flex;gap:8px">
       <button class="btn-ghost" style="flex:1;padding:10px" onclick="closeModal('pm-bet-modal')">Cancel</button>
       <button class="btn-primary" style="flex:2;padding:10px" onclick="PM._confirmBet()">Confirm Bet</button>
+    </div>
+  </div>
+</div>
+
+<!-- PM CASHOUT CONFIRM MODAL -->
+<div class="overlay" id="pm-cashout-confirm-modal">
+  <div class="modal" style="min-width:300px;max-width:380px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-family:var(--sans);font-weight:800;font-size:14px;letter-spacing:2px">CASH OUT</span>
+      <button class="btn-ghost" style="padding:6px 12px;font-size:11px" onclick="closeModal('pm-cashout-confirm-modal')">✕</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px" id="pm-co-type">—</div>
+    <div style="font-size:12px;color:var(--white);margin-bottom:14px;line-height:1.4" id="pm-co-name">—</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">
+      <div style="background:rgba(255,255,255,.04);border-radius:4px;padding:10px 12px">
+        <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Outcome</div>
+        <div style="font-size:13px;font-weight:700;color:var(--gold-hi)" id="pm-co-outcome">—</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border-radius:4px;padding:10px 12px">
+        <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Current Odds</div>
+        <div style="font-size:13px;font-weight:700;color:var(--white)" id="pm-co-odds">—</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border-radius:4px;padding:10px 12px">
+        <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Staked</div>
+        <div style="font-size:13px;font-weight:700;color:var(--white)" id="pm-co-staked">—</div>
+      </div>
+      <div style="background:rgba(255,255,255,.04);border-radius:4px;padding:10px 12px">
+        <div style="font-family:var(--mono);font-size:8px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:4px">Payout</div>
+        <div style="font-size:13px;font-weight:700" id="pm-co-payout">—</div>
+      </div>
+    </div>
+    <div style="font-family:var(--mono);font-size:10px;color:var(--muted);text-align:center;margin-bottom:14px" id="pm-co-pl-line">—</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost" style="flex:1;padding:10px" onclick="closeModal('pm-cashout-confirm-modal')">Cancel</button>
+      <button class="btn-primary" style="flex:2;padding:10px" id="pm-co-confirm-btn" onclick="PM._confirmCashOut()">Confirm Cash Out</button>
     </div>
   </div>
 </div>

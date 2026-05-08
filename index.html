@@ -957,7 +957,7 @@ body.pass-player #felt-toggle-btn { display:flex; }
     gap: 0;
   }
   .tb-logo { display: flex; order: 0; padding: 4px 10px; border-bottom: 1px solid var(--line); width: 100%; box-sizing: border-box; }
-  /* Row 1: name + balance + stake badge */
+  /* Row 1: name + balance + stake badge + timer */
   .tb-center {
     position: static;
     transform: none;
@@ -970,6 +970,7 @@ body.pass-player #felt-toggle-btn { display:flex; }
     border-bottom: 1px solid var(--line);
     order: 1;
     box-sizing: border-box;
+    flex-wrap: wrap;
   }
   .tb-balance { font-size: 16px; }
   .tb-player { font-size: 11px; }
@@ -981,16 +982,24 @@ body.pass-player #felt-toggle-btn { display:flex; }
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    gap: 6px;
-    padding: 4px 10px;
+    gap: 4px;
+    padding: 4px 8px;
     box-sizing: border-box;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
   }
-  /* Cashout/sidebar buttons on mobile */
+  .tb-right::-webkit-scrollbar { display: none; }
+  /* All topbar-right buttons tight on mobile */
   .tb-right .btn-ghost {
     font-size: 9px;
-    padding: 5px 10px;
-    letter-spacing: 1px;
+    padding: 5px 7px;
+    letter-spacing: 0.5px;
+    flex-shrink: 0;
   }
+  /* Leave Table / Top Up need a bit more room for their text */
+  #btn-topup, .tb-right button:last-child { padding: 5px 10px; }
   #sync-badge { display: none; }
 
   /* ── HAND 2 SECTION ── */
@@ -1098,9 +1107,10 @@ body.pass-player #felt-toggle-btn { display:flex; }
     margin-top: 6px;
   }
   /* Stand + Hit always row 1 (50% each), Double + Split row 2 (50% each) */
+  /* !important needed: desktop rule at #play-actions .act (same specificity) comes later in file */
   #play-actions .act {
-    flex: 1 1 calc(50% - 4px);
-    min-width: 0;
+    flex: 1 1 calc(50% - 4px) !important;
+    min-width: 0 !important;
     padding: 9px 2px;
     font-size: 10px;
     letter-spacing: .5px;
@@ -1205,6 +1215,14 @@ body.pass-player #felt-toggle-btn { display:flex; }
   }
   /* Result modal number fits any screen */
   .result-num { font-size: clamp(28px, 10vw, 44px); }
+  /* Help + PM modals: preserve flex-column layout on mobile */
+  #help-modal .modal, #pm-modal .modal {
+    display: flex !important;
+    flex-direction: column !important;
+    overflow: hidden !important;
+    max-height: 88vh !important;
+  }
+  #help-modal .modal { padding: 0 !important; }
 
   /* ── DEAL BUTTON ── override inline min-width */
   #btn-deal-top {
@@ -1276,6 +1294,7 @@ body.pass-player #felt-toggle-btn { display:flex; }
   #play-bet-circle, #play-hand2-bet-circle { width: 60px !important; height: 60px !important; }
   #bet-circle { width: 56px !important; height: 56px !important; }
   .shortcut-btn { font-size: 7px; padding: 4px 3px; }
+  .pm-tracker { font-size: 7px; }
 }
 
 /* ── BET SHORTCUTS ── */
@@ -2813,7 +2832,7 @@ body.mp-bet-locked .all-sb-btn {
     <div style="margin-bottom:18px">
       <div class="info-row" style="font-weight:700;color:var(--gold-hi)"><span>Power-Up</span><span>Effect</span></div>
       <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover ½ bet</span></div>
-      <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Hand of 22 becomes a push</span></div>
+      <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe becomes a push</span></div>
       <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">All Crazy 7s payouts ×2</span></div>
       <div class="info-row"><span class="info-label">BJ Guard (3:1)</span><span class="info-val">Dealer blackjack → push</span></div>
       <div class="info-row"><span class="info-label">BJ Novak (3:1)</span><span class="info-val">Your blackjack pays 2:1 not 3:2</span></div>
@@ -3192,7 +3211,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">Safety Net <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
-          <p>If you reach exactly 22, it counts as a push instead of a bust. One-time save per shoe.</p>
+          <p>Any time you reach exactly 22 this shoe, it counts as a push instead of a bust. Stays active for the whole shoe.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Seven-Seeker <span style="color:var(--muted);font-weight:400">— High+</span></div>
@@ -3428,7 +3447,7 @@ const SB_NAMES = ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'];
 
 const POWERUPS = [
   { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10',   minStake:'mid',       chf:2.50, ratio:5 },
-  { id:'net',    label:'Safety Net',      sub:'22 → push',                minStake:'mid',       chf:2.00, ratio:4 },
+  { id:'net',    label:'Safety Net',      sub:'Any 22 this shoe → push',  minStake:'mid',       chf:2.00, ratio:4 },
   { id:'seeker', label:'Seven-Seeker',    sub:'+2× on Crazy 7s',          minStake:'high',      chf:2.00, ratio:4 },
   { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → push',         minStake:'legendary', chf:1.50, ratio:3 },
   { id:'novak',  label:'BJ Novak',        sub:'Blackjack pays 2:1',        minStake:'legendary', chf:1.50, ratio:3 },
@@ -7123,7 +7142,9 @@ function dbl(){
   const dblIdx=h.length; // index of the double-down card before push
   drawIntoHand(h, dblIdx, G.cur);
   // Jester replacement handled inside drawIntoHand — no need for manual check
-  renderAll(); advOrEnd();
+  renderAll();
+  if(hv(h)===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; notif('SAFETY NET — PUSH'); advOrEnd('safety'); return; }
+  advOrEnd();
 }
 
 function surrender(){
@@ -8022,7 +8043,7 @@ function setActions(playing){
     const canSplit=playing && curHand && curHand.length===2 &&
       cv(curHand[0])===cv(curHand[1]) && G.splits<2 && G.balance>=G.mainBet &&
       !curHand.some(c=>c.bonus&&c.bonus.jester);
-    splitEl.style.display=canSplit?'':'none';
+    splitEl.style.display=canSplit?'block':'none';
     splitEl.disabled=!canSplit;
   }
   // Surrender (in play-actions)

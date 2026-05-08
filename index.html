@@ -11213,6 +11213,30 @@ const PM = (() => {
       _markets.push(m); changed = true;
     }
     if(changed){ _saveMarkets(); render(); }
+
+    // Immediately settle race markets for the local player without waiting for a leaderboard sync.
+    // The leaderboard is sheet-driven and lags by up to one poll interval; the local balance is
+    // always current, so we check directly here after every hand.
+    const myName = G.player || G.username;
+    if(myName && G.balance > 0){
+      let raceSettled = false;
+      MILESTONE_AMOUNTS.forEach(amount => {
+        if(G.balance < amount) return;
+        const openForAmount = _markets.filter(m =>
+          m.type==='race' && m.status==='open' &&
+          m.condition && m.condition.type==='bankroll_race_player' &&
+          m.condition.params && m.condition.params.amount===amount
+        );
+        if(!openForAmount.length) return;
+        const myRace = openForAmount.find(m => m.condition.params.player===myName);
+        if(myRace){
+          settle(myRace.id,'YES');
+          openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));
+          raceSettled = true;
+        }
+      });
+      if(raceSettled){ _saveMarkets(); render(); }
+    }
   }
 
   function onStakeReached(stakeKey){

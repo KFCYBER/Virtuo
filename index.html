@@ -10459,6 +10459,17 @@ const PM = (() => {
         const fmtAmt = fmtFull(Number(amount));
         const countTxt = mkts.length+' player'+(mkts.length!==1?'s':'');
         const expanded = _expandedGroups.has(key);
+        // If someone already won this milestone, the remaining open markets are no longer "first to reach"
+        const winnerExists = _markets.some(m =>
+          m.type==='race' && m.status==='settled' && m.result==='YES' &&
+          m.condition && m.condition.params && m.condition.params.amount===Number(amount)
+        );
+        const renderedMkts = mkts.map(m => {
+          if(!winnerExists) return _renderMkt(m);
+          return _renderMkt(Object.assign({}, m, {
+            desc: m.desc.replace(/be first to reach/i, 'be next to reach')
+          }));
+        }).join('');
         return `<div class="pm-player-group">
           <button class="pm-player-toggle" onclick="PM._togglePlayerGroup('${key}')">
             <span class="pm-ptog-name">Race to ${fmtAmt}</span>
@@ -10466,7 +10477,7 @@ const PM = (() => {
             <span class="pm-ptog-chevron${expanded?'':' closed'}" id="pm-pc-${key}">▾</span>
           </button>
           <div class="pm-player-markets${expanded?'':' collapsed'}" id="pm-pm-${key}">
-            ${mkts.map(_renderMkt).join('')}
+            ${renderedMkts}
           </div>
         </div>`;
       }).join('');

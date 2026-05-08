@@ -12036,6 +12036,9 @@ const MP2 = {
     G._totalBalance         = _pendingLogin?.balance || balance;
     G._walletBalAtLogin     = G._totalBalance;
     G._originalSessionStart = balance;
+    // Load loyalty points — MP bypasses finaliseLogin() so we must seed G._pts here.
+    // Without this, G._pts stays 0 and the first sync overwrites the player's SP points.
+    if (typeof _loadPtsFromLogin === 'function') _loadPtsFromLogin(_pendingLogin?.loyaltyPoints || 0);
     document.body.classList.add('mp-active');
     const displayName = _pendingLogin?.name || G.username;
     if (typeof openApp === 'function') openApp(displayName, balance);

@@ -5376,7 +5376,11 @@ async function _autoSaveToSheet(){
     pin:G._cachedPin||'',
     autosave:'true'
   });
-  try{ await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+  try{
+    await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
+    // Refresh leaderboard so onLeaderboardUpdate sees the new balance and can settle race markets
+    if(typeof _fetchLeaderboard === 'function') _fetchLeaderboard(true);
+  }catch(e){}
 }
 
 // Send a session-end Telegram notification via GAS proxy.
@@ -11217,8 +11221,9 @@ const PM = (() => {
     // Immediately settle race markets for the local player without waiting for a leaderboard sync.
     // The leaderboard is sheet-driven and lags by up to one poll interval; the local balance is
     // always current, so we check directly here after every hand.
-    const myName = G.player || G.username;
-    if(myName && G.balance > 0){
+    // Match by both username and display name — markets store whichever the leaderboard returned first.
+    const myNames = [G.username, G.player].filter(Boolean);
+    if(myNames.length && G.balance > 0){
       let raceSettled = false;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(G.balance < amount) return;
@@ -11228,7 +11233,7 @@ const PM = (() => {
           m.condition.params && m.condition.params.amount===amount
         );
         if(!openForAmount.length) return;
-        const myRace = openForAmount.find(m => m.condition.params.player===myName);
+        const myRace = openForAmount.find(m => myNames.includes(m.condition.params.player));
         if(myRace){
           settle(myRace.id,'YES');
           openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));

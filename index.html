@@ -2160,6 +2160,29 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-bust-live { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
 .pm-tracker { font-family: var(--mono); font-size: 8px; color: var(--muted2); letter-spacing: 1px; text-align: center; margin-bottom: 5px; padding: 3px 6px; background: rgba(255,255,255,.04); border-radius: 4px; }
 .pm-tracker b { color: var(--gold-hi); font-weight: 700; }
+/* ── Help modal ─────────────────────────────────────────────────────────── */
+#help-modal .modal { max-width: 520px; width: 94vw; padding: 0; overflow: hidden; max-height: 88vh; display: flex; flex-direction: column; }
+.help-header { padding: 22px 24px 0; flex-shrink: 0; }
+.help-title { font-size: 11px; letter-spacing: 4px; color: var(--muted); text-transform: uppercase; margin-bottom: 16px; }
+.help-tabs { display: flex; border-bottom: 1px solid var(--line); gap: 0; overflow-x: auto; scrollbar-width: none; }
+.help-tabs::-webkit-scrollbar { display: none; }
+.help-tab { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 8px 14px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; white-space: nowrap; text-transform: uppercase; transition: all .15s; flex-shrink: 0; }
+.help-tab:hover { color: var(--white); }
+.help-tab.active { color: var(--gold-hi); border-bottom-color: var(--gold); }
+.help-body { padding: 20px 24px 24px; overflow-y: auto; flex: 1; }
+.help-section { display: none; }
+.help-section.active { display: block; }
+.help-h1 { font-size: 13px; color: var(--white); letter-spacing: 2px; margin-bottom: 4px; font-weight: 700; }
+.help-lead { font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.6; margin-bottom: 16px; }
+.help-card { background: rgba(255,255,255,.04); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+.help-card-title { font-size: 10px; letter-spacing: 2px; color: var(--gold-lo); font-weight: 700; margin-bottom: 6px; text-transform: uppercase; }
+.help-card p { font-family: var(--mono); font-size: 9px; color: var(--muted2); line-height: 1.65; margin: 0; }
+.help-row { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,.05); }
+.help-row:last-child { border-bottom: none; }
+.help-row-label { font-family: var(--mono); font-size: 9px; color: var(--muted2); }
+.help-row-val { font-family: var(--mono); font-size: 9px; color: var(--gold-hi); font-weight: 700; }
+.help-note { font-family: var(--mono); font-size: 8px; color: var(--muted); margin-top: 10px; line-height: 1.6; padding: 8px 10px; border-left: 2px solid var(--gold-lo); }
+.help-close-row { padding: 0 24px 20px; flex-shrink: 0; }
 .pm-tabs { display: flex; border-bottom: 1px solid var(--line); margin-bottom: 0; gap: 2px; }
 .pm-tab { font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted); padding: 8px 18px; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; text-transform: uppercase; }
 .pm-tab:hover { color: var(--white); }
@@ -2357,9 +2380,10 @@ body.mp-bet-locked .all-sb-btn {
       <span id="session-timer" title="Session duration">00:00</span>
       <button class="btn-ghost" id="btn-share" onclick="shareLastHand()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Share last hand">↗</button>
       <button class="btn-ghost" id="btn-music" onclick="toggleMusicPanel()" style="font-size:13px;padding:6px 10px;letter-spacing:1px;position:relative" title="Music">♪</button>
-      <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" id="felt-toggle-btn" onclick="toggleFelt()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle table colour">🎨</button>
+      <button class="btn-ghost" id="sidebar-toggle" onclick="toggleSidebar()" style="font-size:11px;padding:6px 10px;letter-spacing:1px" title="Toggle sidebar">⊞</button>
       <button class="btn-ghost" onclick="openModal('settings-modal')" style="font-size:13px;padding:6px 10px;letter-spacing:1px" title="Settings">⚙</button>
+      <button class="btn-ghost" onclick="openModal('help-modal')" style="font-size:13px;padding:6px 10px;letter-spacing:1px;font-weight:700" title="Help">?</button>
       <button class="btn-ghost" onclick="showTopUp()" style="border-color:rgba(63,185,80,0.4);color:var(--green)" id="btn-topup">Top Up</button>
       <button class="btn-ghost" onclick="showCashout()">Leave Table</button>
     </div>
@@ -3004,6 +3028,242 @@ body.mp-bet-locked .all-sb-btn {
     </div>
     <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:24px;letter-spacing:1px">Push session results to Telegram on every leave / cashout</div>
     <button class="btn-ghost" style="width:100%" onclick="closeModal('settings-modal')">Close</button>
+  </div>
+</div>
+
+<!-- ── HELP MODAL ─────────────────────────────────────────────────────────── -->
+<div class="overlay" id="help-modal">
+  <div class="modal">
+    <div class="help-header">
+      <div class="help-title">How to Play</div>
+      <div class="help-tabs">
+        <button class="help-tab active" onclick="helpTab('basics')">Basics</button>
+        <button class="help-tab" onclick="helpTab('stakes')">Stakes</button>
+        <button class="help-tab" onclick="helpTab('sidebets')">Side Bets</button>
+        <button class="help-tab" onclick="helpTab('bonuscards')">Bonus Cards</button>
+        <button class="help-tab" onclick="helpTab('powerups')">Power-Ups</button>
+        <button class="help-tab" onclick="helpTab('markets')">Markets</button>
+        <button class="help-tab" onclick="helpTab('loyalty')">Points</button>
+      </div>
+    </div>
+
+    <div class="help-body">
+
+      <!-- BASICS -->
+      <div class="help-section active" id="help-basics">
+        <div class="help-h1">The Game</div>
+        <p class="help-lead">Standard 6-deck Blackjack. Beat the dealer without going over 21. You know the rules — here's what's different at KFC.</p>
+        <div class="help-card">
+          <div class="help-card-title">Payouts</div>
+          <div class="help-row"><span class="help-row-label">Blackjack</span><span class="help-row-val">3:2</span></div>
+          <div class="help-row"><span class="help-row-label">Win</span><span class="help-row-val">1:1</span></div>
+          <div class="help-row"><span class="help-row-label">Insurance</span><span class="help-row-val">2:1</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Shoes &amp; Sessions</div>
+          <p>Each session runs through a set number of shoes. Standard players get 5 shoes per day. 21 Club Pass holders get 15. When you cash out, your balance is locked in — you can't reload into the same session.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Tax</div>
+          <p>A small rake is applied to winnings at each stake level — it scales up at higher stakes. Shown in your session log breakdown.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Need the full rules?</div>
+          <p>Hit, Stand, Double Down, Split — all work as standard. Splits are allowed on any matching rank. Double Down is available on any two-card total.</p>
+        </div>
+      </div>
+
+      <!-- STAKES -->
+      <div class="help-section" id="help-stakes">
+        <div class="help-h1">Stakes</div>
+        <p class="help-lead">Eight stake levels across two tiers. Your stake sets your chip denominations, minimum bet, and tax rate. Change it from the topbar badge between hands.</p>
+        <div class="help-card">
+          <div class="help-card-title">Standard Tier</div>
+          <div class="help-row"><span class="help-row-label">Low</span><span class="help-row-val">min 5 · max 100</span></div>
+          <div class="help-row"><span class="help-row-label">Mid</span><span class="help-row-val">min 50 · max 1,000</span></div>
+          <div class="help-row"><span class="help-row-label">High</span><span class="help-row-val">min 500 · max 10,000</span></div>
+          <div class="help-row"><span class="help-row-label">Royale</span><span class="help-row-val">min 5,000 · max 100,000</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">VIP Tier</div>
+          <div class="help-row"><span class="help-row-label">Legendary</span><span class="help-row-val">min 50K · max 10M</span></div>
+          <div class="help-row"><span class="help-row-label">Mythic</span><span class="help-row-val">min 500K · max 100M</span></div>
+          <div class="help-row"><span class="help-row-label">High-Roller</span><span class="help-row-val">min 5M · max 1B</span></div>
+          <div class="help-row"><span class="help-row-label">Champion</span><span class="help-row-val">min 50M · max 10B</span></div>
+        </div>
+        <div class="help-note">You can only move up one stake level at a time. Dropping requires you to have fallen below your peak balance at that level.</div>
+      </div>
+
+      <!-- SIDE BETS -->
+      <div class="help-section" id="help-sidebets">
+        <div class="help-h1">Side Bets</div>
+        <p class="help-lead">Optional bets placed before the deal. Tap the circles around the main bet to cycle through amounts. All side bets are independent of your main hand result.</p>
+        <div class="help-card">
+          <div class="help-card-title">Perfect Pairs</div>
+          <p>Bet that your first two cards form a pair.</p>
+          <div class="help-row" style="margin-top:8px"><span class="help-row-label">Mixed Pair (2–9)</span><span class="help-row-val">8:1</span></div>
+          <div class="help-row"><span class="help-row-label">Mixed Pair (10–A)</span><span class="help-row-val">10:1</span></div>
+          <div class="help-row"><span class="help-row-label">Coloured Pair (2–9)</span><span class="help-row-val">10:1</span></div>
+          <div class="help-row"><span class="help-row-label">Coloured Pair (10–A)</span><span class="help-row-val">15:1</span></div>
+          <div class="help-row"><span class="help-row-label">Perfect Pair (2–9)</span><span class="help-row-val">25:1</span></div>
+          <div class="help-row"><span class="help-row-label">Perfect Pair (10–A)</span><span class="help-row-val">50:1</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">21+3</div>
+          <p>Combines your two cards with the dealer's upcard into a 3-card poker hand.</p>
+          <div class="help-row" style="margin-top:8px"><span class="help-row-label">Flush</span><span class="help-row-val">5:1</span></div>
+          <div class="help-row"><span class="help-row-label">Straight</span><span class="help-row-val">10–15:1</span></div>
+          <div class="help-row"><span class="help-row-label">Three of a Kind</span><span class="help-row-val">25:1</span></div>
+          <div class="help-row"><span class="help-row-label">Straight Flush</span><span class="help-row-val">30–40:1</span></div>
+          <div class="help-row"><span class="help-row-label">Suited Three of a Kind</span><span class="help-row-val">100:1</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Crazy 7s</div>
+          <p>Pays on 7s appearing in your hand. More 7s = bigger multiplier. Dealer 7 adds a bonus.</p>
+          <div class="help-row" style="margin-top:8px"><span class="help-row-label">First card is a 7</span><span class="help-row-val">5:1</span></div>
+          <div class="help-row"><span class="help-row-label">Second card is a 7</span><span class="help-row-val">+3:1</span></div>
+          <div class="help-row"><span class="help-row-label">Two 7s</span><span class="help-row-val">20:1</span></div>
+          <div class="help-row"><span class="help-row-label">Two 7s — same suit</span><span class="help-row-val">30:1</span></div>
+          <div class="help-row"><span class="help-row-label">7 player + 7 dealer up</span><span class="help-row-val">10:1</span></div>
+          <div class="help-row"><span class="help-row-label">Three 7s</span><span class="help-row-val">25:1</span></div>
+          <div class="help-row"><span class="help-row-label">Three 7s — same suit</span><span class="help-row-val">50:1</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Dealer Bust</div>
+          <p>Bet that the dealer busts. Pays more the more cards it takes the dealer to bust.</p>
+          <div class="help-row" style="margin-top:8px"><span class="help-row-label">Bust in 3 cards</span><span class="help-row-val">1:1</span></div>
+          <div class="help-row"><span class="help-row-label">Bust in 4 cards</span><span class="help-row-val">2:1</span></div>
+          <div class="help-row"><span class="help-row-label">Bust in 5 cards</span><span class="help-row-val">6:1</span></div>
+          <div class="help-row"><span class="help-row-label">Bust in 6 cards</span><span class="help-row-val">12:1</span></div>
+          <div class="help-row"><span class="help-row-label">Bust in 7 cards</span><span class="help-row-val">25:1</span></div>
+          <div class="help-row"><span class="help-row-label">Bust in 8+ cards</span><span class="help-row-val">50:1</span></div>
+        </div>
+      </div>
+
+      <!-- BONUS CARDS -->
+      <div class="help-section" id="help-bonuscards">
+        <div class="help-h1">Bonus Cards</div>
+        <p class="help-lead">Special cards that appear randomly in the shoe. When one lands in your hand it triggers automatically — no action needed.</p>
+        <div class="help-card">
+          <div class="help-card-title">Stamped Card <span style="color:var(--muted);font-weight:400">— 1 in 17</span></div>
+          <p>Peek at up to 3 upcoming cards, then choose to increase your bet by up to your original wager before they're dealt.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Gold Card <span style="color:var(--muted);font-weight:400">— 1 in 26</span></div>
+          <p>Grants a free Dealer Bust side bet worth 1× the table minimum. House money — no cost to you.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Scarface <span style="color:var(--muted);font-weight:400">— 1 in 26</span></div>
+          <p>Instant payout of ½ the table minimum, added to your balance immediately.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Arrow Card <span style="color:var(--muted);font-weight:400">— 1 in 26</span></div>
+          <p>Free double-down — no extra bet required. Land two Arrow Cards in one hand for a double-double-down.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Krueger <span style="color:var(--muted);font-weight:400">— 1 in 26</span></div>
+          <p>Bust insurance: if you bust, you get back half your initial wager (side bets excluded).</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Ice Card <span style="color:var(--muted);font-weight:400">— 1 in 52</span></div>
+          <p>Instant payout equal to the full table minimum, added immediately.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Desert Card <span style="color:var(--muted);font-weight:400">— 1 in 52</span></div>
+          <p>Full protection for that hand: any outcome that would be a loss or bust becomes a push instead.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Steel Card <span style="color:var(--muted);font-weight:400">— 1 in 52</span></div>
+          <p>If you hit Blackjack with this card in hand, it pays 2:1 instead of 3:2.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Jesters <span style="color:var(--muted);font-weight:400">— 1 in 52</span></div>
+          <p><b style="color:var(--white)">Blood Jester</b> — earns you a 2× leverage hand usable in a future round.<br><br><b style="color:var(--white)">Plague Jester</b> — the dealer adds an amount equal to your wager into the Plague Pot, which builds until it pays out.</p>
+        </div>
+      </div>
+
+      <!-- POWER-UPS -->
+      <div class="help-section" id="help-powerups">
+        <div class="help-h1">Power-Ups</div>
+        <p class="help-lead">Purchasable upgrades that last one shoe. Buy them with loyalty points from the ⭐ panel. Standard players can hold 1 at a time; 21 Club Pass holders can hold 2.</p>
+        <div class="help-card">
+          <div class="help-card-title">Surrender Sally <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
+          <p>Lets you surrender against a dealer 10-upcard, recovering half your bet. Normally surrender isn't available at KFC.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Safety Net <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
+          <p>If you reach exactly 22, it counts as a push instead of a bust. One-time save per shoe.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Seven-Seeker <span style="color:var(--muted);font-weight:400">— High+</span></div>
+          <p>Doubles all Crazy 7s side bet payouts for the entire shoe.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">BJ Guard <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
+          <p>If the dealer hits Blackjack, your hand becomes a push instead of a loss — no insurance needed.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">BJ Novak <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
+          <p>Your Blackjack pays 2:1 instead of 3:2 for the whole shoe. Stack it with a Steel Card for maximum effect.</p>
+        </div>
+        <div class="help-note">Points can also be spent on tokens: 2× Leverage (⭐35), Insurance token (⭐25), All Side Bets min (⭐40), Extra shoe (⭐50 standard / ⭐30 pass).</div>
+      </div>
+
+      <!-- PREDICTION MARKETS -->
+      <div class="help-section" id="help-markets">
+        <div class="help-h1">Prediction Markets</div>
+        <p class="help-lead">Bet on what's going to happen — before it does. Tap <b style="color:var(--gold-hi)">MARKETS</b> in the top-left to open the panel.</p>
+        <div class="help-card">
+          <div class="help-card-title">Shoe Markets — Bet Any Time</div>
+          <p>Short-window bets that reset each shoe. Examples: "Blackjack in the next 3 hands?", "Dealer busts 2+ times in the next 5 hands?". Each market shows a live tracker so you can follow progress. Odds are fixed at the moment you bet — what you see is what you get.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Whole-Shoe Markets</div>
+          <p>Bigger bets that run the length of a shoe: "Player wins 5 in a row this shoe?", "Dealer busts 15–17 times?". These lock once the shoe starts — bet before the first hand.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Season Markets</div>
+          <p>Long-run milestone bets: "Will [player] reach 1,000,000 KFC this season?". Settle at the end of the season based on real leaderboard balances.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">Race Markets</div>
+          <p>First-to-reach bets between multiple players heading toward the same milestone. Multiple players, one winner.</p>
+        </div>
+        <div class="help-note">Your Portfolio tab shows all open positions with live P&amp;L, odds movement, and To Win amounts. Settled bets stay visible for one session for reference.</div>
+      </div>
+
+      <!-- LOYALTY POINTS -->
+      <div class="help-section" id="help-loyalty">
+        <div class="help-h1">Loyalty Points ⭐</div>
+        <p class="help-lead">Earned automatically as you play. Spend them on power-ups and tokens between hands via the ⭐ panel.</p>
+        <div class="help-card">
+          <div class="help-card-title">How You Earn</div>
+          <div class="help-row"><span class="help-row-label">Per hand dealt</span><span class="help-row-val">+1 pt</span></div>
+          <div class="help-row"><span class="help-row-label">Per winning hand</span><span class="help-row-val">+2 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Per Blackjack</span><span class="help-row-val">+3 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Per side bet win</span><span class="help-row-val">+2 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Completing a shoe</span><span class="help-row-val">+10 pts</span></div>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">21 Club Pass Bonus</div>
+          <p>Pass holders earn 1.5× on all points. They also get 15 shoes per day (vs 5 for standard), 2 power-up slots per shoe, and access to a free daily power-up.</p>
+        </div>
+        <div class="help-card">
+          <div class="help-card-title">What to Spend On</div>
+          <div class="help-row"><span class="help-row-label">Power-Ups (Sally, Net, Seeker…)</span><span class="help-row-val">35–60 pts</span></div>
+          <div class="help-row"><span class="help-row-label">2× Leverage token</span><span class="help-row-val">35 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Insurance token</span><span class="help-row-val">25 pts</span></div>
+          <div class="help-row"><span class="help-row-label">All Side Bets min</span><span class="help-row-val">40 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Extra shoe (standard)</span><span class="help-row-val">50 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Extra shoe (pass)</span><span class="help-row-val">30 pts</span></div>
+        </div>
+      </div>
+
+    </div><!-- /help-body -->
+
+    <div class="help-close-row">
+      <button class="btn-ghost" style="width:100%" onclick="closeModal('help-modal')">Close</button>
+    </div>
   </div>
 </div>
 
@@ -8361,6 +8621,13 @@ function saveSettings(){
 // ── MODALS ──────────────────────────────────────────────
 function openModal(id){document.getElementById(id).classList.add('open');if(id==='pu-info-modal')buildPuPriceTable();if(id==='settings-modal')_refreshTgToggle();}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
+function helpTab(name){
+  document.querySelectorAll('.help-tab').forEach(b=>b.classList.remove('active'));
+  document.querySelectorAll('.help-section').forEach(s=>s.classList.remove('active'));
+  document.getElementById('help-'+name).classList.add('active');
+  const btn = [...document.querySelectorAll('.help-tab')].find(b=>b.getAttribute('onclick')==="helpTab('"+name+"')");
+  if(btn){ btn.classList.add('active'); btn.scrollIntoView({behavior:'smooth',block:'nearest',inline:'center'}); }
+}
 
 // Close overlays on backdrop click
 document.addEventListener&&document.addEventListener('DOMContentLoaded',()=>{

@@ -10441,15 +10441,12 @@ const PM = (() => {
   }
 
   function _renderRaceSection(raceEl, raceSect){
-    const all = [
-      ..._markets.filter(m => m.type==='race' && m.status==='open'),
-      ..._markets.filter(m => m.type==='race' && m.status==='settled').slice(-4),
-    ];
-    if(!all.length){ if(raceSect) raceSect.style.display = 'none'; return; }
+    const openRace = _markets.filter(m => m.type==='race' && m.status==='open');
+    if(!openRace.length){ if(raceSect) raceSect.style.display = 'none'; return; }
     if(raceSect) raceSect.style.display = '';
-    // Group by milestone amount
+    // Group by milestone amount — only show open markets
     const groups = {};
-    all.forEach(m => {
+    openRace.forEach(m => {
       const amt = m.condition && m.condition.params && m.condition.params.amount;
       if(!amt) return;
       if(!groups[amt]) groups[amt] = [];
@@ -10460,9 +10457,7 @@ const PM = (() => {
       .map(([amount, mkts]) => {
         const key = 'race_'+amount;
         const fmtAmt = fmtFull(Number(amount));
-        const openCount = mkts.filter(m=>m.status==='open').length;
-        const settled = mkts.length - openCount;
-        const countTxt = openCount+' open'+(settled?', '+settled+' settled':'');
+        const countTxt = mkts.length+' player'+(mkts.length!==1?'s':'');
         const expanded = _expandedGroups.has(key);
         return `<div class="pm-player-group">
           <button class="pm-player-toggle" onclick="PM._togglePlayerGroup('${key}')">

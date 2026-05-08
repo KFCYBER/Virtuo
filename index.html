@@ -5541,14 +5541,16 @@ async function _sendTgNotif(){
 function _sendTgBeacon(){
   if(!G.url || !G.username || !G._sessionActive || G.cashedOut) return;
   if(!_tgNotifEnabled()) return;
-  const pl      = G.balance - (G.sessionStart || G.balance);
-  const buyIn   = G.sessionStart || G.balance || 1;
+  // Use preDealBal when mid-hand so a bet in-flight doesn't make balance look like 0
+  const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
+  const pl      = safeBalance - (G.sessionStart || safeBalance);
+  const buyIn   = G.sessionStart || safeBalance || 1;
   const pnlPct  = Math.round((pl / buyIn) * 100);
   const abspl   = Math.abs(pl).toFixed(0);
   const abspct  = Math.abs(pnlPct);
   const sign    = pl >= 0 ? '+' : '-';
   const name    = G.player || G.username;
-  const balFmt  = G.balance.toFixed(0);
+  const balFmt  = safeBalance.toFixed(0);
   const buyFmt  = buyIn.toFixed(0);
   const stake   = G.s ? G.s.label : '';
   const hands   = G.log ? G.log.length : 0;

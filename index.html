@@ -11333,8 +11333,10 @@ const PM = (() => {
         }
 
         const hasCashout = cashoutBtn !== '';
+        const trackerHTML = mkt && mkt.status === 'open' ? _trackerHTML(mkt) : '';
         return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
           <div class="pm-port-name">${name}</div>
+          ${trackerHTML}
           <div class="pm-port-meta">
             <span class="pm-port-outcome">${b.outcome}</span>
             <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>

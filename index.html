@@ -10459,11 +10459,15 @@ const PM = (() => {
         const fmtAmt = fmtFull(Number(amount));
         const countTxt = mkts.length+' player'+(mkts.length!==1?'s':'');
         const expanded = _expandedGroups.has(key);
-        // If someone already won this milestone, the remaining open markets are no longer "first to reach"
-        const winnerExists = _markets.some(m =>
-          m.type==='race' && m.status==='settled' && m.result==='YES' &&
-          m.condition && m.condition.params && m.condition.params.amount===Number(amount)
-        );
+        // If someone already reached this milestone (via settled market OR live balance), no longer "first to reach"
+        const amt = Number(amount);
+        const winnerExists =
+          (G.balance >= amt) ||
+          Object.values(_currBalances).some(bal => bal >= amt) ||
+          _markets.some(m =>
+            m.type==='race' && m.status==='settled' && m.result==='YES' &&
+            m.condition && m.condition.params && m.condition.params.amount===amt
+          );
         const renderedMkts = mkts.map(m => {
           if(!winnerExists) return _renderMkt(m);
           return _renderMkt(Object.assign({}, m, {

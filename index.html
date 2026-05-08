@@ -9952,6 +9952,24 @@ const PM = (() => {
   }
   function _saveBets(b){ localStorage.setItem(_bk(), JSON.stringify(b)); }
 
+  // Push the current balance to GAS immediately after any PM credit/refund.
+  // Called whenever G.balance is modified by PM logic (settle, cashout, refund, orphan cleanup).
+  // Prevents balance loss if the player leaves before the next auto-save fires.
+  function _syncBalanceAfterPM(){
+    if(!G.url || !G.username || !G._cachedPin) return;
+    const p = new URLSearchParams({
+      action:'updatebalance', username:G.username, player:G.player||G.username,
+      balance:String(G.balance),
+      sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+      buyIn:String(G.sessionStart||G.balance),
+      date:new Date().toISOString(),
+      stake:G.s?G.s.label:'auto',
+      pin:G._cachedPin||'',
+      autosave:'true'
+    });
+    fetch(G.url+'?'+p.toString(),{method:'GET',redirect:'follow',cache:'no-store'}).catch(()=>{});
+  }
+
   function _loadMarkets(){
     try{
       const raw = localStorage.getItem(_mk());
@@ -10872,6 +10890,7 @@ const PM = (() => {
     if(won){
       G.balance += myTotal;
       updateUI();
+      _syncBalanceAfterPM();
       setTimeout(()=>notif('Market settled '+result+' — +'+fmtFull(myTotal-mySpend), 'win'), 300);
     }
 
@@ -11358,7 +11377,7 @@ const PM = (() => {
               }
               credit += bet.payout;
             });
-            if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); }
+            if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }
           } else if(sm.status==='open' && local.status==='open'){
             local.pools = sm.pools;
             if(sm.outcomes) local.outcomes = sm.outcomes;
@@ -11557,6 +11576,7 @@ const PM = (() => {
       updateUI();
       _saveBets(bets);
       _saveMarkets();
+      _syncBalanceAfterPM();
       notif('Cashed out at cost — no opposing bets yet');
       _renderPortfolio();
       render();
@@ -11572,6 +11592,7 @@ const PM = (() => {
     updateUI();
     _saveBets(bets);
     _saveMarkets();
+    _syncBalanceAfterPM();
     const pl = payout - bet.amount;
     notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtFull(pl), 'win');
     _renderPortfolio();
@@ -11705,7 +11726,7 @@ const PM = (() => {
       changed = true;
       return b;
     });
-    if(changed){ _saveBets(cleaned); updateUI(); }
+    if(changed){ _saveBets(cleaned); updateUI(); _syncBalanceAfterPM(); }
   }
 
   function init(){
@@ -11800,7 +11821,8 @@ const PM = (() => {
         // Restore sessionStart by the same amount so P&L doesn't treat the refund as a gain.
         if(G.sessionStart) G.sessionStart += refundTotal;
         if(typeof updateUI === 'function') updateUI();
-        if(typeof saveSession === 'function') saveSession(); // persist corrected balance immediately
+        if(typeof saveSession === 'function') saveSession(); // persist corrected balance to localStorage
+        _syncBalanceAfterPM(); // push to sheet — player may leave before next auto-save
         setTimeout(()=>notif('⟳ '+fmtFull(refundTotal)+' refunded — shoe markets reset', 'win'), 800);
       }
       _markets = _markets.filter(m => !(m.type === 'shoe' && m.status === 'open'));

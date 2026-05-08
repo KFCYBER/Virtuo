@@ -5415,7 +5415,7 @@ async function _sendTgNotif(){
   const abspl   = Math.abs(pl).toFixed(0);
   const abspct  = Math.abs(pnlPct);
   const sign    = pl >= 0 ? '+' : '-';
-  const name    = G.player || G.username;
+  const name    = G.username || G.player;
   const balFmt  = G.balance.toFixed(0);
   const buyFmt  = buyIn.toFixed(0);
   const stake   = G.s ? G.s.label : '';
@@ -5554,7 +5554,7 @@ function _sendTgBeacon(){
   const abspl   = Math.abs(pl).toFixed(0);
   const abspct  = Math.abs(pnlPct);
   const sign    = pl >= 0 ? '+' : '-';
-  const name    = G.player || G.username;
+  const name    = G.username || G.player;
   const balFmt  = safeBalance.toFixed(0);
   const buyFmt  = buyIn.toFixed(0);
   const stake   = G.s ? G.s.label : '';
@@ -10354,7 +10354,7 @@ const PM = (() => {
   // Settle any open race markets where we already know the balance (via _currBalances or G.balance),
   // so they never appear as open in the UI after the threshold has been crossed.
   function _settleKnownRaceMarkets(){
-    const myNames = [G.username, G.player].filter(Boolean);
+    const myUsernameLower = (G.username||'').toLowerCase();
     let changed = false;
     MILESTONE_AMOUNTS.forEach(amount => {
       const openForAmount = _markets.filter(m =>
@@ -10363,14 +10363,20 @@ const PM = (() => {
         m.condition.params && m.condition.params.amount===amount
       );
       if(!openForAmount.length) return;
+      // Deduplicate: process each player username only once
+      const seen = new Set();
       openForAmount.forEach(m => {
-        const player = m.condition.params.player;
-        // Check local player directly
-        const isMe = myNames.includes(player);
-        const bal  = isMe ? G.balance : (_currBalances[(player||'').toLowerCase()]||0);
+        const player    = m.condition.params.player || '';
+        const playerLow = player.toLowerCase();
+        if(seen.has(playerLow)) return;
+        seen.add(playerLow);
+        const isMe = myUsernameLower && playerLow === myUsernameLower;
+        const bal  = isMe ? G.balance : (_currBalances[playerLow] || 0);
         if(bal < amount) return;
-        // This player has crossed the threshold — settle YES for them, NO for others
-        const winner = openForAmount.find(om => om.condition.params.player === player);
+        // Player crossed threshold — find their market (case-insensitive) and settle
+        const winner = openForAmount.find(om =>
+          (om.condition.params.player||'').toLowerCase() === playerLow
+        );
         if(!winner || winner.status !== 'open') return;
         settle(winner.id, 'YES');
         openForAmount.filter(om => om.id !== winner.id && om.status === 'open')
@@ -10949,7 +10955,7 @@ const PM = (() => {
     if(!players || !players.length) return;
     const today = new Date().toISOString().slice(0,10);
     players.forEach(p => {
-      const pName = p.username || p.name || '';
+      const pName = p.username || '';
       if(!pName) return;
       const balance = p.balance || 0;
       MILESTONE_AMOUNTS.forEach(amount => {
@@ -11020,16 +11026,16 @@ const PM = (() => {
   function _createRaceMarkets(players){
     if(!players || players.length < 2) return;
     MILESTONE_AMOUNTS.forEach(amount => {
-      const eligible = players.filter(p => (p.balance||0) < amount && (p.username||p.name));
+      const eligible = players.filter(p => (p.balance||0) < amount && p.username);
       if(eligible.length < 2) return;
       const eligTotal = eligible.reduce((s,p)=>s+(p.balance||0), 0);
       eligible.forEach(p => {
-        const pName = p.username||p.name; if(!pName) return;
+        const pName = p.username; if(!pName) return;
         const alreadyOpen = _markets.some(m =>
           m.type==='race' && m.status==='open' &&
           m.condition && m.condition.type==='bankroll_race_player' &&
           m.condition.params && m.condition.params.amount===amount &&
-          m.condition.params.player===pName
+          m.condition.params.player.toLowerCase()===pName.toLowerCase()
         );
         if(alreadyOpen) return;
         // YES bias = balance share × season history factor × time remaining
@@ -11273,8 +11279,8 @@ const PM = (() => {
     // The leaderboard is sheet-driven and lags by up to one poll interval; the local balance is
     // always current, so we check directly here after every hand.
     // Match by both username and display name — markets store whichever the leaderboard returned first.
-    const myNames = [G.username, G.player].filter(Boolean);
-    if(myNames.length && G.balance > 0){
+    const myUserLower = (G.username||'').toLowerCase();
+    if(myUserLower && G.balance > 0){
       let raceSettled = false;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(G.balance < amount) return;
@@ -11284,7 +11290,9 @@ const PM = (() => {
           m.condition.params && m.condition.params.amount===amount
         );
         if(!openForAmount.length) return;
-        const myRace = openForAmount.find(m => myNames.includes(m.condition.params.player));
+        const myRace = openForAmount.find(m =>
+          (m.condition.params.player||'').toLowerCase() === myUserLower
+        );
         if(myRace){
           settle(myRace.id,'YES');
           openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));
@@ -11306,11 +11314,11 @@ const PM = (() => {
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
     // Track current balances for session factor (saved to prev at shoe boundaries)
-    players.forEach(p => { const n=(p.username||p.name||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
+    players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
 
     // Recalibrate milestone odds if only house money remains
     players.forEach(p => {
-      const pName = p.username||p.name||''; if(!pName) return;
+      const pName = p.username||''; if(!pName) return;
       const balance = p.balance||0;
       _markets.filter(m =>
         m.type==='season' && m.status==='open' &&
@@ -11334,7 +11342,7 @@ const PM = (() => {
 
     // Settle milestone markets
     players.forEach(p => {
-      const pName = p.username||p.name||''; if(!pName) return;
+      const pName = p.username||''; if(!pName) return;
       const balance = p.balance||0;
       _markets.filter(m =>
         m.type==='season' && m.status==='open' &&
@@ -11345,7 +11353,8 @@ const PM = (() => {
 
     // Settle race markets — first player to cross the milestone wins; all others lose
     players.forEach(p => {
-      const pName = p.username||p.name||''; if(!pName) return;
+      const pName = p.username||''; if(!pName) return;
+      const pNameLower = pName.toLowerCase();
       const balance = p.balance||0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance < amount) return;
@@ -11355,7 +11364,9 @@ const PM = (() => {
           m.condition.params && m.condition.params.amount===amount
         );
         if(!openForAmount.length) return;
-        const myRace = openForAmount.find(m => m.condition.params.player===pName);
+        const myRace = openForAmount.find(m =>
+          (m.condition.params.player||'').toLowerCase() === pNameLower
+        );
         if(myRace){
           settle(myRace.id, 'YES');
           openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));

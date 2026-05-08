@@ -5601,7 +5601,9 @@ window.addEventListener('beforeunload', (event)=>{
     event.preventDefault();
     event.returnValue = '';
     saveSession();
-    if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
+    // Beacon/sheet logging intentionally NOT here — beforeunload fires before the user
+    // confirms the dialog, so we'd send a false notification if they click "Stay".
+    // pagehide (below) fires only after the page is truly being discarded.
   }
 });
 
@@ -12691,7 +12693,7 @@ const MP2 = {
         // Save session so _expireStaleSession writes a TX row on next load (same as SP)
         if(G.player && !G.cashedOut && G._sessionActive){
           saveSession();
-          if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
+          // Beacon deferred to pagehide — see SP handler comment above
           try{
             const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
             if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

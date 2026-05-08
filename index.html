@@ -5191,7 +5191,7 @@ function saveSession(){
   // mid-hand refund only applies if the bet hasn't been committed yet
   // Once _handCommitted=true the balance is already deducted — use it as-is
   const midHand = (G.phase === 'play' || G.phase === 'dealer');
-  const safeBalance = (midHand && !G._handCommitted && G.preDealBal > 0) ? G.preDealBal : G.balance;
+  const safeBalance = (midHand && !G._handCommitted && G.preDealBal != null) ? G.preDealBal : G.balance;
   try{
     const snap={
       player:G.player, username:G.username,
@@ -5405,9 +5405,9 @@ function _refreshTgToggle(){
 async function _sendTgNotif(){
   if(!G.url || !G.username) return;
   if(!_tgNotifEnabled()) return;
-  const pl      = G.balance - (G.sessionStart || G.balance);
-  const buyIn   = G.sessionStart || G.balance || 1;
-  const pnlPct  = Math.round((pl / buyIn) * 100);
+  const buyIn   = G.sessionStart != null && G.sessionStart > 0 ? G.sessionStart : G.balance;
+  const pl      = G.balance - buyIn;
+  const pnlPct  = buyIn > 0 ? Math.round((pl / buyIn) * 100) : 0;
   const abspl   = Math.abs(pl).toFixed(0);
   const abspct  = Math.abs(pnlPct);
   const sign    = pl >= 0 ? '+' : '-';
@@ -5543,10 +5543,10 @@ function _sendTgBeacon(){
   if(!G.url || !G.username || !G._sessionActive || G.cashedOut) return;
   if(!_tgNotifEnabled()) return;
   // Use preDealBal when mid-hand so a bet in-flight doesn't make balance look like 0
-  const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
-  const pl      = safeBalance - (G.sessionStart || safeBalance);
-  const buyIn   = G.sessionStart || safeBalance || 1;
-  const pnlPct  = Math.round((pl / buyIn) * 100);
+  const safeBalance = (G.preDealBal != null && G.phase !== 'bet') ? G.preDealBal : G.balance;
+  const buyIn   = G.sessionStart != null && G.sessionStart > 0 ? G.sessionStart : safeBalance;
+  const pl      = safeBalance - buyIn;
+  const pnlPct  = buyIn > 0 ? Math.round((pl / buyIn) * 100) : 0;
   const abspl   = Math.abs(pl).toFixed(0);
   const abspct  = Math.abs(pnlPct);
   const sign    = pl >= 0 ? '+' : '-';
@@ -8638,9 +8638,9 @@ async function confirmCashout(){
       if(errDetail){ errDetail.style.display='none'; errDetail.textContent=''; }
       if(leaveBtn){ leaveBtn.disabled=false; leaveBtn.textContent='Leave Table'; }
       if(stayBtn) stayBtn.style.display='block';
+      _sendTgNotif(); // fire-and-forget — must run before G.balance is zeroed
       G.balance=0; updateUI();
       notif('Session saved — balance returned to wallet');
-      _sendTgNotif(); // fire-and-forget Telegram session summary
       // Refresh leaderboard now that this player's balance has updated on the sheet
       setTimeout(()=>_fetchLeaderboard(true), 1500);
     }catch(e){

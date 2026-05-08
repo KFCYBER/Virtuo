@@ -3052,7 +3052,7 @@ body.mp-bet-locked .all-sb-btn {
       <!-- BASICS -->
       <div class="help-section active" id="help-basics">
         <div class="help-h1">The Game</div>
-        <p class="help-lead">Standard 6-deck Blackjack. Beat the dealer without going over 21. You know the rules — here's what's different at KFC.</p>
+        <p class="help-lead">Standard 4-deck Blackjack. Beat the dealer without going over 21. You know the rules — here's what's different at KFC.</p>
         <div class="help-card">
           <div class="help-card-title">Payouts</div>
           <div class="help-row"><span class="help-row-label">Blackjack</span><span class="help-row-val">3:2</span></div>
@@ -10813,11 +10813,11 @@ const PM = (() => {
     const _yn = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
     // Dealer bust range markets (5 YES/NO markets, each covers a count range)
     const BUST_RANGES = [
-      {min:0,  max:10,   desc:'Dealer busts under 11 times this shoe?'},
-      {min:11, max:14,   desc:'Dealer busts 11-14 times this shoe?'},
-      {min:15, max:17,   desc:'Dealer busts 15-17 times this shoe?'},
-      {min:18, max:21,   desc:'Dealer busts 18-21 times this shoe?'},
-      {min:22, max:9999, desc:'Dealer busts 22+ times this shoe?'},
+      {min:0,  max:7,    desc:'Dealer busts under 8 times this shoe?'},
+      {min:8,  max:10,   desc:'Dealer busts 8-10 times this shoe?'},
+      {min:11, max:12,   desc:'Dealer busts 11-12 times this shoe?'},
+      {min:13, max:14,   desc:'Dealer busts 13-14 times this shoe?'},
+      {min:15, max:9999, desc:'Dealer busts 15+ times this shoe?'},
     ];
     BUST_RANGES.forEach(r => {
       _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));

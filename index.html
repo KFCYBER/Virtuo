@@ -9797,10 +9797,14 @@ const PM = (() => {
       return reps[idx] ? reps[idx].r : null;
     }
 
+    // Calibrated bust probability: ~29% at average 6-deck composition (was 0.12 + smalls*0.75 → 41%)
+    const _bustP = (smalls, total) => Math.min(0.42, Math.max(0.18, 0.15 + (smalls / total) * 0.38));
+    // Calibrated win probability: ~42% at average 6-deck composition (was 0.42 + ta*0.35 → 55%)
+    const _winP  = (ta, total)    => Math.min(0.47, Math.max(0.36, 0.32 + (ta / total) * 0.27));
+
     if(condition.type === 'dealer_bust_threshold'){
       const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
-      const bustR = smalls / tot;
-      const bustPPerHand = Math.min(0.48, Math.max(0.10, 0.12 + bustR * 0.75));
+      const bustPPerHand = _bustP(smalls, tot);
       const target = condition.params.target || 4;
       const needed = Math.max(0, target - _pmShoeBusts);
       if(needed <= 0) return 99;
@@ -9817,31 +9821,31 @@ const PM = (() => {
       const pAce = aces / tot, pTen = tens / tot;
       const pBJHand = Math.min(0.5, 2 * pAce * pTen);
       const handsN = Math.min(condition.params.hands || 8, Math.floor(tot / 6));
-      return Math.round(Math.min(95, Math.max(5, (1 - Math.pow(1 - pBJHand, handsN)) * 100)));
+      return Math.round(Math.min(85, Math.max(5, (1 - Math.pow(1 - pBJHand, handsN)) * 100)));
     }
 
     if(condition.type === 'push_streak'){
       const tens = rem.filter(c => ['10','J','Q','K','A'].includes(_cardRank(c))).length;
-      const pushPerHand = Math.min(0.18, Math.max(0.05, 0.08 + (tens/tot) * 0.15));
+      const pushPerHand = Math.min(0.14, Math.max(0.06, 0.07 + (tens/tot) * 0.10));
       const needed = Math.max(0, (condition.params.count||2) - _pmShoePushes);
       if(needed <= 0) return 99;
       const handsLeft = Math.min(condition.params.hands||8, Math.floor(tot/6));
       if(handsLeft < needed) return 4;
       let p = 0;
       for(let k=needed; k<=Math.min(handsLeft,25); k++) p += _binom(handsLeft, k, pushPerHand);
-      return Math.round(Math.min(92, Math.max(5, p * 100)));
+      return Math.round(Math.min(75, Math.max(5, p * 100)));
     }
 
     if(condition.type === 'player_hot_streak'){
       const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
       const aces = rem.filter(c => _cardRank(c) === 'A').length;
-      const winPerHand = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
+      const winPerHand = _winP(tens + aces, tot);
       const streakNeeded = Math.max(0, (condition.params.streak||5) - _pmShoeConsec);
       if(streakNeeded <= 0) return 99;
       const handsLeft = Math.max(streakNeeded, Math.floor(tot/6));
       const windows = Math.max(1, Math.floor(handsLeft / streakNeeded));
       const pSuccess = 1 - Math.pow(1 - Math.pow(winPerHand, streakNeeded), windows);
-      return Math.round(Math.min(88, Math.max(3, pSuccess * 100)));
+      return Math.round(Math.min(65, Math.max(3, pSuccess * 100)));
     }
 
     if(condition.type === 'consec_bj'){
@@ -9856,8 +9860,7 @@ const PM = (() => {
 
     if(condition.type === 'dealer_bust_range'){
       const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
-      const bustR = smalls / tot;
-      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + bustR * 0.75));
+      const bustP = _bustP(smalls, tot);
       const hLeft = Math.max(Math.max(0, condition.params.min - _pmShoeBusts), Math.floor(tot/6));
       const lo = Math.max(0, (condition.params.min||0) - _pmShoeBusts);
       const hi = Math.min((condition.params.max||9999) - _pmShoeBusts, hLeft);
@@ -9870,21 +9873,22 @@ const PM = (() => {
 
     if(condition.type === 'dealer_bust_window'){
       const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
-      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      const bustP = _bustP(smalls, tot);
       const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
       const pAtLeastOne = 1 - Math.pow(1 - bustP, handsN);
-      return Math.round(Math.min(95, Math.max(5, pAtLeastOne * 100)));
+      return Math.round(Math.min(90, Math.max(5, pAtLeastOne * 100)));
     }
 
     if(condition.type === 'win_streak_window'){
       const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
       const aces = rem.filter(c => _cardRank(c) === 'A').length;
-      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
+      const winP = _winP(tens + aces, tot);
       const streak = condition.params.streak || 3;
       const handsN = Math.min(condition.params.hands || 8, Math.floor(tot / 6));
-      const windows = Math.max(1, handsN - streak + 1);
+      // Use non-overlapping window count to avoid double-counting (mirrors player_hot_streak)
+      const windows = Math.max(1, Math.ceil(handsN / streak));
       const pSuccess = 1 - Math.pow(1 - Math.pow(winP, streak), windows);
-      return Math.round(Math.min(88, Math.max(4, pSuccess * 100)));
+      return Math.round(Math.min(55, Math.max(4, pSuccess * 100)));
     }
 
     if(condition.type === 'quick_bj_window'){
@@ -9897,51 +9901,51 @@ const PM = (() => {
 
     if(condition.type === 'dealer_no_bust_window'){
       const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
-      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      const bustP = _bustP(smalls, tot);
       const handsN = Math.min(condition.params.hands || 4, Math.floor(tot / 6));
       const pNoBust = Math.pow(1 - bustP, handsN);
-      return Math.round(Math.min(90, Math.max(5, pNoBust * 100)));
+      return Math.round(Math.min(70, Math.max(5, pNoBust * 100)));
     }
 
     if(condition.type === 'majority_wins_window'){
       const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
       const aces = rem.filter(c => _cardRank(c) === 'A').length;
-      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
+      const winP = _winP(tens + aces, tot);
       const needed = condition.params.wins || 3;
       const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
       let p = 0;
       for(let k=needed; k<=handsN; k++) p += _binom(handsN, k, winP);
-      return Math.round(Math.min(88, Math.max(5, p * 100)));
+      return Math.round(Math.min(65, Math.max(5, p * 100)));
     }
 
     if(condition.type === 'no_loss_window'){
       const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
       const aces = rem.filter(c => _cardRank(c) === 'A').length;
-      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
-      const noLossP = Math.min(0.60, winP + 0.08); // wins + pushes
+      const winP = _winP(tens + aces, tot);
+      const noLossP = Math.min(0.52, winP + 0.09); // wins + pushes (~9% push rate)
       const handsN = Math.min(condition.params.hands || 3, Math.floor(tot / 6));
-      return Math.round(Math.min(80, Math.max(5, Math.pow(noLossP, handsN) * 100)));
+      return Math.round(Math.min(60, Math.max(5, Math.pow(noLossP, handsN) * 100)));
     }
 
     if(condition.type === 'cold_dealer_window'){
       const smalls = rem.filter(c => ['2','3','4','5','6'].includes(_cardRank(c))).length;
-      const bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
+      const bustP = _bustP(smalls, tot);
       const needed = condition.params.busts || 2;
       const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
       let p = 0;
       for(let k=needed; k<=handsN; k++) p += _binom(handsN, k, bustP);
-      return Math.round(Math.min(85, Math.max(5, p * 100)));
+      return Math.round(Math.min(70, Math.max(5, p * 100)));
     }
 
     if(condition.type === 'comeback_window'){
       const tens = rem.filter(c => ['10','J','Q','K'].includes(_cardRank(c))).length;
       const aces = rem.filter(c => _cardRank(c) === 'A').length;
-      const winP = Math.min(0.55, Math.max(0.28, 0.42 + ((tens+aces)/tot) * 0.35));
-      const lossP = Math.max(0.10, 1 - winP - 0.08);
+      const winP = _winP(tens + aces, tot);
+      const lossP = Math.max(0.10, 1 - winP - 0.09);
       const handsN = Math.min(condition.params.hands || 5, Math.floor(tot / 6));
       const windows = Math.max(1, handsN - 2);
       const p = 1 - Math.pow(1 - lossP * winP * winP, windows);
-      return Math.round(Math.min(75, Math.max(5, p * 100)));
+      return Math.round(Math.min(65, Math.max(5, p * 100)));
     }
 
     return 50;
@@ -10538,47 +10542,15 @@ const PM = (() => {
     _saveMarkets();
   }
 
-  function _makeShoeMultiMarket(desc, bandsArr, condition){
-    const rem = G.deck ? G.deck.filter(c => !c.cutCard && !(c.bonus && c.bonus.jester)) : [];
-    const tot = rem.length;
-    let bustP = 0.30, handsEst = 52;
-    if(tot > 0){
-      const smalls = rem.filter(c => !c.bonus && ['2','3','4','5','6'].includes(c.r)).length;
-      bustP = Math.min(0.48, Math.max(0.10, 0.12 + (smalls/tot) * 0.75));
-      handsEst = Math.max(10, Math.floor(tot / 6));
-    }
-    const probs = bandsArr.map(band => {
-      let p = 0;
-      for(let k=band.min; k<=Math.min(band.max, handsEst); k++) p += _binom(handsEst, k, bustP);
-      return Math.max(0.02, p);
-    });
-    const probSum = probs.reduce((a,b)=>a+b, 0);
-    const seedTotal = _seed('shoe') * bandsArr.length;
-    const pools = {}, housePools = {};
-    bandsArr.forEach((band, i) => {
-      const s = Math.max(1, Math.round(seedTotal * probs[i] / probSum));
-      pools[band.label] = s; housePools[band.label] = s;
-    });
-    return {
-      id: PM_PFX+'shoe_'+Date.now()+'_'+Math.random().toString(36).slice(2,5),
-      type:'shoe', desc, status:'open',
-      pools, housePools,
-      outcomes: bandsArr.map(b => b.label),
-      result: null, condition,
-      createdAt: Date.now(), settledAt: null,
-      createdStakeIdx: _stkIdx(),
-    };
-  }
-
   function _createShoeMarkets(){
     const _yn = (desc, cond) => _makeMarket('shoe', desc, cond, _deckProb(cond)/100);
     // Dealer bust range markets (5 YES/NO markets, each covers a count range)
     const BUST_RANGES = [
-      {min:0,  max:14,   desc:'Dealer busts under 15 times this shoe?'},
-      {min:15, max:18,   desc:'Dealer busts 15-18 times this shoe?'},
-      {min:19, max:22,   desc:'Dealer busts 19-22 times this shoe?'},
-      {min:23, max:26,   desc:'Dealer busts 23-26 times this shoe?'},
-      {min:27, max:9999, desc:'Dealer busts 27+ times this shoe?'},
+      {min:0,  max:10,   desc:'Dealer busts under 11 times this shoe?'},
+      {min:11, max:14,   desc:'Dealer busts 11-14 times this shoe?'},
+      {min:15, max:17,   desc:'Dealer busts 15-17 times this shoe?'},
+      {min:18, max:21,   desc:'Dealer busts 18-21 times this shoe?'},
+      {min:22, max:9999, desc:'Dealer busts 22+ times this shoe?'},
     ];
     BUST_RANGES.forEach(r => {
       _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
@@ -11365,6 +11337,11 @@ const PM = (() => {
       if(refundTotal > 0){
         _saveBets(bets);
         G.balance += refundTotal;
+        // PM bets were deducted from balance before saveSession() on the last load.
+        // Restore sessionStart by the same amount so P&L doesn't treat the refund as a gain.
+        if(G.sessionStart) G.sessionStart += refundTotal;
+        if(typeof updateUI === 'function') updateUI();
+        if(typeof saveSession === 'function') saveSession(); // persist corrected balance immediately
         setTimeout(()=>notif('⟳ '+fmtFull(refundTotal)+' refunded — shoe markets reset', 'win'), 800);
       }
       _markets = _markets.filter(m => !(m.type === 'shoe' && m.status === 'open'));
@@ -11382,11 +11359,11 @@ const PM = (() => {
       const hasBustRange = _openShoe.some(m => m.condition && m.condition.type==='dealer_bust_range');
       if(!hasBustRange){
         const BUST_RANGES = [
-          {min:0,  max:14,   desc:'Dealer busts under 15 times this shoe?'},
-          {min:15, max:18,   desc:'Dealer busts 15-18 times this shoe?'},
-          {min:19, max:22,   desc:'Dealer busts 19-22 times this shoe?'},
-          {min:23, max:26,   desc:'Dealer busts 23-26 times this shoe?'},
-          {min:27, max:9999, desc:'Dealer busts 27+ times this shoe?'},
+          {min:0,  max:10,   desc:'Dealer busts under 11 times this shoe?'},
+          {min:11, max:14,   desc:'Dealer busts 11-14 times this shoe?'},
+          {min:15, max:17,   desc:'Dealer busts 15-17 times this shoe?'},
+          {min:18, max:21,   desc:'Dealer busts 18-21 times this shoe?'},
+          {min:22, max:9999, desc:'Dealer busts 22+ times this shoe?'},
         ];
         BUST_RANGES.forEach(r => {
           _markets.push(_bf(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));

@@ -975,7 +975,7 @@ body.pass-player #felt-toggle-btn { display:flex; }
   .tb-balance { font-size: 16px; }
   .tb-player { font-size: 11px; }
   .badge { font-size: 8px; padding: 2px 5px; }
-  /* Row 2: action buttons */
+  /* Row 2: icon buttons + action buttons on their own row */
   .tb-right {
     order: 2;
     width: 100%;
@@ -985,21 +985,25 @@ body.pass-player #felt-toggle-btn { display:flex; }
     gap: 4px;
     padding: 4px 8px;
     box-sizing: border-box;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none;
+    flex-wrap: wrap;
   }
-  .tb-right::-webkit-scrollbar { display: none; }
-  /* All topbar-right buttons tight on mobile */
+  /* Icon buttons — !important overrides inline font-size/padding on these elements */
   .tb-right .btn-ghost {
-    font-size: 9px;
-    padding: 5px 7px;
+    font-size: 9px !important;
+    padding: 5px 7px !important;
     letter-spacing: 0.5px;
     flex-shrink: 0;
   }
-  /* Leave Table / Top Up need a bit more room for their text */
-  #btn-topup, .tb-right button:last-child { padding: 5px 10px; }
+  /* Top Up + Leave Table: pushed to their own full row, always visible */
+  #btn-topup,
+  .tb-right > button:last-child {
+    order: 99;
+    flex: 1 1 calc(50% - 4px);
+    padding: 9px 4px !important;
+    font-size: 10px !important;
+    text-align: center;
+    letter-spacing: 0.5px;
+  }
   #sync-badge { display: none; }
 
   /* ── HAND 2 SECTION ── */
@@ -2179,6 +2183,20 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-bust-live { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
 .pm-tracker { font-family: var(--mono); font-size: 8px; color: var(--muted2); letter-spacing: 1px; text-align: center; margin-bottom: 5px; padding: 3px 6px; background: rgba(255,255,255,.04); border-radius: 4px; }
 .pm-tracker b { color: var(--gold-hi); font-weight: 700; }
+/* ── Hot Markets strip ─── */
+.pm-hot-header { font-family: var(--mono); font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+.pm-hot-strip { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.pm-hot-strip::-webkit-scrollbar { display: none; }
+.pm-hot-card { flex: 0 0 155px; background: rgba(201,168,76,.05); border: 1px solid rgba(201,168,76,.18); border-radius: 4px; padding: 10px 12px; cursor: pointer; transition: border-color .15s, background .15s; }
+.pm-hot-card:hover { background: rgba(201,168,76,.10); border-color: rgba(201,168,76,.38); }
+.pm-hot-card-type { font-family: var(--mono); font-size: 7px; letter-spacing: 2px; color: var(--gold-lo); text-transform: uppercase; margin-bottom: 4px; }
+.pm-hot-card-name { font-size: 10px; color: var(--white); line-height: 1.4; margin-bottom: 8px; }
+.pm-hot-split-bar { height: 3px; background: rgba(255,55,75,.25); border-radius: 2px; overflow: hidden; margin-bottom: 3px; }
+.pm-hot-split-fill { height: 100%; background: rgba(0,200,90,.7); border-radius: 2px; }
+.pm-hot-split-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 7px; margin-bottom: 6px; }
+.pm-hot-split-labels .hs-yes { color: #00c85a; }
+.pm-hot-split-labels .hs-no  { color: #ff3745; }
+.pm-hot-card-pool { font-family: var(--mono); font-size: 8px; color: var(--gold-hi); letter-spacing: 1px; }
 /* ── Help modal ─────────────────────────────────────────────────────────── */
 #help-modal .modal { max-width: 520px; width: 94vw; padding: 0; overflow: hidden; max-height: 88vh; display: flex; flex-direction: column; }
 .help-header { padding: 22px 24px 0; flex-shrink: 0; }
@@ -10256,6 +10274,55 @@ const PM = (() => {
     return 50;
   }
 
+  // ── Hot Markets ────────────────────────────────────────────────────────────
+  function _renderHotMarkets(){
+    const area  = document.getElementById('pm-hot-area');
+    const strip = document.getElementById('pm-hot-strip');
+    if(!area || !strip) return;
+
+    // Player-only pool for any market (excludes house seeds)
+    const playerPool = m => Object.keys(m.pools||{}).reduce((s,k) =>
+      s + Math.max(0, (m.pools[k]||0) - ((m.housePools||{})[k]||0)), 0);
+
+    const top = _markets
+      .filter(m => m.status === 'open')
+      .map(m => ({ m, pool: playerPool(m) }))
+      .filter(x => x.pool > 0)
+      .sort((a,b) => b.pool - a.pool)
+      .slice(0, 3);
+
+    if(!top.length){ area.style.display = 'none'; return; }
+    area.style.display = '';
+
+    const typeLabel = t => t==='race'?'RACE':t==='season'?'SEASON':'SHOE';
+
+    strip.innerHTML = top.map(({m, pool}) => {
+      const yP = Math.max(0, (m.pools&&m.pools.YES||0) - ((m.housePools||{}).YES||0));
+      const nP = Math.max(0, (m.pools&&m.pools.NO||0)  - ((m.housePools||{}).NO||0));
+      const hasYN = m.pools && 'YES' in m.pools;
+      const yPct = hasYN && (yP+nP)>0 ? Math.round(yP/(yP+nP)*100) : null;
+      const splitHTML = yPct !== null
+        ? `<div class="pm-hot-split-bar"><div class="pm-hot-split-fill" style="width:${yPct}%"></div></div>
+           <div class="pm-hot-split-labels"><span class="hs-yes">${yPct}% YES</span><span class="hs-no">${100-yPct}% NO</span></div>`
+        : '';
+      const name = m.desc.length > 42 ? m.desc.slice(0,40)+'…' : m.desc;
+      return `<div class="pm-hot-card" onclick="PM._jumpToMarket('${m.id}')">
+        <div class="pm-hot-card-type">${typeLabel(m.type)}</div>
+        <div class="pm-hot-card-name">${name}</div>
+        ${splitHTML}
+        <div class="pm-hot-card-pool">${fmtFull(pool)} wagered</div>
+      </div>`;
+    }).join('');
+  }
+
+  function _jumpToMarket(id){
+    _switchTab('markets');
+    setTimeout(() => {
+      const el = document.querySelector(`.pm-market[data-mktid="${id}"]`);
+      if(el) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    }, 60);
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
   function render(){
     const balEl = document.getElementById('pm-modal-bal');
@@ -10271,6 +10338,7 @@ const PM = (() => {
     const shoeEl   = document.getElementById('pm-shoe-list');
     const portPane = document.getElementById('pm-pane-portfolio');
 
+    _renderHotMarkets();
     if(raceEl) _renderRaceSection(raceEl, raceSect);
     if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
@@ -10380,7 +10448,7 @@ const PM = (() => {
       </div>`;
     }).join('');
 
-    return `<div class="pm-market">
+    return `<div class="pm-market" data-mktid="${mkt.id}">
       <div class="pm-market-label${isOpen?'':' settled'}">${isOpen?'SHOE':'SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
       ${liveHTML}
@@ -10433,7 +10501,7 @@ const PM = (() => {
       </button>`;
     }).join('');
 
-    return `<div class="pm-market">
+    return `<div class="pm-market" data-mktid="${mkt.id}">
       <div class="pm-market-label${isOpen?'':' settled'}">${typeLabel}${isOpen?'':' — SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
       <div class="pm-race-grid" style="grid-template-columns:repeat(${cols},1fr)">${outHTML}</div>
@@ -10551,7 +10619,7 @@ const PM = (() => {
 
     const trackerHTML = _trackerHTML(mkt);
 
-    return `<div class="pm-market">
+    return `<div class="pm-market" data-mktid="${mkt.id}">
       <div class="pm-market-label ${lblCls}">${isOpen?lbl:'SETTLED'}</div>
       <div class="pm-market-desc">${mkt.desc}</div>
       ${trackerHTML}${gameOddsHTML}${selfNote}${lockNote}
@@ -11696,7 +11764,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
 })();
 
 
@@ -12693,6 +12761,10 @@ const MP2 = {
       <button class="pm-tab"        id="pm-tab-history"   onclick="PM._switchTab('history')" style="display:none">HISTORY</button>
     </div>
     <div id="pm-pane-markets" class="pm-modal-body">
+      <div id="pm-hot-area" style="display:none">
+        <div class="pm-hot-header">🔥 Most Bet On</div>
+        <div class="pm-hot-strip" id="pm-hot-strip"></div>
+      </div>
       <div id="pm-race-section" style="display:none;margin-bottom:14px">
         <div class="pm-section-title">Race Markets</div>
         <div id="pm-race-list"></div>

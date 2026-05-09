@@ -3316,7 +3316,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">Season Markets</div>
-          <p>Long-run milestone bets: "Will [player] reach 1,000,000 KFC this season?". Settle at the end of the season based on real leaderboard balances.</p>
+          <p>Monthly milestone bets: "Will [player] reach 1,000,000 KFC this month?". Settle at month-end — YES if the player hit the target, NO if not. Odds tighten as the month runs out.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Race Markets</div>
@@ -10102,18 +10102,23 @@ const PM = (() => {
     return _sessionFactor(pName, currentBal);
   }
 
-  // Fraction of season remaining → suppresses YES odds as deadline approaches
-  // Returns 1.0 at season start, ~0.20 floor at season end
+  // Fraction of current calendar month remaining → suppresses YES odds as month-end approaches
+  // Returns 1.0 at start of month, ~0.20 floor at month end
   function _timeFactor(){
-    if(!_seasonDates.start || !_seasonDates.end) return 1.0;
-    const now   = Date.now();
-    const start = new Date(_seasonDates.start).getTime();
-    const end   = new Date(_seasonDates.end).getTime();
+    const now   = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    const end   = new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59, 999).getTime();
     const total = end - start;
     if(total <= 0) return 1.0;
-    const remaining = Math.max(0, end - now);
-    const frac = remaining / total;            // 1.0 at start → 0 at end
+    const remaining = Math.max(0, end - Date.now());
+    const frac = remaining / total;
     return Math.max(0.20, Math.min(1.0, Math.sqrt(frac)));
+  }
+
+  // End-of-current-month timestamp (used for market expiry)
+  function _monthEnd(){
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth()+1, 0, 23, 59, 59, 999).getTime();
   }
 
   // Parse "5M", "500K", "2B", or plain number string → integer
@@ -11058,7 +11063,9 @@ const PM = (() => {
 
   function _createPlayerMilestoneMarkets(players){
     if(!players || !players.length) return;
-    const today = new Date().toISOString().slice(0,10);
+    const today     = new Date().toISOString().slice(0,10);
+    const thisMonth = new Date().toISOString().slice(0,7); // "2026-05"
+    const expiry    = _monthEnd();
     players.forEach(p => {
       const pName = p.username || '';
       if(!pName) return;
@@ -11066,22 +11073,25 @@ const PM = (() => {
       const balance = p.balance || 0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance >= amount) return;
+        // Dedup within the current month — one market per player×amount×month
         const alreadyExists = _markets.some(m =>
           m.type==='season' && m.status==='open' && m.condition &&
           m.condition.type==='bankroll_milestone' &&
           m.condition.params && m.condition.params.player===pName &&
-          m.condition.params.amount===amount
+          m.condition.params.amount===amount &&
+          (m.condition.params.month || (m.condition.params.date||'').slice(0,7)) === thisMonth
         );
         if(alreadyExists) return;
-        // Base bias from proximity × season history factor × time remaining
         const ratio = Math.min(balance / amount, 0.99);
         const baseBias = 0.15 + 0.70 * ratio;
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance) * _timeFactor()));
-        _markets.push(_makeMarket('season',
-          'Will '+pName+' reach '+fmtFull(amount)+' this season?',
-          {type:'bankroll_milestone', params:{player:pName, amount, date:today}},
+        const mkt = _makeMarket('season',
+          'Will '+pName+' reach '+fmtFull(amount)+' this month?',
+          {type:'bankroll_milestone', params:{player:pName, amount, date:today, month:thisMonth}},
           yesBias
-        ));
+        );
+        mkt.expiresAt = expiry;
+        _markets.push(mkt);
       });
     });
     _saveMarkets();
@@ -11419,14 +11429,24 @@ const PM = (() => {
 
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
-    // Purge any open race/milestone markets for the creator account
+    // Build live player set from fresh leaderboard data
+    const liveUsernames = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
+    // Always keep the local player's markets regardless of leaderboard state
+    if(G.username) liveUsernames.add(G.username.toLowerCase());
+    // Purge open race/milestone markets for:
+    //   (a) creator account (always exempt)
+    //   (b) any player no longer on the live leaderboard (deleted accounts)
     const _beforePurge = _markets.length;
-    _markets = _markets.filter(m =>
-      !(m.status==='open' && (m.type==='race' || m.type==='season') &&
-        m.condition && m.condition.params &&
-        (m.condition.params.player||'').toLowerCase()==='creator')
-    );
-    if(_markets.length !== _beforePurge) _saveMarkets();
+    _markets = _markets.filter(m => {
+      if(m.status !== 'open') return true;
+      if(m.type !== 'race' && m.type !== 'season') return true;
+      if(!m.condition || !m.condition.params) return true;
+      const player = (m.condition.params.player || '').toLowerCase();
+      if(!player) return true;
+      if(player === 'creator') return false;
+      return liveUsernames.has(player);
+    });
+    if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
     // Track current balances for session factor (saved to prev at shoe boundaries)
     players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
 
@@ -11891,6 +11911,21 @@ const PM = (() => {
     _seasonHist   = _loadSeasonHist();
     _seasonDates  = _loadSeasonDates();
     _loadMarkets();
+    // Always purge open race/milestone markets for the creator account (master account is exempt)
+    _markets = _markets.filter(m =>
+      !(m.status==='open' && (m.type==='race' || m.type==='season') &&
+        m.condition && m.condition.params &&
+        (m.condition.params.player||'').toLowerCase()==='creator')
+    );
+    // Settle expired monthly milestone markets as NO (month passed without hitting the milestone)
+    const _nowTs = Date.now();
+    _markets.forEach(m => {
+      if(m.type==='season' && m.status==='open' &&
+         m.condition && m.condition.type==='bankroll_milestone' &&
+         m.expiresAt && _nowTs > m.expiresAt){
+        settle(m.id, 'NO');
+      }
+    });
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));
     // Milestone markets with double-KFC description (pre-fix)
     _markets = _markets.filter(m => !(m.type==='season' && m.desc && m.desc.includes('KFC KFC')));

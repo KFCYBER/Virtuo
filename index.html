@@ -1230,15 +1230,25 @@ body.pass-player #felt-toggle-btn { display:flex; }
   #inventory-bar { flex-wrap: wrap; gap: 4px; max-width: 100%; }
   .inv-item { font-size: 10px; padding: 2px 6px; }
 
-  /* ── SIDEBAR ── */
+  /* ── SIDEBAR — full-screen overlay drawer on mobile ── */
+  /* #main is position:relative so the sidebar can fill it absolutely */
+  #main {
+    position: relative;
+  }
   #sidebar {
-    max-height: none;
-    overflow: visible;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 200;
+    background: var(--bg1);
+    max-height: none !important;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
     gap: 10px;
-    width: 100%;
+    width: 100% !important;
     box-sizing: border-box;
-    padding: 12px 12px 32px;
-    /* Collapsed sidebar takes zero space — game area fills full screen */
+    padding: 12px 12px 40px;
+    border-top: 1px solid var(--line);
   }
   #sidebar.collapsed {
     display: none !important;

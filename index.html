@@ -2907,7 +2907,7 @@ body.mp-bet-locked .all-sb-btn {
       <div class="info-row" style="font-weight:700;color:var(--gold-hi)"><span>Power-Up</span><span>Effect</span></div>
       <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover ½ bet</span></div>
       <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe becomes a push</span></div>
-      <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">All Crazy 7s payouts ×2</span></div>
+      <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">+2 to all Crazy 7s multipliers</span></div>
       <div class="info-row"><span class="info-label">BJ Guard (3:1)</span><span class="info-val">Dealer blackjack → push</span></div>
       <div class="info-row"><span class="info-label">BJ Novak (3:1)</span><span class="info-val">Your blackjack pays 2:1 not 3:2</span></div>
     </div>
@@ -3289,7 +3289,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">Seven-Seeker <span style="color:var(--muted);font-weight:400">— High+</span></div>
-          <p>Doubles all Crazy 7s side bet payouts for the entire shoe.</p>
+          <p>Adds +2 to every Crazy 7s multiplier for the entire shoe. Example: 5:1 becomes 7:1, 25:1 becomes 27:1.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">BJ Guard <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
@@ -7883,22 +7883,22 @@ function evalCrazy7s(hand,dealerUpCard){
   // Include bonus cards — use cv() which handles bonus card values via BONUS_CARD_REPS
   const cards=hand.filter(c=>cardRank(c)).slice(0,2);
   const seeker=G.puOwned.has('seeker');
-  const mul=seeker?2:1;
+  const add=seeker?2:0;
   const p1=cards[0]||null, p2=cards[1]||null, d=dealerUpCard||null;
   const v1=p1?cv(p1):null, v2=p2?cv(p2):null, vd=d?cv(d):null;
   const s1=p1?cardSuit(p1):null, s2=p2?cardSuit(p2):null, sd=d?cardSuit(d):null;
   const p1is7=(v1===7), p2is7=(v2===7), dis7=(vd===7);
   if(p1is7&&p2is7&&dis7){
-    if(s1&&s1===s2&&s2===sd) return {name:'Three 7s — same suit!',mult:50*mul};
-    return {name:'Three 7s',mult:25*mul};
+    if(s1&&s1===s2&&s2===sd) return {name:'Three 7s — same suit!',mult:50+add};
+    return {name:'Three 7s',mult:25+add};
   }
   if(p1is7&&p2is7){
-    if(s1&&s1===s2) return {name:'Two 7s — same suit',mult:30*mul};
-    return {name:'Two 7s (player)',mult:20*mul};
+    if(s1&&s1===s2) return {name:'Two 7s — same suit',mult:30+add};
+    return {name:'Two 7s (player)',mult:20+add};
   }
-  if((p1is7||p2is7)&&dis7) return {name:'7 player + 7 dealer',mult:10*mul};
-  if(p2is7) return {name:'7 on second card',mult:3*mul};
-  if(p1is7) return {name:'7 on first card',mult:5*mul};
+  if((p1is7||p2is7)&&dis7) return {name:'7 player + 7 dealer',mult:10+add};
+  if(p2is7) return {name:'7 on second card',mult:3+add};
+  if(p1is7) return {name:'7 on first card',mult:5+add};
   return null;
 }
 function calcSide(name,amount,dealerBust,isFreeStake){

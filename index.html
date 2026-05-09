@@ -11482,6 +11482,46 @@ const PM = (() => {
       return liveUsernames.has(player);                        // milestone: just must exist
     });
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
+
+    // Remap markets created with a player's display name to their canonical username.
+    // Happens when market creation historically used p.name instead of p.username.
+    let _remapped = false;
+    players.forEach(p => {
+      const username    = (p.username||'').toLowerCase();
+      const displayName = (p.name||p.player||'').toLowerCase();
+      if(!username || !displayName || username === displayName) return;
+      _markets.forEach(m => {
+        if(!m.condition?.params) return;
+        const mPlayer = (m.condition.params.player||'').toLowerCase();
+        if(mPlayer === displayName){
+          m.condition.params.player = p.username || m.condition.params.player;
+          _remapped = true;
+        }
+      });
+    });
+    // After remapping, deduplicate milestone markets — same player+amount+month may now collide
+    if(_remapped){
+      const thisMonth = new Date().toISOString().slice(0,7);
+      const seen = new Map();
+      const savedBets = _loadBets();
+      _markets = _markets.filter(m => {
+        if(m.type !== 'season' || !m.condition || m.condition.type !== 'bankroll_milestone') return true;
+        const p = m.condition.params;
+        const month = p.month || (p.date||'').slice(0,7);
+        const key = (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
+        const existing = seen.get(key);
+        if(!existing){ seen.set(key, m); return true; }
+        // Keep whichever has a player bet on it; otherwise keep the newer one
+        const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
+        if(hasBet){ seen.set(key, m); return true; }
+        const existingHasBet = savedBets.some(b => b.mktId === existing.id && b.payout == null);
+        if(existingHasBet) return false;
+        if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); return true; }
+        return false;
+      });
+      _saveMarkets();
+    }
+
     // Track current balances for session factor (saved to prev at shoe boundaries)
     players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
 

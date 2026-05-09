@@ -11585,6 +11585,7 @@ const PM = (() => {
     // Settle milestone markets
     players.forEach(p => {
       const pName = p.username||''; if(!pName) return;
+      if(pName.toLowerCase() === 'creator') return;
       const balance = p.balance||0;
       _markets.filter(m =>
         m.type==='season' && m.status==='open' &&
@@ -11597,6 +11598,7 @@ const PM = (() => {
     players.forEach(p => {
       const pName = p.username||''; if(!pName) return;
       const pNameLower = pName.toLowerCase();
+      if(pNameLower === 'creator') return; // creator is exempt — balance shouldn't trigger race settlements
       const balance = p.balance||0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance < amount) return;

@@ -2430,7 +2430,7 @@ body.mp-bet-locked .all-sb-btn {
     </div>
     <!-- Step 2: Stake selection (shown first after credentials) -->
     <div id="login-step2" style="display:none">
-      <button class="btn-ghost" onclick="goLoginStep(1,true)" style="padding:6px 12px;margin-bottom:16px;font-size:11px">← Back</button>
+      <button class="btn-ghost" onclick="_step2Back()" style="padding:6px 12px;margin-bottom:16px;font-size:11px">← Back</button>
       <div style="font-family:var(--sans);font-weight:800;font-size:15px;color:var(--gold-hi);letter-spacing:3px;text-align:center;margin-bottom:4px;text-transform:uppercase">Select Stake</div>
       <div id="login-bal-display" style="font-family:var(--mono);font-size:11px;color:var(--muted);text-align:center;margin-bottom:16px;letter-spacing:1px"></div>
       <div id="login-stake-list" style="display:flex;flex-direction:column;gap:6px;max-height:320px;overflow-y:auto;scrollbar-width:none;-ms-overflow-style:none"></div>
@@ -4540,6 +4540,19 @@ let _pendingLogin = null;
 
 // ── LOGIN FLOW NAVIGATION ────────────────────────────────────
 let _selectedStakeKey = null;
+
+// Back button on stake-selection (step2) — goes to mode select when coming from SP flow,
+// otherwise goes back to credentials (step1)
+let _loginFromModeSelect = false;
+function _step2Back(){
+  if(_loginFromModeSelect){
+    _loginFromModeSelect = false;
+    document.getElementById('login').style.display = 'none';
+    if(typeof MP2 !== 'undefined') MP2._showModeSelect();
+  } else {
+    goLoginStep(1, true);
+  }
+}
 
 function goLoginStep(step, back){
   const stepIds=['login-step1','login-step2','login-step-buyin'];
@@ -10698,8 +10711,9 @@ const PM = (() => {
   }
 
   function _renderSeasonList(seasonEl){
-    const openSeason    = _markets.filter(m => m.type==='season' && m.status==='open');
-    const settledSeason = _markets.filter(m => m.type==='season' && m.status==='settled').slice(-3);
+    const _notCreator = m => (m.condition?.params?.player||'').toLowerCase() !== 'creator';
+    const openSeason    = _markets.filter(m => m.type==='season' && m.status==='open'    && _notCreator(m));
+    const settledSeason = _markets.filter(m => m.type==='season' && m.status==='settled' && _notCreator(m)).slice(-3);
     const all = [...openSeason, ...settledSeason];
     if(!all.length){ seasonEl.innerHTML = '<div class="pm-empty">No milestone markets yet</div>'; return; }
 
@@ -11446,13 +11460,16 @@ const PM = (() => {
 
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
-    // Build live player set from fresh leaderboard data
-    const liveUsernames = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
+    // Build live player sets from fresh leaderboard data
+    const liveUsernames  = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
+    // For race markets: only players with balance > 0 are considered active racers
+    const activeRacers   = new Set(players.filter(p => (p.balance||0) > 0).map(p => (p.username||'').toLowerCase()).filter(Boolean));
     // Always keep the local player's markets regardless of leaderboard state
-    if(G.username) liveUsernames.add(G.username.toLowerCase());
+    if(G.username){ liveUsernames.add(G.username.toLowerCase()); activeRacers.add(G.username.toLowerCase()); }
     // Purge open race/milestone markets for:
-    //   (a) creator account (always exempt)
-    //   (b) any player no longer on the live leaderboard (deleted accounts)
+    //   (a) creator account (always exempt from PMs)
+    //   (b) deleted accounts (not in live leaderboard)
+    //   (c) race markets for players with 0 balance (inactive/zeroed accounts)
     const _beforePurge = _markets.length;
     _markets = _markets.filter(m => {
       if(m.status !== 'open') return true;
@@ -11461,7 +11478,8 @@ const PM = (() => {
       const player = (m.condition.params.player || '').toLowerCase();
       if(!player) return true;
       if(player === 'creator') return false;
-      return liveUsernames.has(player);
+      if(m.type === 'race') return activeRacers.has(player);  // race: must have balance > 0
+      return liveUsernames.has(player);                        // milestone: just must exist
     });
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
     // Track current balances for session factor (saved to prev at shoe boundaries)
@@ -11928,9 +11946,9 @@ const PM = (() => {
     _seasonHist   = _loadSeasonHist();
     _seasonDates  = _loadSeasonDates();
     _loadMarkets();
-    // Always purge open race/milestone markets for the creator account (master account is exempt)
+    // Purge ALL creator markets — open and settled — so they never appear in any view
     _markets = _markets.filter(m =>
-      !(m.status==='open' && (m.type==='race' || m.type==='season') &&
+      !((m.type==='race' || m.type==='season') &&
         m.condition && m.condition.params &&
         (m.condition.params.player||'').toLowerCase()==='creator')
     );
@@ -12136,6 +12154,7 @@ const MP2 = {
     document.getElementById('mp-mode-select').style.display = 'none';
     const lg = document.getElementById('login');
     if (lg) lg.style.display = 'flex';
+    _loginFromModeSelect = true;
     if (typeof goLoginStep === 'function') goLoginStep(2);
   },
   _chooseMP() {

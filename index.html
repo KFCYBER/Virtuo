@@ -963,57 +963,79 @@ body.pass-player #felt-toggle-btn { display:flex; }
   }
   #sidebar { order: 2; }
 
-  /* ── TOPBAR ── */
+  /* ── TOPBAR ──
+     CRITICAL: desktop #topbar is display:grid — must explicitly override to flex,
+     otherwise flex-direction/order/flex properties are all silently ignored. */
   #topbar {
+    display: flex !important;
+    flex-direction: column;
+    flex-wrap: nowrap;
     height: auto;
     padding: 0;
-    flex-direction: column;
     align-items: stretch;
     gap: 0;
   }
-  .tb-logo { display: flex; flex-wrap: wrap; order: 0; padding: 4px 10px; border-bottom: 1px solid var(--line); width: 100%; box-sizing: border-box; gap: 6px; }
-  /* Row 1: name + balance + stake badge + timer */
+
+  /* Row 0 — nav strip: MARKETS / STANDINGS / TEST on left */
+  .tb-logo {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    order: 0;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 5px 8px;
+    gap: 6px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  /* Row 1 — player info: name | balance | stake */
   .tb-center {
+    display: flex;
+    order: 1;
+    width: 100%;
+    box-sizing: border-box;
     position: static;
     transform: none;
     left: auto;
     justify-content: center;
-    width: 100%;
-    padding: 8px 12px 4px;
-    gap: 8px;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 5px 10px;
     pointer-events: auto;
     border-bottom: 1px solid var(--line);
-    order: 1;
-    box-sizing: border-box;
-    flex-wrap: wrap;
   }
-  .tb-balance { font-size: 16px; }
-  .tb-player { font-size: 11px; }
-  .badge { font-size: 8px; padding: 2px 5px; }
-  /* Row 2: icon buttons + action buttons on their own row */
+  .tb-balance { font-size: 15px; }
+  .tb-player  { font-size: 11px; }
+  .badge      { font-size: 8px; padding: 2px 5px; }
+
+  /* Row 2 — compact icons + timer left, TOP UP + LEAVE right */
   .tb-right {
     order: 2;
     width: 100%;
+    box-sizing: border-box;
     display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 4px;
     padding: 4px 8px;
-    box-sizing: border-box;
-    flex-wrap: wrap;
   }
-  /* Icon buttons — !important overrides inline font-size/padding on these elements */
-  /* Hide sidebar toggle on mobile — sidebar is always stacked below, toggle is confusing */
-  #sidebar-toggle { display: none !important; }
-  /* Hide share button on mobile — saves topbar space */
-  #btn-share { display: none !important; }
+  /* Compact icon buttons */
   .tb-right .btn-ghost {
-    font-size: 9px !important;
-    padding: 5px 7px !important;
-    letter-spacing: 0.5px;
+    font-size: 10px !important;
+    padding: 5px 8px !important;
+    letter-spacing: 0;
     flex-shrink: 0;
   }
-  /* Top Up + Leave Table: pushed to their own full row, always visible */
+  /* Session timer in the right row */
+  #session-timer { font-size: 9px; letter-spacing: 1px; flex-shrink: 0; }
+  /* Hide sidebar toggle (useless on mobile) and share button */
+  #sidebar-toggle { display: none !important; }
+  #btn-share      { display: none !important; }
+  /* TOP UP + LEAVE TABLE: pushed to right, each takes 50% on their own sub-row */
   #btn-topup,
   .tb-right > button:last-child {
     order: 99;

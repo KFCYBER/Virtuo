@@ -6366,16 +6366,17 @@ function clearBets(){
   if(bc) bc.classList.remove('visible');
   sfx('button');
 }
+function _clampSB(val){ return Math.min(val||0, G.s.max); }
 function sameBet(){
   if(G.phase!=='bet'){notif('Finish the current hand first');return;}
   if(!G.lastMainBet&&Object.values(G.lastSideBets||{}).every(v=>!v)){notif('No previous bet to restore');return;}
   _betHistory.length=0; // fresh start — can't undo into previous round
-  G.mainBet=G.lastMainBet||0;
-  SB_NAMES.forEach(n=>G.sideBets[n]=(G.lastSideBets&&G.lastSideBets[n])||0);
+  G.mainBet=Math.min(G.lastMainBet||0, G.s.max);
+  SB_NAMES.forEach(n=>G.sideBets[n]=_clampSB(G.lastSideBets&&G.lastSideBets[n]));
   // Restore hand 2 if it was active last round
   if(G._hand2Active&&G.lastMainBet2>0){
-    G.mainBet2=G.lastMainBet2;
-    SB_NAMES.forEach(n=>G.sideBets2[n]=(G.lastSideBets2&&G.lastSideBets2[n])||0);
+    G.mainBet2=Math.min(G.lastMainBet2, G.s.max);
+    SB_NAMES.forEach(n=>G.sideBets2[n]=_clampSB(G.lastSideBets2&&G.lastSideBets2[n]));
     if(typeof updateHand2Panel==='function') updateHand2Panel();
   }
   updateBetPanel(); buildSideBets(); updateSBCircles(); sfx('chip');
@@ -8214,11 +8215,11 @@ function closeResult(){
   if(G.sideBets2) SB_NAMES.forEach(n=>G.sideBets2[n]=0);
   G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null;
   if(_autoSameBet&&G.lastMainBet>0){
-    G.mainBet=G.lastMainBet;
-    SB_NAMES.forEach(n=>G.sideBets[n]=(G.lastSideBets&&G.lastSideBets[n])||0);
+    G.mainBet=Math.min(G.lastMainBet, G.s.max);
+    SB_NAMES.forEach(n=>G.sideBets[n]=_clampSB(G.lastSideBets&&G.lastSideBets[n]));
     if(G._hand2Active&&G.lastMainBet2>0){
-      G.mainBet2=G.lastMainBet2;
-      SB_NAMES.forEach(n=>G.sideBets2[n]=(G.lastSideBets2&&G.lastSideBets2[n])||0);
+      G.mainBet2=Math.min(G.lastMainBet2, G.s.max);
+      SB_NAMES.forEach(n=>G.sideBets2[n]=_clampSB(G.lastSideBets2&&G.lastSideBets2[n]));
     }
   }
   updateSBCircles(); // update circles AFTER bets are restored so active state is correct

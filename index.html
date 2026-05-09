@@ -11357,6 +11357,14 @@ const PM = (() => {
 
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
+    // Purge any open race/milestone markets for the creator account
+    const _beforePurge = _markets.length;
+    _markets = _markets.filter(m =>
+      !(m.status==='open' && (m.type==='race' || m.type==='season') &&
+        m.condition && m.condition.params &&
+        (m.condition.params.player||'').toLowerCase()==='creator')
+    );
+    if(_markets.length !== _beforePurge) _saveMarkets();
     // Track current balances for session factor (saved to prev at shoe boundaries)
     players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
 

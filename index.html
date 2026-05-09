@@ -10034,6 +10034,7 @@ const PM = (() => {
   // Session/shoe balance snapshots for market calibration
   let _currBalances = {};   // updated each onLeaderboardUpdate
   let _prevBalances = {};   // snapshot from end of previous shoe, persisted to LS
+  let _lastPlayers  = [];   // cached from last leaderboard fetch — used to remap after poll
   const LS_PREV_BAL = 'kfc_pm_prev_bal';
   function _loadPrevBal(){ try{ return JSON.parse(localStorage.getItem(LS_PREV_BAL)||'{}'); }catch(e){ return {}; } }
   function _savePrevBal(s){ try{ localStorage.setItem(LS_PREV_BAL, JSON.stringify(s)); }catch(e){} }
@@ -11458,30 +11459,68 @@ const PM = (() => {
     ).forEach(m => settle(m.id,'YES'));
   }
 
-  function onLeaderboardUpdate(players){
+  // Remap any market whose player name matches a known display name → canonical username,
+  // then deduplicate markets that now share the same (player+amount+month) key.
+  // Called from onLeaderboardUpdate AND after poll() imports new markets.
+  function _remapAndDedup(players){
     if(!players || !players.length) return;
-
-    // Step 1: Remap display-name markets → canonical username BEFORE purge.
-    // If "Steven" markets exist but "steven" isn't a username, the purge would remove them
-    // before we ever get a chance to normalize them. Remapping first prevents that loss.
+    // Build alias map: every display-name variant → canonical p.username
+    // Covers p.name, p.player, and the username itself as a self-alias.
+    const aliasMap = {};
     players.forEach(p => {
-      const username    = (p.username||'').toLowerCase();
-      const displayName = (p.name||p.player||'').toLowerCase();
-      if(!username || !displayName || username === displayName) return;
-      _markets.forEach(m => {
-        if(!m.condition?.params) return;
-        const mPlayer = (m.condition.params.player||'').toLowerCase();
-        if(mPlayer === displayName) m.condition.params.player = p.username || m.condition.params.player;
+      const uname = p.username || '';
+      if(!uname) return;
+      aliasMap[uname.toLowerCase()] = uname;
+      ['name','player'].forEach(field => {
+        const alias = (p[field]||'').toLowerCase();
+        if(alias && alias !== uname.toLowerCase()) aliasMap[alias] = uname;
       });
     });
+    // Remap markets whose player name is a display-name alias, not the canonical username
+    let remapped = false;
+    _markets.forEach(m => {
+      if(!m.condition?.params) return;
+      const mPlayer = (m.condition.params.player||'').toLowerCase();
+      const canonical = aliasMap[mPlayer];
+      if(canonical && canonical !== m.condition.params.player){
+        m.condition.params.player = canonical;
+        remapped = true;
+      }
+    });
+    // Deduplicate: same player+amount+month → keep the one with an active bet, else the newest
+    const before = _markets.length;
+    const seen = new Map();
+    const savedBets = _loadBets();
+    _markets = _markets.filter(m => {
+      if(m.type !== 'season' || !m.condition || m.condition.type !== 'bankroll_milestone') return true;
+      const p = m.condition.params;
+      const month = p.month || (p.date||'').slice(0,7);
+      const key = (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
+      const existing = seen.get(key);
+      if(!existing){ seen.set(key, m); return true; }
+      const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
+      if(hasBet){ seen.set(key, m); return true; }
+      const existingHasBet = savedBets.some(b => b.mktId === existing.id && b.payout == null);
+      if(existingHasBet) return false;
+      if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); return true; }
+      return false;
+    });
+    if(remapped || _markets.length !== before) _saveMarkets();
+  }
 
-    // Step 2: Build live player sets (using canonical usernames, so remap above is already applied)
+  function onLeaderboardUpdate(players){
+    if(!players || !players.length) return;
+    _lastPlayers = players; // cache for post-poll remap
+
+    // Step 1: Remap display-name markets → canonical username BEFORE purge.
+    _remapAndDedup(players);
+
+    // Step 2: Build live player sets (all markets now normalized to canonical usernames)
     const liveUsernames  = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
     const activeRacers   = new Set(players.filter(p => (p.balance||0) > 0).map(p => (p.username||'').toLowerCase()).filter(Boolean));
     if(G.username){ liveUsernames.add(G.username.toLowerCase()); activeRacers.add(G.username.toLowerCase()); }
 
     // Step 3: Purge open race/milestone markets for deleted or inactive players.
-    // All markets are now normalized to usernames, so liveUsernames check is accurate.
     const _beforePurge = _markets.length;
     _markets = _markets.filter(m => {
       if(m.status !== 'open') return true;
@@ -11494,30 +11533,6 @@ const PM = (() => {
       return liveUsernames.has(player);
     });
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
-
-    // Step 4: Deduplicate milestone markets — remap may have caused player+amount+month collisions.
-    // Run unconditionally (not just when remap fired) so any pre-existing duplicates get cleaned.
-    (()=>{
-      const seen = new Map();
-      const savedBets = _loadBets();
-      let changed = false;
-      const before = _markets.length;
-      _markets = _markets.filter(m => {
-        if(m.type !== 'season' || !m.condition || m.condition.type !== 'bankroll_milestone') return true;
-        const p = m.condition.params;
-        const month = p.month || (p.date||'').slice(0,7);
-        const key = (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
-        const existing = seen.get(key);
-        if(!existing){ seen.set(key, m); return true; }
-        const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
-        if(hasBet){ seen.set(key, m); return true; }
-        const existingHasBet = savedBets.some(b => b.mktId === existing.id && b.payout == null);
-        if(existingHasBet) return false;
-        if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); return true; }
-        return false;
-      });
-      if(_markets.length !== before) _saveMarkets();
-    })();
 
     // Track current balances for session factor (saved to prev at shoe boundaries)
     players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
@@ -11640,7 +11655,10 @@ const PM = (() => {
             if(sm.outcomes) local.outcomes = sm.outcomes;
           }
         });
-        _saveMarkets();
+        // Re-run remap after import — poll may have pulled in display-name markets from GAS
+        // (e.g. old "Steven" markets that logicDup couldn't block due to name mismatch).
+        if(_lastPlayers.length) _remapAndDedup(_lastPlayers);
+        else _saveMarkets();
       }
     }catch(e){}
     render();

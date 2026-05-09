@@ -10101,12 +10101,16 @@ const PM = (() => {
 
   function _isCreator(){ return (G.username||G.player||'').toLowerCase().includes('creator'); }
 
-  // Combined factor: uses season history end balance if available, otherwise falls back to shoe-to-shoe
+  // Combined factor: history proves skill ceiling — a player who reached 500M before is
+  // capable of doing it again. Use the higher of current vs history as effective strength.
+  // Small momentum bonus if currently above history, neutral (not penalised) if rebuilding.
   function _seasonFactor(pName, currentBal){
     const key = (pName||'').toLowerCase();
     const hist = _seasonHist[key];
     if(hist && hist > 0 && currentBal > 0){
-      return Math.min(1.8, Math.max(0.55, Math.sqrt(currentBal / hist)));
+      const effective = Math.max(currentBal, hist);
+      const momentum  = currentBal >= hist ? 1.1 : 1.0;
+      return Math.min(1.8, Math.max(0.55, (effective / hist) * momentum));
     }
     return _sessionFactor(pName, currentBal);
   }

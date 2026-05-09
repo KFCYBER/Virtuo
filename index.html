@@ -11487,15 +11487,24 @@ const PM = (() => {
         remapped = true;
       }
     });
-    // Deduplicate: same player+amount+month → keep the one with an active bet, else the newest
+    // Deduplicate open season (player+amount+month) and open race (player+amount) markets.
+    // After remap, two markets may now share the same logical key.
+    // Only open-vs-open: never collapse a settled market with an incoming open one.
     const before = _markets.length;
     const seen = new Map();
     const savedBets = _loadBets();
     _markets = _markets.filter(m => {
-      if(m.type !== 'season' || !m.condition || m.condition.type !== 'bankroll_milestone') return true;
+      if(m.status !== 'open') return true; // never discard settled/cancelled markets
+      if(!m.condition || !m.condition.params) return true;
       const p = m.condition.params;
-      const month = p.month || (p.date||'').slice(0,7);
-      const key = (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
+      let key = null;
+      if(m.type === 'season' && m.condition.type === 'bankroll_milestone'){
+        const month = p.month || (p.date||'').slice(0,7);
+        key = 'season_' + (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
+      } else if(m.type === 'race' && m.condition.type === 'bankroll_race_player'){
+        key = 'race_' + (p.player||'').toLowerCase() + '_' + (p.amount||'');
+      }
+      if(!key) return true;
       const existing = seen.get(key);
       if(!existing){ seen.set(key, m); return true; }
       const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);

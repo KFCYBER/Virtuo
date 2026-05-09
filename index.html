@@ -2405,6 +2405,7 @@ body.mp-bet-locked .all-sb-btn {
     <div class="tb-logo">
       <button class="btn-ghost" id="btn-markets" onclick="PM.openModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700" title="Prediction Markets">MARKETS</button>
       <a href="https://kfcyber.github.io/KFC-Standings/" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none" title="KFC Standings">STANDINGS</a>
+      <button class="btn-ghost" id="btn-creator-mode" onclick="_toggleCreatorMode()" style="font-size:10px;padding:6px 10px;letter-spacing:1px;font-weight:700;display:none">🧪 TEST</button>
     </div>
     <div class="tb-center">
       <div class="tb-player" id="tb-name">—</div>
@@ -5304,7 +5305,8 @@ function clearSession(){
 // Auto-sync a stale session (>4h) to the sheet so chips aren't lost.
 // Fires silently in the background — player never sees this UI-side.
 async function _expireStaleSession(snap){
-  if(!snap||!snap.username||!snap.balance) return; // username required — player is display name only
+  if(!snap||!snap.username||!snap.balance) return;
+  if((snap.username||'').toLowerCase()==='creator') return;
   const url=localStorage.getItem('kfc_url')||G.url; // declare early — used in points sync below
   // Award loyalty points for the partial shoe before expiring
   if(snap.shoeHandCount > 0){
@@ -5360,10 +5362,32 @@ async function _expireStaleSession(snap){
   }
 }
 
+// Master test account — exempt from all sheet logging, Telegram, PM markets, leaderboard writes.
+// Toggle with the LIVE/TEST button visible only to this account.
+function _isCreator(){
+  if((G.username||'').toLowerCase() !== 'creator') return false;
+  return localStorage.getItem('kfc_creator_live') !== '1'; // exempt unless live mode on
+}
+function _toggleCreatorMode(){
+  const live = localStorage.getItem('kfc_creator_live') === '1';
+  localStorage.setItem('kfc_creator_live', live ? '0' : '1');
+  _updateCreatorBtn();
+}
+function _updateCreatorBtn(){
+  const btn = document.getElementById('btn-creator-mode');
+  if(!btn) return;
+  const live = localStorage.getItem('kfc_creator_live') === '1';
+  btn.textContent = live ? '🔴 LIVE' : '🧪 TEST';
+  btn.title = live ? 'Live mode: logging ON — click to switch to test mode' : 'Test mode: logging OFF — click to switch to live mode';
+  btn.style.borderColor = live ? 'rgba(255,80,80,0.6)' : 'rgba(100,200,255,0.4)';
+  btn.style.color = live ? '#ff5050' : '#64c8ff';
+}
+
 // Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
 // Uses autosave=true so GAS skips TX row and games++ increment.
 let _autoSaveHandCount = 0;
 async function _autoSaveToSheet(){
+  if(_isCreator()) return;
   if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
   if(++_autoSaveHandCount % 5 !== 0) return;
   const params=new URLSearchParams({
@@ -5407,6 +5431,7 @@ function _refreshTgToggle(){
 }
 
 async function _sendTgNotif(){
+  if(_isCreator()) return;
   if(!G.url || !G.username) return;
   if(!_tgNotifEnabled()) return;
   const buyIn   = G.sessionStart != null && G.sessionStart > 0 ? G.sessionStart : G.balance;
@@ -5544,6 +5569,7 @@ async function _sendTgNotif(){
 
 // Synchronous beacon version of _sendTgNotif — safe to call from beforeunload/pagehide
 function _sendTgBeacon(){
+  if(_isCreator()) return;
   if(!G.url || !G.username || !G._sessionActive || G.cashedOut) return;
   if(!_tgNotifEnabled()) return;
   // Use preDealBal when mid-hand so a bet in-flight doesn't make balance look like 0
@@ -5580,6 +5606,7 @@ function _sendTgBeacon(){
 
 // Log session to GAS sheet on unload — keepalive ensures delivery even as page closes
 function _logSessionToSheet(stakeLabel){
+  if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
   const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
   const params = new URLSearchParams({
@@ -5805,6 +5832,9 @@ function openApp(displayName, balance){
   document.getElementById('app').style.display='flex';
   document.getElementById('app').style.flexDirection='column';
   document.getElementById('tb-name').textContent=displayName;
+  // Show creator mode toggle only for the master account
+  const _cmBtn = document.getElementById('btn-creator-mode');
+  if(_cmBtn){ _cmBtn.style.display = (G.username||'').toLowerCase()==='creator' ? '' : 'none'; _updateCreatorBtn(); }
   // Restore this player's sidebar collapsed state
   const _sbColKey='kfc_sb_col_'+(G.username||'').toLowerCase();
   const _sb=document.getElementById('sidebar');const _mn=document.getElementById('main');const _bt=document.getElementById('sidebar-toggle');const _ta=document.getElementById('table-area');
@@ -8508,6 +8538,7 @@ function getSyncQueue(){
 async function attemptSync(payload){
   if(!G.url) return {ok:false, local:true};
   if(!payload.username) throw new Error('Missing username — cannot sync');
+  if((payload.username||'').toLowerCase()==='creator') return {ok:true, local:true};
   const params=new URLSearchParams({
     action:'updatebalance',
     username: String(payload.username),
@@ -9956,6 +9987,7 @@ const PM = (() => {
   // Called whenever G.balance is modified by PM logic (settle, cashout, refund, orphan cleanup).
   // Prevents balance loss if the player leaves before the next auto-save fires.
   function _syncBalanceAfterPM(){
+    if(_isCreator()) return;
     if(!G.url || !G.username || !G._cachedPin) return;
     const p = new URLSearchParams({
       action:'updatebalance', username:G.username, player:G.player||G.username,
@@ -10967,6 +10999,7 @@ const PM = (() => {
     players.forEach(p => {
       const pName = p.username || '';
       if(!pName) return;
+      if(pName.toLowerCase()==='creator') return;
       const balance = p.balance || 0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance >= amount) return;
@@ -11036,7 +11069,7 @@ const PM = (() => {
   function _createRaceMarkets(players){
     if(!players || players.length < 2) return;
     MILESTONE_AMOUNTS.forEach(amount => {
-      const eligible = players.filter(p => (p.balance||0) < amount && p.username);
+      const eligible = players.filter(p => (p.balance||0) < amount && p.username && (p.username||'').toLowerCase()!=='creator');
       if(eligible.length < 2) return;
       const eligTotal = eligible.reduce((s,p)=>s+(p.balance||0), 0);
       eligible.forEach(p => {

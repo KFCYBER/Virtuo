@@ -9591,8 +9591,17 @@ function _renderLeaderboard(players, errMsg){
     el.innerHTML = `<div style="color:var(--muted);padding:4px 0">${errMsg||'—'}</div>`;
     return;
   }
+  // Deduplicate by username (case-insensitive) — keep highest balance when a player appears twice
+  // e.g. if a row was moved/duplicated in the sheet, only the higher-balance entry is used
+  const _seen = new Map();
+  players.forEach(p => {
+    const key = (p.username||p.name||'').toLowerCase();
+    if(!key) return;
+    const existing = _seen.get(key);
+    if(!existing || (p.balance||0) > (existing.balance||0)) _seen.set(key, p);
+  });
   // Sort by total balance descending
-  const sorted = [...players].sort((a,b)=>b.balance - a.balance);
+  const sorted = [..._seen.values()].sort((a,b)=>b.balance - a.balance);
   const me = (G.username||G.player||'').toLowerCase();
   const rankSymbol = (i) => i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
   const rankClass  = (i) => i===0?'gold':i===1?'silver':i===2?'bronze':'';
@@ -10691,34 +10700,38 @@ const PM = (() => {
     if(!all.length){ seasonEl.innerHTML = '<div class="pm-empty">No milestone markets yet</div>'; return; }
 
     const groups = {};
+    const groupLabels = {}; // canonical display name per key
     all.forEach(m => {
       const player = (m.condition && m.condition.params && m.condition.params.player) || '__misc';
-      if(!groups[player]) groups[player] = [];
-      groups[player].push(m);
+      const key = player.toLowerCase();
+      if(!groups[key]) { groups[key] = []; groupLabels[key] = player; }
+      groups[key].push(m);
     });
 
     const me = (G.username || G.player || '').toLowerCase();
+    // Keys are already lowercase — sort with local player first
     const sortedKeys = Object.keys(groups).sort((a, b) => {
-      if(a.toLowerCase() === me) return -1;
-      if(b.toLowerCase() === me) return 1;
+      if(a === me) return -1;
+      if(b === me) return 1;
       return a.localeCompare(b);
     });
 
-    seasonEl.innerHTML = sortedKeys.map(player => {
-      const mkts = groups[player].slice().sort((a, b) => {
+    seasonEl.innerHTML = sortedKeys.map(playerKey => {
+      const displayName = groupLabels[playerKey] || playerKey;
+      const mkts = groups[playerKey].slice().sort((a, b) => {
         const am = a.condition && a.condition.params && a.condition.params.amount || 0;
         const bm = b.condition && b.condition.params && b.condition.params.amount || 0;
         return am - bm;
       });
-      const key = player.toLowerCase().replace(/[^a-z0-9]/g,'_');
-      const isMe = player.toLowerCase() === me;
+      const key = playerKey.replace(/[^a-z0-9]/g,'_');
+      const isMe = playerKey === me;
       const openCount = mkts.filter(m => m.status==='open').length;
       const settled   = mkts.length - openCount;
       const countTxt  = openCount + ' open' + (settled ? ', '+settled+' settled' : '');
       const expanded  = _expandedGroups.has(key);
       return `<div class="pm-player-group">
         <button class="pm-player-toggle" onclick="PM._togglePlayerGroup('${key}')">
-          <span class="pm-ptog-name">${player}${isMe?' (you)':''}</span>
+          <span class="pm-ptog-name">${displayName}${isMe?' (you)':''}</span>
           <span class="pm-ptog-count">${countTxt}</span>
           <span class="pm-ptog-chevron${expanded?'':' closed'}" id="pm-pc-${key}">▾</span>
         </button>

@@ -1030,11 +1030,12 @@ body.pass-player #felt-toggle-btn { display:flex; }
     letter-spacing: 0;
     flex-shrink: 0;
   }
-  /* Hide timer, felt toggle, sidebar toggle, and share — not needed on mobile */
+  /* Hide timer, felt toggle, and share — not needed on mobile */
   #session-timer  { display: none !important; }
   #felt-toggle-btn { display: none !important; }
-  #sidebar-toggle { display: none !important; }
   #btn-share      { display: none !important; }
+  /* Sidebar toggle: visible on mobile so users can open/close the panels */
+  #sidebar-toggle { display: inline-flex !important; }
   /* TOP UP + LEAVE TABLE: grow equally to fill remaining row space */
   #btn-topup,
   .tb-right > button:last-child {
@@ -1236,7 +1237,11 @@ body.pass-player #felt-toggle-btn { display:flex; }
     gap: 10px;
     width: 100%;
     box-sizing: border-box;
-    padding: 12px 12px 16px;
+    padding: 12px 12px 32px;
+    /* Collapsed sidebar takes zero space — game area fills full screen */
+  }
+  #sidebar.collapsed {
+    display: none !important;
   }
   .panel { padding: 12px; }
   .panel-title { font-size: 10px; letter-spacing: 2px; margin-bottom: 10px; }
@@ -5085,7 +5090,9 @@ function toggleSidebar(){
   const btn=document.getElementById('sidebar-toggle');
   if(!sb||!mn) return;
   const col=sb.classList.toggle('collapsed');
-  mn.style.gridTemplateColumns=col?'1fr 0':'';
+  // On mobile, CSS media query handles the single-column layout — don't override with inline style
+  if(window.innerWidth > 720) mn.style.gridTemplateColumns=col?'1fr 0':'';
+  else mn.style.gridTemplateColumns='';
   if(btn) btn.textContent=col?'⊟':'⊞';
   // Hide the right border when sidebar is collapsed — it becomes a stray line
   const ta=document.getElementById('table-area');
@@ -5874,11 +5881,18 @@ function openApp(displayName, balance){
   // Show creator mode toggle only for the master account
   const _cmBtn = document.getElementById('btn-creator-mode');
   if(_cmBtn){ _cmBtn.style.display = (G.username||'').toLowerCase()==='creator' ? '' : 'none'; _updateCreatorBtn(); }
-  // Restore this player's sidebar collapsed state
+  // Restore this player's sidebar collapsed state; always collapse on mobile
   const _sbColKey='kfc_sb_col_'+(G.username||'').toLowerCase();
   const _sb=document.getElementById('sidebar');const _mn=document.getElementById('main');const _bt=document.getElementById('sidebar-toggle');const _ta=document.getElementById('table-area');
-  const _col=localStorage.getItem(_sbColKey)==='1';
-  if(_sb){_sb.classList.toggle('collapsed',_col);if(_mn)_mn.style.gridTemplateColumns=_col?'1fr 0':'';if(_bt)_bt.textContent=_col?'⊟':'⊞';if(_ta)_ta.style.borderRight=_col?'none':'1px solid var(--line)';}
+  const _isMobile=window.innerWidth<=720;
+  const _col=_isMobile?true:(localStorage.getItem(_sbColKey)==='1');
+  if(_sb){
+    _sb.classList.toggle('collapsed',_col);
+    // On desktop, control the grid column width via inline style; on mobile let media query handle it
+    if(_mn) _mn.style.gridTemplateColumns=(!_isMobile&&_col)?'1fr 0':'';
+    if(_bt) _bt.textContent=_col?'⊟':'⊞';
+    if(_ta) _ta.style.borderRight=_col?'none':'1px solid var(--line)';
+  }
   updateUI();
   buildChips();
   buildSideBets();

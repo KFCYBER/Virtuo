@@ -11108,7 +11108,7 @@ const PM = (() => {
         const alreadyExists = _markets.some(m =>
           m.type==='season' && m.status==='open' && m.condition &&
           m.condition.type==='bankroll_milestone' &&
-          m.condition.params && m.condition.params.player===pName &&
+          m.condition.params && (m.condition.params.player||'').toLowerCase()===pName.toLowerCase() &&
           m.condition.params.amount===amount &&
           (m.condition.params.month || (m.condition.params.date||'').slice(0,7)) === thisMonth
         );
@@ -11460,16 +11460,28 @@ const PM = (() => {
 
   function onLeaderboardUpdate(players){
     if(!players || !players.length) return;
-    // Build live player sets from fresh leaderboard data
+
+    // Step 1: Remap display-name markets → canonical username BEFORE purge.
+    // If "Steven" markets exist but "steven" isn't a username, the purge would remove them
+    // before we ever get a chance to normalize them. Remapping first prevents that loss.
+    players.forEach(p => {
+      const username    = (p.username||'').toLowerCase();
+      const displayName = (p.name||p.player||'').toLowerCase();
+      if(!username || !displayName || username === displayName) return;
+      _markets.forEach(m => {
+        if(!m.condition?.params) return;
+        const mPlayer = (m.condition.params.player||'').toLowerCase();
+        if(mPlayer === displayName) m.condition.params.player = p.username || m.condition.params.player;
+      });
+    });
+
+    // Step 2: Build live player sets (using canonical usernames, so remap above is already applied)
     const liveUsernames  = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
-    // For race markets: only players with balance > 0 are considered active racers
     const activeRacers   = new Set(players.filter(p => (p.balance||0) > 0).map(p => (p.username||'').toLowerCase()).filter(Boolean));
-    // Always keep the local player's markets regardless of leaderboard state
     if(G.username){ liveUsernames.add(G.username.toLowerCase()); activeRacers.add(G.username.toLowerCase()); }
-    // Purge open race/milestone markets for:
-    //   (a) creator account (always exempt from PMs)
-    //   (b) deleted accounts (not in live leaderboard)
-    //   (c) race markets for players with 0 balance (inactive/zeroed accounts)
+
+    // Step 3: Purge open race/milestone markets for deleted or inactive players.
+    // All markets are now normalized to usernames, so liveUsernames check is accurate.
     const _beforePurge = _markets.length;
     _markets = _markets.filter(m => {
       if(m.status !== 'open') return true;
@@ -11478,32 +11490,18 @@ const PM = (() => {
       const player = (m.condition.params.player || '').toLowerCase();
       if(!player) return true;
       if(player === 'creator') return false;
-      if(m.type === 'race') return activeRacers.has(player);  // race: must have balance > 0
-      return liveUsernames.has(player);                        // milestone: just must exist
+      if(m.type === 'race') return activeRacers.has(player);
+      return liveUsernames.has(player);
     });
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
 
-    // Remap markets created with a player's display name to their canonical username.
-    // Happens when market creation historically used p.name instead of p.username.
-    let _remapped = false;
-    players.forEach(p => {
-      const username    = (p.username||'').toLowerCase();
-      const displayName = (p.name||p.player||'').toLowerCase();
-      if(!username || !displayName || username === displayName) return;
-      _markets.forEach(m => {
-        if(!m.condition?.params) return;
-        const mPlayer = (m.condition.params.player||'').toLowerCase();
-        if(mPlayer === displayName){
-          m.condition.params.player = p.username || m.condition.params.player;
-          _remapped = true;
-        }
-      });
-    });
-    // After remapping, deduplicate milestone markets — same player+amount+month may now collide
-    if(_remapped){
-      const thisMonth = new Date().toISOString().slice(0,7);
+    // Step 4: Deduplicate milestone markets — remap may have caused player+amount+month collisions.
+    // Run unconditionally (not just when remap fired) so any pre-existing duplicates get cleaned.
+    (()=>{
       const seen = new Map();
       const savedBets = _loadBets();
+      let changed = false;
+      const before = _markets.length;
       _markets = _markets.filter(m => {
         if(m.type !== 'season' || !m.condition || m.condition.type !== 'bankroll_milestone') return true;
         const p = m.condition.params;
@@ -11511,7 +11509,6 @@ const PM = (() => {
         const key = (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
         const existing = seen.get(key);
         if(!existing){ seen.set(key, m); return true; }
-        // Keep whichever has a player bet on it; otherwise keep the newer one
         const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
         if(hasBet){ seen.set(key, m); return true; }
         const existingHasBet = savedBets.some(b => b.mktId === existing.id && b.payout == null);
@@ -11519,8 +11516,8 @@ const PM = (() => {
         if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); return true; }
         return false;
       });
-      _saveMarkets();
-    }
+      if(_markets.length !== before) _saveMarkets();
+    })();
 
     // Track current balances for session factor (saved to prev at shoe boundaries)
     players.forEach(p => { const n=(p.username||'').toLowerCase(); if(n) _currBalances[n]=p.balance||0; });
@@ -11992,13 +11989,17 @@ const PM = (() => {
         m.condition && m.condition.params &&
         (m.condition.params.player||'').toLowerCase()==='creator')
     );
-    // Settle expired monthly milestone markets as NO (month passed without hitting the milestone)
+    // Settle expired monthly milestone markets as NO.
+    // Two paths: (a) expiresAt set and passed, (b) month field is an old calendar month
+    // (covers markets created before expiresAt was introduced — they never had a deadline).
     const _nowTs = Date.now();
+    const _curMonth = new Date().toISOString().slice(0,7);
     _markets.forEach(m => {
       if(m.type==='season' && m.status==='open' &&
-         m.condition && m.condition.type==='bankroll_milestone' &&
-         m.expiresAt && _nowTs > m.expiresAt){
-        settle(m.id, 'NO');
+         m.condition && m.condition.type==='bankroll_milestone'){
+        const mMonth = m.condition.params.month || (m.condition.params.date||'').slice(0,7);
+        const expired = (m.expiresAt && _nowTs > m.expiresAt) || (mMonth && mMonth < _curMonth);
+        if(expired) settle(m.id, 'NO');
       }
     });
     _markets = _markets.filter(m => !(m.type==='season' && m.condition && m.condition.type==='stake_reached'));

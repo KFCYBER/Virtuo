@@ -11595,15 +11595,23 @@ const PM = (() => {
           if(!local){
             // Shoe markets are purely local — never import from GAS (old shoe IDs would re-appear as duplicates)
             if(sm.type === 'shoe') return;
+            // Never re-import stale monthly milestone markets from GAS — they were settled locally
+            // and would otherwise come back on every poll as open (breaking the cleanup cycle).
+            if(sm.type === 'season' && sm.status === 'open' &&
+               sm.condition && sm.condition.type === 'bankroll_milestone'){
+              const smMonth = (sm.condition.params.month || (sm.condition.params.date||'').slice(0,7));
+              if(smMonth && smMonth < new Date().toISOString().slice(0,7)) return;
+            }
             // Skip logical duplicates for season/race — in MP both host and guest create markets
             // independently with different IDs; match by type+condition so only one copy exists.
+            // Player name comparison is case-insensitive to handle display-name vs username variants.
             const sp = sm.condition && sm.condition.params;
             const logicDup = sp && _markets.some(m => {
               if (m.type !== sm.type || m.status !== 'open' || sm.status !== 'open') return false;
               if (!m.condition || m.condition.type !== sm.condition.type) return false;
               const mp = m.condition.params;
               if ((sm.type === 'season' || sm.type === 'race') && mp && sp)
-                return mp.player === sp.player && mp.amount === sp.amount;
+                return (mp.player||'').toLowerCase() === (sp.player||'').toLowerCase() && mp.amount === sp.amount;
               return false;
             });
             if (!logicDup) _markets.push(sm);

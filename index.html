@@ -10035,6 +10035,7 @@ const PM = (() => {
   let _currBalances = {};   // updated each onLeaderboardUpdate
   let _prevBalances = {};   // snapshot from end of previous shoe, persisted to LS
   let _lastPlayers  = [];   // cached from last leaderboard fetch — used to remap after poll
+  let _aliasMap     = {};   // displayName.lower → canonical username, rebuilt each _remapAndDedup
   const LS_PREV_BAL = 'kfc_pm_prev_bal';
   function _loadPrevBal(){ try{ return JSON.parse(localStorage.getItem(LS_PREV_BAL)||'{}'); }catch(e){ return {}; } }
   function _savePrevBal(s){ try{ localStorage.setItem(LS_PREV_BAL, JSON.stringify(s)); }catch(e){} }
@@ -11476,6 +11477,7 @@ const PM = (() => {
         if(alias && alias !== uname.toLowerCase()) aliasMap[alias] = uname;
       });
     });
+    _aliasMap = aliasMap; // persist so poll() can normalize incoming markets
     // Remap markets whose player name is a display-name alias, not the canonical username
     let remapped = false;
     _markets.forEach(m => {
@@ -11530,17 +11532,27 @@ const PM = (() => {
     if(G.username){ liveUsernames.add(G.username.toLowerCase()); activeRacers.add(G.username.toLowerCase()); }
 
     // Step 3: Purge open race/milestone markets for deleted or inactive players.
-    const _beforePurge = _markets.length;
-    _markets = _markets.filter(m => {
-      if(m.status !== 'open') return true;
-      if(m.type !== 'race' && m.type !== 'season') return true;
-      if(!m.condition || !m.condition.params) return true;
+    // Also notify GAS (pmSettle) for each purged market so GAS marks them settled —
+    // otherwise poll() re-imports them as 'open' on every cycle.
+    const _shouldPurge = m => {
+      if(m.status !== 'open') return false;
+      if(m.type !== 'race' && m.type !== 'season') return false;
+      if(!m.condition || !m.condition.params) return false;
       const player = (m.condition.params.player || '').toLowerCase();
-      if(!player) return true;
-      if(player === 'creator') return false;
-      if(m.type === 'race') return activeRacers.has(player);
-      return liveUsernames.has(player);
-    });
+      if(!player) return false;
+      if(player === 'creator') return true;
+      if(m.type === 'race') return !activeRacers.has(player);
+      return !liveUsernames.has(player);
+    };
+    const _beforePurge = _markets.length;
+    if(G.url && G.username){
+      _markets.forEach(m => {
+        if(!_shouldPurge(m)) return;
+        const p = new URLSearchParams({ action:'pmSettle', mktId:m.id, result:'NO', settledBy:'system' });
+        fetch(G.url+'?'+p.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
+      });
+    }
+    _markets = _markets.filter(m => !_shouldPurge(m));
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
 
     // Track current balances for session factor (saved to prev at shoe boundaries)
@@ -11626,9 +11638,16 @@ const PM = (() => {
               const smMonth = (sm.condition.params.month || (sm.condition.params.date||'').slice(0,7));
               if(smMonth && smMonth < new Date().toISOString().slice(0,7)) return;
             }
+            // For race/season markets: normalize player name BEFORE logicDup so the dup check
+            // can correctly match e.g. incoming "Steven" against local "quindariousgooch".
+            if((sm.type === 'race' || sm.type === 'season') && sm.condition && sm.condition.params){
+              const rawPlayer = (sm.condition.params.player||'').toLowerCase();
+              if(rawPlayer === 'creator') return; // creator never gets markets
+              const canonical = _aliasMap[rawPlayer];
+              if(canonical) sm.condition.params.player = canonical;
+            }
             // Skip logical duplicates for season/race — in MP both host and guest create markets
             // independently with different IDs; match by type+condition so only one copy exists.
-            // Player name comparison is case-insensitive to handle display-name vs username variants.
             const sp = sm.condition && sm.condition.params;
             const logicDup = sp && _markets.some(m => {
               if (m.type !== sm.type || m.status !== 'open' || sm.status !== 'open') return false;

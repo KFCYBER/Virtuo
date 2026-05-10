@@ -4250,22 +4250,38 @@ function _voiceExclaim(type){
   while(pool.length > 1 && idx === _voiceLastPick[type]);
   _voiceLastPick[type] = idx;
 
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(pool[idx]);
-  const voice = _getFemaleVoice();
-  if(voice) utt.voice = voice;
-  utt.rate   = 1.05;
-  utt.pitch  = 1.15;
-  utt.volume = 0.92;
-  utt.lang   = 'en-IE'; // Irish English accent
-  window.speechSynthesis.speak(utt);
+  const _speak = () => {
+    const utt = new SpeechSynthesisUtterance(pool[idx]);
+    const voice = _getFemaleVoice();
+    if(voice){
+      utt.voice = voice;
+      // Only override lang when no specific voice is set — avoids conflict on Windows
+      // where en-IE doesn't exist and setting it after a voice breaks the utterance
+    } else {
+      utt.lang = 'en-IE'; // hint accent when falling back to browser default
+    }
+    utt.rate   = 1.05;
+    utt.pitch  = 1.15;
+    utt.volume = 0.92;
+    window.speechSynthesis.speak(utt);
+  };
+
+  // Chrome: cancel() then immediately speak() silently drops the utterance.
+  // Cancel first, then give Chrome one event-loop tick to flush before speaking.
+  if(window.speechSynthesis.speaking || window.speechSynthesis.pending){
+    window.speechSynthesis.cancel();
+    setTimeout(_speak, 50);
+  } else {
+    _speak();
+  }
 }
 
 // Load voice list — Chrome populates it async after voiceschanged fires
 if(window.speechSynthesis){
   const _primeVoice = () => { _cachedVoice = null; _getFemaleVoice(); };
-  if(window.speechSynthesis.onvoiceschanged !== undefined)
-    window.speechSynthesis.addEventListener('voiceschanged', _primeVoice);
+  // voiceschanged fires once voices are ready in Chrome; addEventListener is safe cross-browser
+  window.speechSynthesis.addEventListener('voiceschanged', _primeVoice);
+  // Try immediately in case voices are already loaded (Firefox/Safari/Edge)
   _primeVoice();
 }
 
@@ -5805,6 +5821,7 @@ function _sendTgBeacon(){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._sessionActive || G.cashedOut) return;
   if(!_tgNotifEnabled()) return;
+  if(!G.log || G.log.length === 0) return; // no hands played — skip
   // Use preDealBal when mid-hand so a bet in-flight doesn't make balance look like 0
   const safeBalance = (G.preDealBal != null && G.phase !== 'bet') ? G.preDealBal : G.balance;
   const buyIn   = G.sessionStart != null && G.sessionStart > 0 ? G.sessionStart : safeBalance;
@@ -5841,6 +5858,7 @@ function _sendTgBeacon(){
 function _logSessionToSheet(stakeLabel){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
+  if(!G.log || G.log.length === 0) return; // no hands played — nothing meaningful to log
   const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
   const params = new URLSearchParams({
     action:    'updatebalance',

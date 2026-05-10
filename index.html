@@ -12100,7 +12100,11 @@ const PM = (() => {
                 return (mp.player||'').toLowerCase() === (sp.player||'').toLowerCase() && mp.amount === sp.amount;
               return false;
             });
-            if (!logicDup) _markets.push(sm);
+            if (!logicDup){
+              // Ensure housePools exists for GAS-imported markets (GAS doesn't store it)
+              if(!sm.housePools) sm.housePools = sm.pools ? {...sm.pools} : {};
+              _markets.push(sm);
+            }
           } else if(sm.status==='settled' && local.status==='open'){
             Object.assign(local, sm);
             // Credit won bets to main balance
@@ -12122,7 +12126,11 @@ const PM = (() => {
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }
           } else if(sm.status==='open' && local.status==='open'){
-            local.pools = sm.pools;
+            // Merge rather than replace — keep the max per outcome key so a locally-placed bet
+            // that hasn't reached GAS yet isn't wiped by a stale GAS snapshot
+            if(sm.pools) Object.keys(sm.pools).forEach(k => {
+              local.pools[k] = Math.max(local.pools[k]||0, sm.pools[k]||0);
+            });
             if(sm.outcomes) local.outcomes = sm.outcomes;
           }
         });
@@ -12184,8 +12192,9 @@ const PM = (() => {
       totalExposure += b.amount;
       totalToWin += b.lockedPayout !== undefined ? (b.lockedPayout - b.amount) : 0;
       if(mkt && (mkt.type === 'race' || mkt.type === 'season')){
-        const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
-        const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+        const _hps = mkt.housePools||{};
+        const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(_hps[b.outcome]||0));
+        const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(_hps[k]||0)),0);
         totalLivePL += (pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount) - b.amount;
       }
     });
@@ -12296,8 +12305,9 @@ const PM = (() => {
             const oddsLabel = curPct ? `<span class="pm-port-odds">${curPct}%</span>` : '';
             let liveHTML = '', cashoutBtn = '';
             if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
-              const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
-              const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+              const _hp = mkt.housePools||{};
+              const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(_hp[b.outcome]||0));
+              const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(_hp[k]||0)),0);
               const livePL = (pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount) - b.amount;
               const lc = livePL > 0 ? 'pos' : livePL < 0 ? 'neg' : 'zero';
               liveHTML = `<span class="pm-port-live-pl ${lc}">Live: ${livePL>=0?'+':''}${fmtFull(livePL)}</span>`;
@@ -12380,8 +12390,9 @@ const PM = (() => {
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
 
-    const playerOut   = Math.max(0, (mkt.pools[outcome]||0) - (mkt.housePools[outcome]||0));
-    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
+    const _hp1    = mkt.housePools||{};
+    const playerOut   = Math.max(0, (mkt.pools[outcome]||0) - (_hp1[outcome]||0));
+    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(_hp1[k]||0)), 0);
     const payout = playerOut > 0 ? Math.round((bet.amount / playerOut) * playerTotal) : bet.amount;
     const pl     = payout - bet.amount;
     const curOdds = _pct(mkt, outcome);
@@ -12419,14 +12430,15 @@ const PM = (() => {
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
     // Use outcome-keyed pools directly — works for both YES/NO and race (player-name keyed) markets
-    const playerOut   = Math.max(0, (mkt.pools[outcome] || 0) - (mkt.housePools[outcome] || 0));
-    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)), 0);
+    const _hp2    = mkt.housePools||{};
+    const playerOut   = Math.max(0, (mkt.pools[outcome] || 0) - (_hp2[outcome] || 0));
+    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(_hp2[k]||0)), 0);
     const curOdds = _pct(mkt, outcome);
     if(playerOut <= 0){
       bet.payout = bet.amount;
       bet.cashoutEarly = true;
       bet.cashoutOdds  = curOdds;
-      mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
+      mkt.pools[outcome] = Math.max((_hp2[outcome]||0), mkt.pools[outcome] - bet.amount);
       G.balance += bet.amount;
       updateUI();
       _saveBets(bets);
@@ -12442,7 +12454,7 @@ const PM = (() => {
     bet.cashoutEarly = true;
     bet.cashoutOdds  = curOdds;
     // Remove stake from pool (floor at house pool to keep liquidity)
-    mkt.pools[outcome] = Math.max(mkt.housePools[outcome]||0, mkt.pools[outcome] - bet.amount);
+    mkt.pools[outcome] = Math.max((_hp2[outcome]||0), mkt.pools[outcome] - bet.amount);
     G.balance += payout;
     updateUI();
     _saveBets(bets);

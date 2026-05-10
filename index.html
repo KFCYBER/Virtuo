@@ -4184,6 +4184,78 @@ function playWelcomeSound(){
   }catch(e){}
 }
 
+// ── VOICE EXCLAIM (Web Speech API) ───────────────────────────────────────────
+const _voicePhrases = {
+  bj: [
+    "BLACKJACK, baby!",
+    "Oh my god, BLACKJACK!",
+    "Natural twenty-one — let's GO!",
+    "BLACKJACK! Are you kidding me?!",
+    "Yes YES YES! Blackjack!",
+    "Twenty-one! That's what I'm talking about!",
+    "BLACKJACK! You absolute legend!",
+    "Oh she did NOT just hit blackjack!",
+  ],
+  bigwin: [
+    "That is a MASSIVE win!",
+    "Oh, she is on FIRE!",
+    "HUGE win! Incredible!",
+    "Get IN! What a hand!",
+    "Now THAT is how you play blackjack!",
+    "Unbelievable! She cleaned UP!",
+    "YES! Take the money and RUN!",
+    "Oh my god, what a payday!",
+  ],
+};
+
+let _voiceLastPick = {bj:-1, bigwin:-1};
+let _cachedVoice = null;
+
+function _getFemaleVoice(){
+  if(_cachedVoice) return _cachedVoice;
+  const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+  // Priority list: known good female voices → any female-named → any English
+  const matchers = [
+    v => /samantha|victoria|karen|moira|fiona|zira|hazel|aria|google uk english female/i.test(v.name),
+    v => v.name.toLowerCase().includes('female') && v.lang.startsWith('en'),
+    v => v.lang.startsWith('en-'),
+    v => v.lang.startsWith('en'),
+  ];
+  for(const fn of matchers){
+    const v = voices.find(fn);
+    if(v){ _cachedVoice = v; return v; }
+  }
+  return null;
+}
+
+function _voiceExclaim(type){
+  if(!window.speechSynthesis) return;
+  const pool = _voicePhrases[type];
+  if(!pool || !pool.length) return;
+  // Pick a random phrase, never repeating the same one twice in a row
+  let idx;
+  do { idx = Math.floor(Math.random() * pool.length); }
+  while(pool.length > 1 && idx === _voiceLastPick[type]);
+  _voiceLastPick[type] = idx;
+
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(pool[idx]);
+  const voice = _getFemaleVoice();
+  if(voice) utt.voice = voice;
+  utt.rate   = 1.08;   // slightly faster = more hype energy
+  utt.pitch  = 1.25;   // higher = more feminine and excited
+  utt.volume = 0.92;
+  window.speechSynthesis.speak(utt);
+}
+
+// Prime the voice list as soon as the browser is ready (Chrome loads voices async)
+if(window.speechSynthesis){
+  if(window.speechSynthesis.onvoiceschanged !== undefined){
+    window.speechSynthesis.onvoiceschanged = () => { _cachedVoice = null; _getFemaleVoice(); };
+  }
+  _getFemaleVoice();
+}
+
 // ══════════════════════════════════════════════════════════
 // BACKGROUND MUSIC ENGINE  — seamless AudioContext looping
 // ══════════════════════════════════════════════════════════
@@ -7920,7 +7992,10 @@ function settle(reason){
 
   // ── Hot/cold shoe update ──
   _updateShoeTemp();
-  if(totalPLForDisplay>0){if(totalPLForDisplay>G.s.min*10)sfx('cash');else sfx('win');} else if(totalPLForDisplay<0){} else sfx('push');
+  if(totalPLForDisplay>0){
+    if(totalPLForDisplay>G.s.min*10){ sfx('cash'); _voiceExclaim(reason==='player_bj'?'bj':'bigwin'); }
+    else { sfx('win'); if(reason==='player_bj') _voiceExclaim('bj'); }
+  } else if(totalPLForDisplay<0){} else sfx('push');
   // Show missed side bet payouts (including Dealer Bust if it busted)
   if(db){
     const dbCards=G.dealer.length;

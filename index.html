@@ -330,9 +330,9 @@ body:not(.betting) #betting-spacer { flex: 0; }
   margin-top: 8px;
 }
 @keyframes loginFadeUp {
-  0%   { opacity:0; transform:translateY(40px) scale(0.88); border-color:rgba(201,168,76,0.9); box-shadow:0 0 90px rgba(201,168,76,0.45),0 32px 80px rgba(0,0,0,0.9); }
-  55%  { opacity:1; transform:translateY(-6px) scale(1.018); border-color:rgba(201,168,76,0.55); box-shadow:0 0 50px rgba(201,168,76,0.2),0 28px 80px rgba(0,0,0,0.65); }
-  100% { opacity:1; transform:translateY(0) scale(1); border-color:var(--line2); box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.03); }
+  0%   { opacity:0; transform:scale(0.90); border-color:rgba(201,168,76,0.9); box-shadow:0 0 90px rgba(201,168,76,0.45),0 32px 80px rgba(0,0,0,0.9); }
+  55%  { opacity:1; transform:scale(1.015); border-color:rgba(201,168,76,0.55); box-shadow:0 0 50px rgba(201,168,76,0.2),0 28px 80px rgba(0,0,0,0.65); }
+  100% { opacity:1; transform:scale(1); border-color:var(--line2); box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.03); }
 }
 @keyframes logoBoom {
   0%   { opacity:0; transform:scale(0.65); filter:brightness(5) blur(12px); }
@@ -341,7 +341,7 @@ body:not(.betting) #betting-spacer { flex: 0; }
 }
 @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
 @keyframes lfFadeUp {
-  from { opacity:0; transform:translateY(16px); }
+  from { opacity:0; transform:translateY(10px); }
   to   { opacity:1; transform:translateY(0); }
 }
 @keyframes btnShimmer {
@@ -382,7 +382,7 @@ body:not(.betting) #betting-spacer { flex: 0; }
 }
 .login-stake-btn { transition: border-color .15s, background .15s, transform .15s !important; }
 .login-stake-btn:hover:not([disabled]) { transform: translateX(5px) !important; }
-.btn-primary { position:relative; overflow:hidden; }
+#login .btn-primary { position:relative; overflow:hidden; }
 /* Members Only tag */
 .login-members-tag {
   font-family:var(--mono); font-size:10px; letter-spacing:7px;
@@ -394,11 +394,14 @@ body:not(.betting) #betting-spacer { flex: 0; }
   background:rgba(201,168,76,0.75); margin-left:3px; vertical-align:middle;
   animation:blink 0.75s ease infinite;
 }
+/* Login text centering */
+#login-loading { text-align:center; }
+#login .err { text-align:center; }
 /* Staggered field rows */
-.login-field-row { opacity:0; transform:translateY(16px); }
+.login-field-row { opacity:0; transform:translateY(10px); }
 .login-field-row.lf-in { animation:lfFadeUp 0.55s cubic-bezier(.16,1,.3,1) both; }
-/* Button shine streak */
-.btn-primary::after {
+/* Button shine streak — scoped to login only */
+#login .btn-primary::after {
   content:''; position:absolute; top:0; left:-80%; bottom:0; width:55%;
   background:linear-gradient(90deg,transparent,rgba(255,255,255,0.24),transparent);
   transform:skewX(-18deg); pointer-events:none;
@@ -4220,11 +4223,13 @@ let _cachedVoice = null;
 function _getFemaleVoice(){
   if(_cachedVoice) return _cachedVoice;
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
-  // Priority list: known good female voices → any female-named → any English
+  if(!voices.length) return null; // voices not loaded yet — don't cache null
+  // Priority: known good English female voices → any en-GB/en-US → any English
   const matchers = [
-    v => /samantha|victoria|karen|moira|fiona|zira|hazel|aria|google uk english female/i.test(v.name),
+    v => /samantha|victoria|karen|moira|fiona|zira|hazel|aria|google uk english female/i.test(v.name) && v.lang.startsWith('en'),
     v => v.name.toLowerCase().includes('female') && v.lang.startsWith('en'),
-    v => v.lang.startsWith('en-'),
+    v => v.lang === 'en-GB',
+    v => v.lang === 'en-US',
     v => v.lang.startsWith('en'),
   ];
   for(const fn of matchers){
@@ -4238,7 +4243,6 @@ function _voiceExclaim(type){
   if(!window.speechSynthesis) return;
   const pool = _voicePhrases[type];
   if(!pool || !pool.length) return;
-  // Pick a random phrase, never repeating the same one twice in a row
   let idx;
   do { idx = Math.floor(Math.random() * pool.length); }
   while(pool.length > 1 && idx === _voiceLastPick[type]);
@@ -4248,18 +4252,19 @@ function _voiceExclaim(type){
   const utt = new SpeechSynthesisUtterance(pool[idx]);
   const voice = _getFemaleVoice();
   if(voice) utt.voice = voice;
-  utt.rate   = 1.08;   // slightly faster = more hype energy
-  utt.pitch  = 1.25;   // higher = more feminine and excited
+  utt.rate   = 1.05;
+  utt.pitch  = 1.15;
   utt.volume = 0.92;
+  utt.lang   = 'en-US'; // explicit language so browser doesn't guess
   window.speechSynthesis.speak(utt);
 }
 
-// Prime the voice list as soon as the browser is ready (Chrome loads voices async)
+// Load voice list — Chrome populates it async after voiceschanged fires
 if(window.speechSynthesis){
-  if(window.speechSynthesis.onvoiceschanged !== undefined){
-    window.speechSynthesis.onvoiceschanged = () => { _cachedVoice = null; _getFemaleVoice(); };
-  }
-  _getFemaleVoice();
+  const _primeVoice = () => { _cachedVoice = null; _getFemaleVoice(); };
+  if(window.speechSynthesis.onvoiceschanged !== undefined)
+    window.speechSynthesis.addEventListener('voiceschanged', _primeVoice);
+  _primeVoice();
 }
 
 // ══════════════════════════════════════════════════════════
@@ -6071,6 +6076,7 @@ function openApp(displayName, balance){
     document.getElementById('login').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('app').style.flexDirection='column';
+    setTimeout(updateAnnounceCx, 80); // measure table-area after it's visible
   },400);
 
   document.getElementById('tb-name').textContent=displayName;
@@ -6157,8 +6163,7 @@ function openApp(displayName, balance){
   document.body.classList.add('betting');
   updateBetPanel();
   updateSBCircles();
-  // Set announce center after layout settles
-  setTimeout(updateAnnounceCx, 100);
+  // announce-cx is set inside the transition timeout above, after #app is visible
   // Sync hand2 toggle UI if it was active in previous session
   if(G._hand2Active){
     const _h2btn=document.getElementById('btn-hand2-toggle');

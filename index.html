@@ -12302,25 +12302,74 @@ const PM = (() => {
         // Re-run remap after import — normalises display-name variants → canonical username
         if(_lastPlayers.length) _remapAndDedup(_lastPlayers);
         else _saveMarkets();
-        // Post-import dedup: collapse any remaining duplicates by player+amount key
-        const _savedBetsPost = _loadBets();
+        // Post-import dedup: stable markets are authoritative.
+        // Any non-stable market that shares the same player+amount as a stable market is a legacy
+        // duplicate and gets removed, regardless of player name casing or aliasing differences.
+        // For any remaining duplicates (no stable equivalent), keep the newest by createdAt.
+        const _stableIds = new Set();
+        const _stableKeys = new Map(); // 'ms_player_amount_month' or 'rc_player_amount' → stableId
+        const _parseStablePlayer = id => {
+          const pfx = id.startsWith(PM_PFX+'ms_') ? PM_PFX+'ms_' : id.startsWith(PM_PFX+'rc_') ? PM_PFX+'rc_' : null;
+          if(!pfx) return null;
+          const rest = id.slice(pfx.length).split('_');
+          // Find the amount segment (last pure-number segment before optional YYYY-MM)
+          for(let i = rest.length-1; i >= 1; i--){
+            if(/^\d+$/.test(rest[i])) return rest.slice(0,i).join('_');
+          }
+          return null;
+        };
+        _markets.forEach(m => {
+          if(m.status !== 'open' || !m.condition?.params) return;
+          const isStable = m.id.startsWith(PM_PFX+'ms_') || m.id.startsWith(PM_PFX+'rc_');
+          if(!isStable) return;
+          _stableIds.add(m.id);
+          const p = m.condition.params;
+          const pl = _parseStablePlayer(m.id) || (p.player||'').toLowerCase();
+          if(m.type === 'season' && m.condition.type === 'bankroll_milestone'){
+            const mon = p.month || (p.date||'').slice(0,7);
+            _stableKeys.set('ms_'+pl+'_'+p.amount+'_'+mon, m.id);
+          } else if(m.type === 'race' && m.condition.type === 'bankroll_race_player'){
+            _stableKeys.set('rc_'+pl+'_'+p.amount, m.id);
+          }
+        });
+        const _betsPost = _loadBets();
+        const _hasBet = id => _betsPost.some(b => b.mktId === id && b.payout == null);
+        if(_stableKeys.size > 0){
+          _markets = _markets.filter(m => {
+            if(m.status !== 'open' || _stableIds.has(m.id)) return true;
+            const p = m.condition?.params; if(!p) return true;
+            const pl = (p.player||'').toLowerCase();
+            const aliases = [pl, _aliasMap[pl] ? _aliasMap[pl].toLowerCase() : null].filter(Boolean);
+            let covered = false;
+            aliases.forEach(a => {
+              if(covered) return;
+              if(m.type === 'season' && m.condition.type === 'bankroll_milestone'){
+                const mon = p.month || (p.date||'').slice(0,7);
+                if(_stableKeys.has('ms_'+a+'_'+p.amount+'_'+mon)) covered = true;
+              } else if(m.type === 'race' && m.condition.type === 'bankroll_race_player'){
+                if(_stableKeys.has('rc_'+a+'_'+p.amount)) covered = true;
+              }
+            });
+            if(!covered) return true;
+            return _hasBet(m.id); // keep only if player has an active bet on it
+          });
+        }
+        // Fallback dedup by player+amount (catches any residual duplicates without stable equivalents)
         (['season','race']).forEach(mtype => {
           const seen = new Map();
           _markets.forEach(m => {
             if(m.type !== mtype || m.status !== 'open') return;
-            const p = m.condition && m.condition.params; if(!p) return;
-            const k = (p.player||'').toLowerCase() + '_' + (p.amount||'');
+            const p = m.condition?.params; if(!p) return;
+            const k = (p.player||'').toLowerCase()+'_'+(p.amount||'');
             const ex = seen.get(k);
             if(!ex || (m.createdAt||0) > (ex.createdAt||0)) seen.set(k, m);
           });
           const keepIds = new Set([...seen.values()].map(m => m.id));
           _markets = _markets.filter(m => {
             if(m.type !== mtype || m.status !== 'open') return true;
-            const p = m.condition && m.condition.params; if(!p) return true;
-            const k = (p.player||'').toLowerCase() + '_' + (p.amount||'');
-            if(!seen.has(k)) return true;
+            const p = m.condition?.params; if(!p) return true;
             if(keepIds.has(m.id)) return true;
-            return _savedBetsPost.some(b => b.mktId === m.id && b.payout == null);
+            return _hasBet(m.id);
           });
         });
         _saveMarkets(); render();

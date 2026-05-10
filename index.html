@@ -5444,7 +5444,7 @@ function saveSession(){
   const safeBalance = (midHand && !G._handCommitted && G.preDealBal != null) ? G.preDealBal : G.balance;
   try{
     const snap={
-      player:G.player, username:G.username,
+      player:G.player, username:G.username, playerId:G.playerId||'',
       balance:safeBalance, sessionStart:G.sessionStart, totalBalance:G._totalBalance||G.balance, cashedOut:G.cashedOut, sessionActive:G._sessionActive,
       stake:G.stake,
       cachedPin:G._cachedPin||'',
@@ -5502,9 +5502,10 @@ function restoreSession(lastUser){
     }
 
     // Restore state
-    G.player=snap.player; 
+    G.player=snap.player;
     // Use snap.username if available — never fall back to snap.player (display name ≠ username)
     G.username=snap.username||'';
+    G.playerId=snap.playerId||'';
     G._cachedPin=snap.cachedPin||'';
     G._clubPass=snap.clubPass||false;
     G.balance=snap.balance; G.sessionStart=snap.sessionStart||snap.balance; G._totalBalance=snap.totalBalance||snap.balance; G._sessionActive=snap.sessionActive||false;
@@ -9891,39 +9892,32 @@ function _renderLeaderboard(players, errMsg){
     el.innerHTML = `<div style="color:var(--muted);padding:4px 0">${errMsg||'—'}</div>`;
     return;
   }
-  // Deduplicate: by playerId first (strongest signal), then by username, then by display name.
-  // Handles stale sheet rows from renamed players — keep highest balance per stable ID.
-  const _seenById   = new Map(); // playerId → player
-  const _seenByUser = new Map(); // username.lower → player
-  const _seenByName = new Map(); // displayName.lower → player
+  // Step 1: best player per stable key — playerId when available, else username.lower
+  const _byKey = new Map();
   players.forEach(p => {
-    const pid  = (p.playerId||'').trim();
-    const ukey = (p.username||p.name||'').toLowerCase();
-    if(pid){
-      const ex = _seenById.get(pid);
-      if(!ex || (p.balance||0) > (ex.balance||0)) _seenById.set(pid, p);
-    } else if(ukey){
-      const ex = _seenByUser.get(ukey);
-      if(!ex || (p.balance||0) > (ex.balance||0)) _seenByUser.set(ukey, p);
-    }
+    const key = (p.playerId||'').trim() || (p.username||p.name||'').toLowerCase();
+    if(!key) return;
+    const ex = _byKey.get(key);
+    if(!ex || (p.balance||0) > (ex.balance||0)) _byKey.set(key, p);
   });
-  // Merge: playerId-deduped entries take priority; fallback to username-deduped
-  const _merged = new Map();
-  _seenById.forEach((p, pid) => { _merged.set('id:'+pid, p); });
-  _seenByUser.forEach((p, ukey) => {
-    if(![..._seenById.values()].some(q => (q.username||'').toLowerCase()===ukey)) _merged.set('u:'+ukey, p);
-  });
-  // Final display-name collapse for any remaining duplicates (no playerId, same name)
-  _merged.forEach((p, mk) => {
+  // Step 2: collapse by display name — catches same person with different username/playerId
+  const _byName = new Map(); // displayName.lower → {key, player}
+  const _toRemove = new Set();
+  _byKey.forEach((p, key) => {
     const nameKey = (p.name||p.username||'').toLowerCase();
     if(!nameKey) return;
-    const ex = _seenByName.get(nameKey);
-    if(!ex){ _seenByName.set(nameKey, p); return; }
-    if((p.balance||0) > (ex.balance||0)){ _seenByName.set(nameKey, p); _merged.delete('u:'+(ex.username||'').toLowerCase()); }
-    else { _merged.delete(mk); }
+    const ex = _byName.get(nameKey);
+    if(!ex){ _byName.set(nameKey, {key, p}); return; }
+    if((p.balance||0) > (ex.p.balance||0)){
+      _toRemove.add(ex.key);
+      _byName.set(nameKey, {key, p});
+    } else {
+      _toRemove.add(key);
+    }
   });
-  // Sort by total balance descending, hide creator account
-  const sorted = [..._merged.values()].filter(p=>(p.username||p.name||'').toLowerCase()!=='creator').sort((a,b)=>b.balance - a.balance);
+  _toRemove.forEach(k => _byKey.delete(k));
+  // Sort by balance descending, hide creator
+  const sorted = [..._byKey.values()].filter(p=>(p.username||p.name||'').toLowerCase()!=='creator').sort((a,b)=>b.balance-a.balance);
   const me = (G.username||G.player||'').toLowerCase();
   const rankSymbol = (i) => i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
   const rankClass  = (i) => i===0?'gold':i===1?'silver':i===2?'bronze':'';

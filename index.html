@@ -12004,9 +12004,11 @@ const PM = (() => {
       if(!m.condition || !m.condition.params) return false;
       const player = (m.condition.params.player || '').toLowerCase();
       if(!player) return false;
-      if(player === 'creator') return true;
-      if(m.type === 'race') return !activeRacers.has(player);
-      return !liveUsernames.has(player);
+      // Only purge creator markets — never purge based on leaderboard presence.
+      // Players may be offline while their race/milestone markets are still valid;
+      // purging would orphan open bets and trigger erroneous refunds.
+      // Milestone markets expire naturally at month-end; race markets settle via onHandEnd.
+      return player === 'creator';
     };
     const _beforePurge = _markets.length;
     if(G.url && G.username){

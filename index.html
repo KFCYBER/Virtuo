@@ -10995,20 +10995,20 @@ const PM = (() => {
     const strip = document.getElementById('pm-hot-strip');
     if(!area || !strip) return;
 
-    // Player-only pool — requires housePools to be defined; without it we can't
-    // distinguish house seed from player bets, so we treat playerPool as 0.
-    // Use local bets as the source of truth — pool math drifts when the GAS sheet is cleared
-    const _hotBets = _loadBets();
-    const playerPool = m => _hotBets
-      .filter(b => b.mktId === m.id)
-      .reduce((s, b) => s + (b.amount||0), 0);
+    // Shared pool — uses GAS-aggregated pools so all players see the same hot markets.
+    // housePools is the original house seed; anything above it is real player bets.
+    const playerPool = m => {
+      if(!m.housePools) return 0;
+      return Object.keys(m.pools||{}).reduce((s,k) =>
+        s + Math.max(0, (m.pools[k]||0) - (m.housePools[k]||0)), 0);
+    };
 
     const top = _markets
       .filter(m => m.status === 'open')
       .map(m => ({ m, pool: playerPool(m) }))
       .filter(x => x.pool > 0)
       .sort((a,b) => b.pool - a.pool)
-      .slice(0, 3);
+      .slice(0, 5);
 
     if(!top.length){ area.style.display = 'none'; return; }
     area.style.display = '';

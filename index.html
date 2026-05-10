@@ -12680,6 +12680,25 @@ const PM = (() => {
         <button class="btn-primary" style="flex:2;padding:8px;font-size:10px" onclick="PM._saveSeasonHist()">SAVE ALL</button>
       </div>
       ${hasHist ? '<div style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px;margin-top:10px;text-align:center">'+Object.keys(_seasonHist).length+' player'+(Object.keys(_seasonHist).length!==1?'s':'')+' calibrated</div>' : ''}
+      <div style="height:1px;background:var(--line);margin:18px 0"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:2px;margin-bottom:8px">EXPORT HAND LOG</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;line-height:1.6;margin-bottom:10px">Download last 500 hands for a player as CSV.</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <select id="pm-export-player" style="flex:1;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:6px 8px;font-family:var(--mono);font-size:10px;color:var(--white);outline:none">
+          <option value="">— select player —</option>
+          ${Object.keys(_currBalances).sort().map(p=>`<option value="${p}">${p}</option>`).join('')}
+        </select>
+        <button class="btn-ghost" style="padding:8px 14px;font-size:10px" onclick="PM._exportHandLog()">⬇ Export CSV</button>
+      </div>
+      <div id="pm-export-result" style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px"></div>
+      <div style="height:1px;background:var(--line);margin:18px 0"></div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:2px;margin-bottom:8px">ADMIN: PURGE DUPLICATE MARKETS</div>
+      <div style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px;line-height:1.6;margin-bottom:10px">
+        Deletes duplicate open season/race rows from the GAS sheet.<br>
+        Keeps only the canonical market per player+amount. Run once to fix duplicates.
+      </div>
+      <button class="btn-ghost" style="width:100%;padding:8px;font-size:10px" onclick="PM._purgeDups()">🧹 Purge Duplicate Markets</button>
+      <div id="pm-purge-result" style="font-family:var(--mono);font-size:9px;color:var(--green);letter-spacing:1px;margin-top:8px;text-align:center"></div>
     `;
   }
 
@@ -12916,6 +12935,28 @@ const PM = (() => {
     poll();
   }
 
+  async function _exportHandLog(){
+    const sel = document.getElementById('pm-export-player');
+    const res = document.getElementById('pm-export-result');
+    const player = sel && sel.value;
+    if(!player){ if(res) res.textContent = 'Select a player first.'; return; }
+    if(res) res.textContent = 'Fetching…';
+    try{
+      const d = await sheetGet(G.url + '?action=exporthandlog&player=' + encodeURIComponent(player));
+      if(!d || !d.ok){ if(res) res.textContent = '✗ ' + (d && d.error || 'error'); return; }
+      const rows = d.rows || [];
+      if(!rows.length){ if(res) res.textContent = 'No hands found for ' + player; return; }
+      const header = 'Timestamp,Player,Username,Stake,Hand#,Detail,P&L,Balance,Session P&L';
+      const csv = header + '\n' + rows.map(r => r.map(v => '"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+      const blob = new Blob([csv], {type:'text/csv'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = player + '_hands_' + new Date().toISOString().slice(0,10) + '.csv';
+      a.click(); URL.revokeObjectURL(url);
+      if(res) res.textContent = '✓ Downloaded ' + rows.length + ' hands' + (d.total > rows.length ? ' (last 500 of ' + d.total + ')' : '') + '.';
+    }catch(e){ if(res) res.textContent = '✗ ' + e.message; }
+  }
+
   async function _purgeDups(){
     const btn = document.getElementById('pm-purge-btn');
     const res = document.getElementById('pm-purge-result');
@@ -12930,7 +12971,7 @@ const PM = (() => {
     if(btn) btn.disabled = false;
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog };
 })();
 
 
@@ -13955,12 +13996,6 @@ const MP2 = {
     </div>
     <div id="pm-pane-history" class="pm-modal-body" style="display:none">
       <div class="pm-empty">Loading…</div>
-      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
-        <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ADMIN: PURGE DUPLICATE MARKETS</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Deletes all duplicate open season/race rows from GAS sheet, keeping only the canonical market per player+amount. Run once to clean up historical junk.</div>
-        <button class="btn-ghost" id="pm-purge-btn" style="font-size:11px;padding:8px 16px" onclick="PM._purgeDups()">🧹 Purge Duplicates</button>
-        <div id="pm-purge-result" style="font-size:11px;color:var(--green);margin-top:8px"></div>
-      </div>
     </div>
   </div>
 </div>

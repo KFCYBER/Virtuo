@@ -11613,14 +11613,8 @@ const PM = (() => {
       const balance = p.balance || 0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance >= amount) return;
-        const alreadyExists = _markets.some(m =>
-          m.type==='season' && m.status==='open' && m.condition &&
-          m.condition.type==='bankroll_milestone' &&
-          m.condition.params && (m.condition.params.player||'').toLowerCase()===pLow &&
-          m.condition.params.amount===amount &&
-          (m.condition.params.month || (m.condition.params.date||'').slice(0,7)) === thisMonth
-        );
-        if(alreadyExists) return;
+        const stableId = PM_PFX + 'ms_' + pLow + '_' + amount + '_' + thisMonth;
+        if(_markets.some(m => m.id === stableId)) return;
         const ratio = Math.min(balance / amount, 0.99);
         const baseBias = 0.15 + 0.70 * ratio;
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance) * _timeFactor()));
@@ -11629,6 +11623,7 @@ const PM = (() => {
           {type:'bankroll_milestone', params:{player:pName, amount, date:today, month:thisMonth}},
           yesBias
         );
+        mkt.id = stableId;
         mkt.expiresAt = expiry;
         _markets.push(mkt);
       });
@@ -11687,21 +11682,18 @@ const PM = (() => {
       eligible.forEach(p => {
         const pName = p.username; if(!pName) return;
         const pLow  = pName.toLowerCase();
-        const alreadyOpen = _markets.some(m =>
-          m.type==='race' && m.status==='open' &&
-          m.condition && m.condition.type==='bankroll_race_player' &&
-          m.condition.params && m.condition.params.amount===amount &&
-          (m.condition.params.player||'').toLowerCase()===pLow
-        );
-        if(alreadyOpen) return;
+        const stableId = PM_PFX + 'rc_' + pLow + '_' + amount;
+        if(_markets.some(m => m.id === stableId)) return;
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
         const baseBias = Math.max(0.06, Math.min(0.90, 0.10 + 0.80*ratio));
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0) * _timeFactor()));
-        _markets.push(_makeMarket('race',
+        const mkt = _makeMarket('race',
           'Will '+pName+' be first to reach '+fmtFull(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
           yesBias, 'season'
-        ));
+        );
+        mkt.id = stableId;
+        _markets.push(mkt);
       });
     });
     _saveMarkets();

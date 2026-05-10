@@ -4199,6 +4199,16 @@ function playWelcomeSound(){
 
 // ── VOICE EXCLAIM (Web Speech API) ───────────────────────────────────────────
 const _voicePhrases = {
+  allin: [
+    "ALL IN, baby — everything on the line!",
+    "Oh my god, they're going ALL IN!",
+    "All in! This is it — do or die!",
+    "Every single chip. ALL IN!",
+    "They've gone all in — unbelievable!",
+    "This is insane — ALL IN!",
+    "No more chips to bet — ALL IN!",
+    "The whole stack — ALL IN!",
+  ],
   bj: [
     "BLACKJACK, baby!",
     "Oh my god, BLACKJACK!",
@@ -4221,7 +4231,7 @@ const _voicePhrases = {
   ],
 };
 
-let _voiceLastPick = {bj:-1, bigwin:-1};
+let _voiceLastPick = {allin:-1, bj:-1, bigwin:-1};
 let _cachedVoice = null;
 
 function _getFemaleVoice(){
@@ -4283,10 +4293,16 @@ function _voiceExclaim(type){
 // Load voice list — Chrome populates it async after voiceschanged fires
 if(window.speechSynthesis){
   const _primeVoice = () => { _cachedVoice = null; _getFemaleVoice(); };
-  // voiceschanged fires once voices are ready in Chrome; addEventListener is safe cross-browser
   window.speechSynthesis.addEventListener('voiceschanged', _primeVoice);
-  // Try immediately in case voices are already loaded (Firefox/Safari/Edge)
   _primeVoice();
+
+  // Chrome pauses speechSynthesis when the tab goes to background and never resumes it.
+  // Calling resume() on a 5s interval keeps the engine alive. Also cancel any stuck
+  // queue when the tab becomes visible again.
+  setInterval(() => { window.speechSynthesis.resume(); }, 5000);
+  document.addEventListener('visibilitychange', () => {
+    if(!document.hidden) window.speechSynthesis.cancel();
+  });
 }
 
 // ══════════════════════════════════════════════════════════
@@ -7108,6 +7124,7 @@ function showAllIn(){
   void el.offsetWidth; // force reflow to restart animation
   el.classList.add('show');
   setTimeout(()=>el.classList.remove('show'), 1700);
+  if(_isVocalMode()) _voiceExclaim('allin');
 }
 
 function showBJ(){

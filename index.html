@@ -5898,7 +5898,7 @@ window.addEventListener('pagehide', ()=>{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
     }catch(e){}
-    // MP: also send leave beacon so the table slot is freed (mirrors the beforeunload handler)
+    // MP: send leave beacon here (pagehide) — not in beforeunload, so "Stay" keeps the player in the table
     if(G.mpMode && MP2.tableId && MP2._url && MP2._me){
       try{ navigator.sendBeacon(`${MP2._url}/mp/leave`, new Blob([JSON.stringify({tableId:MP2.tableId,username:MP2._me})],{type:'application/json'})); }catch(e){}
     }
@@ -10893,10 +10893,13 @@ const PM = (() => {
     const typeLabel = t => t==='race'?'RACE':t==='season'?'SEASON':'SHOE';
 
     strip.innerHTML = top.map(({m, pool}) => {
-      const yP = Math.max(0, (m.pools&&m.pools.YES||0) - ((m.housePools||{}).YES||0));
-      const nP = Math.max(0, (m.pools&&m.pools.NO||0)  - ((m.housePools||{}).NO||0));
+      const hp   = m.housePools || null;
+      const yP   = hp ? Math.max(0, (m.pools.YES||0) - (hp.YES||0)) : 0;
+      const nP   = hp ? Math.max(0, (m.pools.NO||0)  - (hp.NO||0))  : 0;
       const hasYN = m.pools && 'YES' in m.pools;
-      const yPct = hasYN && (yP+nP)>0 ? Math.round(yP/(yP+nP)*100) : null;
+      // Only show the split bar if housePools is known — without it the house-seed bias
+      // bleeds into nP and produces a misleading "100% NO" even after a YES bet.
+      const yPct = hasYN && hp && (yP+nP)>0 ? Math.round(yP/(yP+nP)*100) : null;
       const splitHTML = yPct !== null
         ? `<div class="pm-hot-split-bar"><div class="pm-hot-split-fill" style="width:${yPct}%"></div></div>
            <div class="pm-hot-split-labels"><span class="hs-yes">${yPct}% YES</span><span class="hs-no">${100-yPct}% NO</span></div>`
@@ -11934,10 +11937,11 @@ const PM = (() => {
     // After remap, two markets may now share the same logical key.
     // Only open-vs-open: never collapse a settled market with an incoming open one.
     const before = _markets.length;
-    const seen = new Map();
+    const seen = new Map();           // key → surviving market
+    const discarded = new Map();      // discarded market id → surviving market id
     const savedBets = _loadBets();
     _markets = _markets.filter(m => {
-      if(m.status !== 'open') return true; // never discard settled/cancelled markets
+      if(m.status !== 'open') return true;
       if(!m.condition || !m.condition.params) return true;
       const p = m.condition.params;
       let key = null;
@@ -11951,12 +11955,31 @@ const PM = (() => {
       const existing = seen.get(key);
       if(!existing){ seen.set(key, m); return true; }
       const hasBet = savedBets.some(b => b.mktId === m.id && b.payout == null);
-      if(hasBet){ seen.set(key, m); return true; }
+      if(hasBet){ seen.set(key, m); discarded.set(existing.id, m.id); return true; }
       const existingHasBet = savedBets.some(b => b.mktId === existing.id && b.payout == null);
-      if(existingHasBet) return false;
-      if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); return true; }
+      if(existingHasBet){ discarded.set(m.id, existing.id); return false; }
+      if((m.createdAt||0) > (existing.createdAt||0)){ seen.set(key, m); discarded.set(existing.id, m.id); return true; }
+      discarded.set(m.id, existing.id);
       return false;
     });
+    // Migrate open bets from discarded markets to their survivor so _cleanupOrphanBets
+    // doesn't refund them. Also merge their stake into the survivor's pool.
+    if(discarded.size){
+      let betsChanged = false;
+      savedBets.forEach(b => {
+        if(b.payout !== null) return;
+        const survivorId = discarded.get(b.mktId);
+        if(!survivorId) return;
+        const survivor = _markets.find(m => m.id === survivorId);
+        if(!survivor) return;
+        b.mktId = survivorId;
+        if(survivor.pools && b.outcome !== undefined && (survivor.pools[b.outcome] !== undefined)){
+          survivor.pools[b.outcome] = (survivor.pools[b.outcome]||0) + b.amount;
+        }
+        betsChanged = true;
+      });
+      if(betsChanged){ _saveBets(savedBets); }
+    }
     if(remapped || _markets.length !== before) _saveMarkets();
   }
 
@@ -12022,6 +12045,8 @@ const PM = (() => {
 
     _createPlayerMilestoneMarkets(players);
     _createRaceMarkets(players);
+    // Immediately dedup after creation — catches duplicates without waiting for next poll
+    _remapAndDedup(players);
 
     // Settle milestone markets
     players.forEach(p => {
@@ -13634,13 +13659,13 @@ const MP2 = {
         // Save session so _expireStaleSession writes a TX row on next load (same as SP)
         if(G.player && !G.cashedOut && G._sessionActive){
           saveSession();
-          // Beacon deferred to pagehide — see SP handler comment above
+          // Leave beacon deferred to pagehide — fires only after user confirms the dialog.
+          // Sending it here would kick the player from the table even if they click "Stay".
           try{
             const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
             if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
           }catch(e){}
         }
-        try { navigator.sendBeacon(`${this._url}/mp/leave`, new Blob([JSON.stringify({tableId:this.tableId,username:this._me})],{type:'application/json'})); } catch(e) {}
       }
     };
     window.addEventListener('beforeunload', this._unloadFn);

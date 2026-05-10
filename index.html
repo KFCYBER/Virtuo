@@ -330,12 +330,28 @@ body:not(.betting) #betting-spacer { flex: 0; }
   margin-top: 8px;
 }
 @keyframes loginFadeUp {
-  from { opacity:0; transform:translateY(24px) scale(0.96); }
-  to   { opacity:1; transform:translateY(0) scale(1); }
+  0%   { opacity:0; transform:translateY(40px) scale(0.88); border-color:rgba(201,168,76,0.9); box-shadow:0 0 90px rgba(201,168,76,0.45),0 32px 80px rgba(0,0,0,0.9); }
+  55%  { opacity:1; transform:translateY(-6px) scale(1.018); border-color:rgba(201,168,76,0.55); box-shadow:0 0 50px rgba(201,168,76,0.2),0 28px 80px rgba(0,0,0,0.65); }
+  100% { opacity:1; transform:translateY(0) scale(1); border-color:var(--line2); box-shadow:0 24px 80px rgba(0,0,0,0.6),0 0 0 1px rgba(255,255,255,0.03); }
 }
-@keyframes logoGlow {
-  0%,100% { box-shadow:0 0 24px rgba(201,168,76,0.08); }
-  50%      { box-shadow:0 0 48px rgba(201,168,76,0.22), 0 0 80px rgba(201,168,76,0.08); }
+@keyframes logoBoom {
+  0%   { opacity:0; transform:scale(0.65); filter:brightness(5) blur(12px); }
+  45%  { opacity:1; transform:scale(1.1); filter:brightness(2.2) blur(3px); }
+  100% { opacity:1; transform:scale(1); filter:brightness(1) blur(0px); }
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+@keyframes lfFadeUp {
+  from { opacity:0; transform:translateY(16px); }
+  to   { opacity:1; transform:translateY(0); }
+}
+@keyframes btnShimmer {
+  from { left:-80%; }
+  to   { left:160%; }
+}
+@keyframes goldFlash {
+  0%   { opacity:0; }
+  22%  { opacity:0.9; }
+  100% { opacity:0; }
 }
 @keyframes stepSlideIn {
   from { opacity:0; transform:translateX(22px) scale(0.97); }
@@ -367,6 +383,33 @@ body:not(.betting) #betting-spacer { flex: 0; }
 .login-stake-btn { transition: border-color .15s, background .15s, transform .15s !important; }
 .login-stake-btn:hover:not([disabled]) { transform: translateX(5px) !important; }
 .btn-primary { position:relative; overflow:hidden; }
+/* Members Only tag */
+.login-members-tag {
+  font-family:var(--mono); font-size:10px; letter-spacing:7px;
+  color:rgba(201,168,76,0.75); text-transform:uppercase; text-align:center;
+  margin-bottom:28px; min-height:16px; white-space:nowrap; overflow:hidden;
+}
+.login-members-cursor {
+  display:inline-block; width:1.5px; height:10px;
+  background:rgba(201,168,76,0.75); margin-left:3px; vertical-align:middle;
+  animation:blink 0.75s ease infinite;
+}
+/* Staggered field rows */
+.login-field-row { opacity:0; transform:translateY(16px); }
+.login-field-row.lf-in { animation:lfFadeUp 0.55s cubic-bezier(.16,1,.3,1) both; }
+/* Button shine streak */
+.btn-primary::after {
+  content:''; position:absolute; top:0; left:-80%; bottom:0; width:55%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,0.24),transparent);
+  transform:skewX(-18deg); pointer-events:none;
+}
+#login .btn-primary:hover::after { animation:btnShimmer 0.55s ease; }
+/* Gold flash overlay — fixed so it sits above everything during transition */
+#login-flash {
+  position:fixed; inset:0; z-index:99999; pointer-events:none;
+  background:radial-gradient(ellipse at center,rgba(201,168,76,0.92) 0%,rgba(201,168,76,0.35) 55%,transparent 100%);
+  opacity:0;
+}
 @keyframes btnRipple { to { transform:scale(4); opacity:0; } }
 .btn-ripple {
   position:absolute; border-radius:50%;
@@ -2440,21 +2483,27 @@ body.mp-bet-locked .all-sb-btn {
 <!-- ══════════════ LOGIN ══════════════ -->
 <div id="login">
   <canvas id="login-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0"></canvas>
+  <div id="login-flash"></div>
   <div class="login-wrap">
-    <div style="display:flex;justify-content:center;align-items:center;margin-bottom:32px">
-      <div class="login-logo-wrap" style="animation:logoGlow 3s ease-in-out infinite;">
+    <div style="display:flex;justify-content:center;align-items:center;margin-bottom:24px">
+      <div class="login-logo-wrap" id="login-logo-wrap" style="opacity:0">
         <img src="KFC_LOGO.png" alt="KFC" style="width:160px;height:160px;object-fit:contain;display:block;mix-blend-mode:screen">
       </div>
     </div>
+    <div class="login-members-tag" id="login-members-text"></div>
     <div id="login-loading" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:24px;display:none">LOADING PLAYERS ···</div>
     <div id="login-step1">
-      <label class="field-label">Username</label>
-      <input type="text" id="lusername" placeholder="your username" autocomplete="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('lpin').focus()">
-      <label class="field-label">PIN</label>
-      <input type="password" id="lpin" placeholder="" maxlength="8" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
-      <button class="btn-primary" onclick="doLogin()">Continue</button>
-      <div style="display:flex;gap:8px;margin-top:12px">
-
+      <div class="login-field-row" id="lf-username">
+        <label class="field-label">Username</label>
+        <input type="text" id="lusername" placeholder="your username" autocomplete="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('lpin').focus()">
+      </div>
+      <div class="login-field-row" id="lf-pin">
+        <label class="field-label">PIN</label>
+        <input type="password" id="lpin" placeholder="" maxlength="8" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
+      </div>
+      <div class="login-field-row" id="lf-btn">
+        <button class="btn-primary" onclick="doLogin()">Continue</button>
+        <div style="display:flex;gap:8px;margin-top:12px"></div>
       </div>
       <div class="err" id="lerr"></div>
     </div>
@@ -5927,9 +5976,25 @@ function openApp(displayName, balance){
   // Only reset sessionStart on a fresh login — on session restore it's already set correctly
   // by restoreSession() and must NOT be overwritten (it represents the original buy-in)
   if(!G._sessionActive) { G.sessionStart=balance; G._sessionStartTs=Date.now(); }
-  document.getElementById('login').style.display='none';
-  document.getElementById('app').style.display='flex';
-  document.getElementById('app').style.flexDirection='column';
+
+  // ── Cinematic login → game transition ────────────────────────────────────────
+  const _lWrap=document.querySelector('.login-wrap');
+  const _lFlash=document.getElementById('login-flash');
+  if(_lWrap){
+    _lWrap.style.transition='transform 0.42s cubic-bezier(.4,0,.2,1),opacity 0.36s ease';
+    _lWrap.style.transform='scale(0.86) translateY(-14px)';
+    _lWrap.style.opacity='0';
+  }
+  if(_lFlash){
+    _lFlash.style.animation='none'; void _lFlash.offsetWidth;
+    _lFlash.style.animation='goldFlash 0.7s ease both';
+  }
+  setTimeout(()=>{
+    document.getElementById('login').style.display='none';
+    document.getElementById('app').style.display='flex';
+    document.getElementById('app').style.flexDirection='column';
+  },400);
+
   document.getElementById('tb-name').textContent=displayName;
   // Show creator mode toggle only for the master account
   const _cmBtn = document.getElementById('btn-creator-mode');
@@ -10069,8 +10134,151 @@ function _startVortexAnim(canvasId, watchId) {
   setTimeout(lStart,200);
 }
 
+// ── LOGIN PARTICLE FIELD (dramatic gold constellation) ───────────────────────
+function _startLoginParticles(){
+  const canvas=document.getElementById('login-bg');
+  if(!canvas) return;
+  const ctx=canvas.getContext('2d');
+  let W,H,animId;
+  const N=120, MAX_D=150, MAX_D2=MAX_D*MAX_D;
+
+  function mkP(){
+    const bright=Math.random()<0.12; // ~12% are hero particles
+    return {
+      x:Math.random()*(W||window.innerWidth),
+      y:Math.random()*(H||window.innerHeight),
+      vx:(Math.random()-0.5)*(bright?0.18:0.28),
+      vy:(Math.random()-0.5)*(bright?0.18:0.28),
+      r: bright ? 2.5+Math.random()*2 : 0.8+Math.random()*2,
+      baseOp: bright ? 0.7+Math.random()*0.25 : 0.25+Math.random()*0.4,
+      pulse:Math.random()*Math.PI*2,
+      ps:0.006+Math.random()*0.014,
+      bright,
+    };
+  }
+
+  function resize(){
+    W=window.innerWidth; H=window.innerHeight;
+    canvas.width=W*devicePixelRatio; canvas.height=H*devicePixelRatio;
+    ctx.scale(devicePixelRatio,devicePixelRatio);
+  }
+
+  let particles=[];
+  function init(){ resize(); particles=Array.from({length:N},mkP); }
+
+  function frame(){
+    // Deep background
+    ctx.fillStyle='rgba(9,10,12,1)';
+    ctx.fillRect(0,0,W,H);
+
+    // Radial centre bloom — strong and dramatic
+    const bloom=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.min(W,H)*0.65);
+    bloom.addColorStop(0,'rgba(201,168,76,0.13)');
+    bloom.addColorStop(0.45,'rgba(201,168,76,0.05)');
+    bloom.addColorStop(1,'rgba(201,168,76,0)');
+    ctx.fillStyle=bloom; ctx.fillRect(0,0,W,H);
+
+    // Move & draw
+    for(let i=0;i<N;i++){
+      const p=particles[i];
+      p.x+=p.vx; p.y+=p.vy; p.pulse+=p.ps;
+      if(p.x<-20) p.x=W+20; else if(p.x>W+20) p.x=-20;
+      if(p.y<-20) p.y=H+20; else if(p.y>H+20) p.y=-20;
+
+      const ao=p.baseOp+Math.sin(p.pulse)*0.18;
+      const ar=p.r+Math.sin(p.pulse)*0.6;
+
+      // Connections
+      for(let j=i+1;j<N;j++){
+        const q=particles[j];
+        const dx=p.x-q.x, dy=p.y-q.y, d2=dx*dx+dy*dy;
+        if(d2<MAX_D2){
+          const t=1-Math.sqrt(d2)/MAX_D;
+          const la=p.bright||q.bright ? t*0.55 : t*0.28;
+          ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(q.x,q.y);
+          ctx.strokeStyle=`rgba(201,168,76,${la})`; ctx.lineWidth=p.bright||q.bright?1:0.6; ctx.stroke();
+        }
+      }
+
+      // Particle glow (hero particles get a halo)
+      if(p.bright){
+        const grd=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,ar*4);
+        grd.addColorStop(0,`rgba(201,168,76,${ao*0.35})`);
+        grd.addColorStop(1,'rgba(201,168,76,0)');
+        ctx.fillStyle=grd; ctx.fillRect(p.x-ar*4,p.y-ar*4,ar*8,ar*8);
+      }
+
+      ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(0.3,ar),0,Math.PI*2);
+      ctx.fillStyle=`rgba(201,168,76,${Math.max(0.08,ao)})`; ctx.fill();
+    }
+
+    animId=requestAnimationFrame(frame);
+  }
+
+  function start(){ init(); frame(); }
+
+  window.addEventListener('resize',()=>{
+    resize();
+    particles.forEach(p=>{ if(p.x>W)p.x=Math.random()*W; if(p.y>H)p.y=Math.random()*H; });
+  });
+
+  const obs=new MutationObserver(()=>{
+    const el=document.getElementById('login');
+    const hidden=!el||el.style.display==='none'||el.style.display==='';
+    if(hidden&&animId){ cancelAnimationFrame(animId); animId=null; }
+    else if(!hidden&&!animId){ frame(); }
+  });
+  const loginEl=document.getElementById('login');
+  if(loginEl) obs.observe(loginEl,{attributes:true,attributeFilter:['style']});
+
+  setTimeout(start,80);
+}
+
+// ── LOGIN ENTRANCE SEQUENCE ───────────────────────────────────────────────────
+function _runLoginEntrance(){
+  const logo=document.getElementById('login-logo-wrap');
+  const membersEl=document.getElementById('login-members-text');
+  const fieldRows=['lf-username','lf-pin','lf-btn'];
+
+  // 1. Logo blooms at 320ms
+  setTimeout(()=>{
+    if(!logo) return;
+    logo.style.animation='logoBoom 0.85s cubic-bezier(.16,1,.3,1) both';
+    logo.style.opacity='1';
+  },320);
+
+  // 2. "MEMBERS ONLY" types at 780ms
+  setTimeout(()=>{
+    if(!membersEl) return;
+    const text='MEMBERS ONLY';
+    membersEl.textContent='';
+    const cursor=document.createElement('span');
+    cursor.className='login-members-cursor';
+    membersEl.appendChild(cursor);
+    let i=0;
+    const iv=setInterval(()=>{
+      membersEl.insertBefore(document.createTextNode(text[i]),cursor);
+      i++;
+      if(i>=text.length){
+        clearInterval(iv);
+        // Remove cursor after a beat
+        setTimeout(()=>cursor.remove(),900);
+      }
+    },62);
+  },780);
+
+  // 3. Form fields cascade at 1450ms, 70ms apart
+  fieldRows.forEach((id,idx)=>{
+    setTimeout(()=>{
+      const el=document.getElementById(id);
+      if(el){ el.style.animationDelay='0ms'; el.classList.add('lf-in'); }
+    },1450+idx*90);
+  });
+}
+
 // Wire all three login/MP screens
-_startVortexAnim('login-bg','login');
+_startLoginParticles();
+_runLoginEntrance();
 document.addEventListener('DOMContentLoaded',()=>{
   _startVortexAnim('mp-mode-bg','mp-mode-select');
   _startVortexAnim('mp-lobby-bg','mp-lobby-overlay');

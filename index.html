@@ -8943,14 +8943,18 @@ async function attemptSync(payload){
   });
   let r;
   try{
+    const _ctrl = new AbortController();
+    const _syncTimer = setTimeout(() => _ctrl.abort(), 30000);
     r = await fetch(G.url+'?'+params.toString(), {
       method: 'GET',
-      redirect: 'follow',   // follow Google's redirect chain
-      cache: 'no-store'
+      redirect: 'follow',
+      cache: 'no-store',
+      signal: _ctrl.signal
     });
+    clearTimeout(_syncTimer);
   }catch(netErr){
     console.error('Sync network error:', netErr);
-    throw new Error('Network error: '+netErr.message);
+    throw new Error(netErr.name === 'AbortError' ? 'Sync timed out after 30s — check connection' : 'Network error: '+netErr.message);
   }
   if(!r.ok){
     console.error('Sync HTTP error:', r.status, r.statusText);

@@ -7659,6 +7659,9 @@ function revealHole(){
 
 // ── SETTLE ──────────────────────────────────────────────
 function settle(reason){
+  // No bet in play — spurious call, nothing to settle or log
+  const _totalBetInPlay = G.mainBet || (G._hand2Active ? (G.mainBet2||0) : 0) || (G.splitBets&&G.splitBets.reduce((a,b)=>a+b,0)||0);
+  if(!_totalBetInPlay) return;
   G.phase='done';
   hideStampedBoost();
   closeModal('insurance-modal');

@@ -5640,6 +5640,7 @@ function _updateCreatorBtn(){
 // Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
 // Uses autosave=true so GAS skips TX row and games++ increment.
 let _autoSaveHandCount = 0;
+let _handLogOffset = 0;
 async function _autoSaveToSheet(){
   if(_isCreator()) return;
   if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
@@ -5659,6 +5660,36 @@ async function _autoSaveToSheet(){
     // Refresh leaderboard so onLeaderboardUpdate sees the new balance and can settle race markets
     if(typeof _fetchLeaderboard === 'function') _fetchLeaderboard(true);
   }catch(e){}
+}
+
+// Flush accumulated hand log entries to GAS Hand_Log sheet.
+// Batches ≥5 hands normally; pass force=true to flush everything (e.g. on cashout).
+async function _flushHandLog(force){
+  if(!G.url || !G.username || !G._cachedPin) return;
+  const pending = (G.log || []).slice(_handLogOffset);
+  if(!pending.length) return;
+  if(!force && pending.length < 5) return;
+  const offsetSnapshot = _handLogOffset;
+  const rows = pending.map((e, i) => ({
+    ts: e.ts || 0,
+    player: G.player || G.username,
+    username: G.username,
+    stake: G.s ? G.s.label : '',
+    hand: offsetSnapshot + i + 1,
+    detail: e.detail || '',
+    pl: e.pl || 0,
+    bal: e.bal || 0,
+    sessionPL: (e.bal || 0) - (G.sessionStart || (e.bal || 0))
+  }));
+  try {
+    const resp = await fetch(G.url + '?action=loghands', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: G.username, pin: G._cachedPin, rows }),
+      cache: 'no-store'
+    });
+    if(resp.ok) _handLogOffset += pending.length;
+  } catch(e) {}
 }
 
 // Send a session-end Telegram notification via GAS proxy.
@@ -6138,7 +6169,7 @@ function openApp(displayName, balance){
   if(!G.deck||G.deck.length===0) G.deck=buildShoe();
   msg('PLACE YOUR BET');
   // Reset streak and shoe log on fresh session (not restore)
-  if(!G._sessionActive){ _streak=0; _shoeLog=[]; _shoeHandCount=0; _autoSaveHandCount=0; }
+  if(!G._sessionActive){ _streak=0; _shoeLog=[]; _shoeHandCount=0; _autoSaveHandCount=0; _handLogOffset=0; }
   _updatePassUI(); // crown badge, chip glow, hot/cold, PU panel
   _updatePointsBadge(undefined, false); // show current points in topbar
   _initLeaderboard(); // fetch league table from sheet
@@ -8028,7 +8059,7 @@ function settle(reason){
   const _logDetail = _hasHand2
     ? `H1: ${_h1Res.detail} / H2: ${_h2Res.detail}`
     : detail;
-  G.log.push({detail:_logDetail,pl:totalPLForDisplay,bal:G.balance,breakdown});
+  G.log.push({detail:_logDetail,pl:totalPLForDisplay,bal:G.balance,breakdown,ts:Date.now()});
   // Count side bet wins for loyalty points (+2 per SB won)
   const _sbWins = (G._earlySBResults||[]).filter(r=>r.won).length
     + sbAnnouncements.filter(a=>a.pl>0&&!a.free).length;
@@ -8102,7 +8133,7 @@ function settle(reason){
     const _extraHands = Math.max(0, _handResults.length - 1);           // hands beyond first
     setTimeout(()=>PM.onHandEnd(_dbForPM, _anyBJForPM, _wonForPM, _pushForPM, _extraHands), 0);
   }
-  if(G.url && G._sessionActive) _autoSaveToSheet();
+  if(G.url && G._sessionActive){ _autoSaveToSheet(); _flushHandLog(); }
 }
 
 // ── REAL SIDE BET EVALUATION ──────────────────────────────
@@ -9032,6 +9063,7 @@ async function confirmCashout(){
       if(errDetail){ errDetail.style.display='none'; errDetail.textContent=''; }
       if(leaveBtn){ leaveBtn.disabled=false; leaveBtn.textContent='Leave Table'; }
       if(stayBtn) stayBtn.style.display='block';
+      _flushHandLog(true); // flush remaining hands before balance is zeroed
       _sendTgNotif(); // fire-and-forget — must run before G.balance is zeroed
       G.balance=0; updateUI();
       notif('Session saved — balance returned to wallet');
@@ -9062,7 +9094,7 @@ async function confirmCashout(){
 
   G.sessionStart=G.balance;
   G._totalBalance=newTotalBalance; // keep total in sync for any subsequent session
-  G.log=[]; renderLog();
+  G.log=[]; _handLogOffset=0; renderLog();
   resetSessionChart();
 }
 

@@ -7001,11 +7001,27 @@ function _redeemExtraShoe(){
   const u=G.username||G.player;
   const cur=_shoesPlayedToday(u);
   localStorage.setItem(_shoeKey(u), String(Math.max(0, cur-1)));
+  // If we hit the daily limit at the cut-card, the old deck was never replaced.
+  // Build a fresh shoe now so the player gets a real extra shoe, not old remnants
+  // that would immediately trigger the deck-low branch after one hand.
+  const db=document.getElementById('btn-deal');
+  const dbt=document.getElementById('btn-deal-top');
+  const wasLimitBlocked = G.phase==='bet' && db && db.disabled;
+  if(wasLimitBlocked || !G.deck || G.deck.length<40){
+    G.deck=buildShoe();
+    G.cutCardTriggered=false;
+    _shoeLog=[]; _shoeHandCount=0;
+    G.puOwned.clear(); G.puPending.clear();
+    G.levCards=[]; G._levCardsPending=[];
+    buildPuPanel(); buildLevPanel();
+    if(typeof PM!=='undefined'){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(),0); }
+    setTimeout(()=>_earlyShoePreview(),800);
+  }
   buildPuPanel();
   // Re-enable deal buttons if they were disabled by the daily limit gate
   if(_shoesRemaining()>0 && G.phase==='bet'){
-    const db=document.getElementById('btn-deal'); if(db) db.disabled=false;
-    const dbt=document.getElementById('btn-deal-top'); if(dbt) dbt.disabled=false;
+    if(db) db.disabled=false;
+    if(dbt) dbt.disabled=false;
     msg('PLACE YOUR BET');
   }
   sfx('cash'); notif('⭐ +1 extra shoe added — '+_shoesRemaining()+' shoes remaining today');

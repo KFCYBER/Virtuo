@@ -11230,7 +11230,7 @@ const PM = (() => {
     const groupLabels = {}; // display name per stable key
     all.forEach(m => {
       const pp = m.condition && m.condition.params;
-      const key = (pp && pp.player) || '__misc';
+      const key = (pp && pp.player) ? pp.player.toLowerCase() : '__misc';
       const displayName = (pp && (pp.playerName || pp.player)) || key;
       if(!groups[key]) { groups[key] = []; groupLabels[key] = displayName; }
       groups[key].push(m);
@@ -12271,6 +12271,29 @@ const PM = (() => {
         // (e.g. old "Steven" markets that logicDup couldn't block due to name mismatch).
         if(_lastPlayers.length) _remapAndDedup(_lastPlayers);
         else _saveMarkets();
+        // Post-import dedup: collapse any duplicates that slipped through logicDup
+        // (different IDs, same player+amount — common after the pre-_pmInited race condition).
+        const _savedBetsPost = _loadBets();
+        (['season','race']).forEach(mtype => {
+          const seen = new Map();
+          _markets.forEach(m => {
+            if(m.type !== mtype || m.status !== 'open') return;
+            const p = m.condition && m.condition.params; if(!p) return;
+            const k = (p.player||'').toLowerCase() + '_' + (p.amount||'');
+            const ex = seen.get(k);
+            if(!ex || (m.createdAt||0) > (ex.createdAt||0)) seen.set(k, m);
+          });
+          const keepIds = new Set([...seen.values()].map(m => m.id));
+          _markets = _markets.filter(m => {
+            if(m.type !== mtype || m.status !== 'open') return true;
+            const p = m.condition && m.condition.params; if(!p) return true;
+            const k = (p.player||'').toLowerCase() + '_' + (p.amount||'');
+            if(!seen.has(k)) return true;
+            if(keepIds.has(m.id)) return true;
+            return _savedBetsPost.some(b => b.mktId === m.id && b.payout == null);
+          });
+        });
+        _saveMarkets(); render();
       }
     }catch(e){}
     render();

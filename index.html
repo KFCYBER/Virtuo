@@ -12916,7 +12916,21 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll };
+  async function _purgeDups(){
+    const btn = document.getElementById('pm-purge-btn');
+    const res = document.getElementById('pm-purge-result');
+    if(btn) btn.disabled = true;
+    if(res) res.textContent = 'Running…';
+    try{
+      const d = await sheetGet(G.url + '?action=pmpurgedups');
+      if(res) res.textContent = d && d.ok ? '✓ Purged ' + (d.purged||0) + ' duplicate row(s). Reload to see clean markets.' : '✗ Error: ' + (d && d.error || 'unknown');
+    }catch(e){
+      if(res) res.textContent = '✗ ' + e.message;
+    }
+    if(btn) btn.disabled = false;
+  }
+
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups };
 })();
 
 
@@ -13941,6 +13955,12 @@ const MP2 = {
     </div>
     <div id="pm-pane-history" class="pm-modal-body" style="display:none">
       <div class="pm-empty">Loading…</div>
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border)">
+        <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);margin-bottom:10px">ADMIN: PURGE DUPLICATE MARKETS</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:10px">Deletes all duplicate open season/race rows from GAS sheet, keeping only the canonical market per player+amount. Run once to clean up historical junk.</div>
+        <button class="btn-ghost" id="pm-purge-btn" style="font-size:11px;padding:8px 16px" onclick="PM._purgeDups()">🧹 Purge Duplicates</button>
+        <div id="pm-purge-result" style="font-size:11px;color:var(--green);margin-top:8px"></div>
+      </div>
     </div>
   </div>
 </div>

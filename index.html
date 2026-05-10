@@ -12965,7 +12965,16 @@ const PM = (() => {
     if(res) res.textContent = 'Running…';
     try{
       const d = await sheetGet(G.url + '?action=pmpurgedups');
-      if(res) res.textContent = d && d.ok ? '✓ Purged ' + (d.purged||0) + ' duplicate row(s). Reload to see clean markets.' : '✗ Error: ' + (d && d.error || 'unknown');
+      if(d && d.ok){
+        // Wipe local market cache so next poll re-imports from the now-clean GAS sheet
+        localStorage.removeItem(_mk());
+        _markets = _markets.filter(m => m.type === 'shoe'); // keep shoe markets (local-only)
+        _saveMarkets();
+        await poll(); // re-fetch clean data from GAS
+        if(res) res.textContent = '✓ Purged ' + (d.purged||0) + ' duplicate row(s) — markets reloaded.';
+      } else {
+        if(res) res.textContent = '✗ Error: ' + (d && d.error || 'unknown');
+      }
     }catch(e){
       if(res) res.textContent = '✗ ' + e.message;
     }

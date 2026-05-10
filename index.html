@@ -12265,12 +12265,20 @@ const PM = (() => {
             if(sm.outcomes) local.outcomes = sm.outcomes;
           }
         });
-        // Re-run remap after import — poll may have pulled in display-name markets from GAS
-        // (e.g. old "Steven" markets that logicDup couldn't block due to name mismatch).
+        // Drop local open season/race markets whose ID is absent from GAS response and
+        // have no active bet — GAS is authoritative; absence means it was purged as a duplicate.
+        const _gasIds = new Set(d.markets.map(m => m.id));
+        const _betsForOrphan = _loadBets();
+        _markets = _markets.filter(m => {
+          if(m.type !== 'season' && m.type !== 'race') return true;
+          if(m.status !== 'open') return true;
+          if(_gasIds.has(m.id)) return true;
+          return _betsForOrphan.some(b => b.mktId === m.id && b.payout == null);
+        });
+        // Re-run remap after import — normalises display-name variants → canonical username
         if(_lastPlayers.length) _remapAndDedup(_lastPlayers);
         else _saveMarkets();
-        // Post-import dedup: collapse any duplicates that slipped through logicDup
-        // (different IDs, same player+amount — common after the pre-_pmInited race condition).
+        // Post-import dedup: collapse any remaining duplicates by player+amount key
         const _savedBetsPost = _loadBets();
         (['season','race']).forEach(mtype => {
           const seen = new Map();

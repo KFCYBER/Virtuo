@@ -3798,6 +3798,10 @@ function _shoesPlayedToday(username){ return parseInt(localStorage.getItem(_shoe
 function _incrementShoesPlayed(username){ localStorage.setItem(_shoeKey(username), _shoesPlayedToday(username)+1); }
 function _shoeLimit(){ return G._clubPass ? SHOES_PER_DAY_PASS : SHOES_PER_DAY_STANDARD; }
 function _shoesRemaining(){ return Math.max(0, _shoeLimit() - _shoesPlayedToday(G.username||G.player)); }
+// Extra shoe escalating cost — starts at 40, +10 per buy today, resets daily with shoe counter
+function _xsbKey(u){ return 'kfc_xsb_'+new Date().toISOString().slice(0,10)+'_'+(u||'').toLowerCase(); }
+function _xsbToday(){ return parseInt(localStorage.getItem(_xsbKey(G.username||G.player))||'0',10); }
+function _extraShoeCost(){ return 40 + _xsbToday() * 10; }
 
 const G = {
   player:'', username:'', balance:0, sessionStart:0, _totalBalance:0,
@@ -5929,7 +5933,8 @@ window.onload=()=>{
     // Purge dated shoe/free-pu keys older than today
     const _shoeMatch = k.match(/^kfc_shoes_(\d{4}-\d{2}-\d{2})_/);
     const _puMatch   = k.match(/^kfc_freepu_(\d{4}-\d{2}-\d{2})_/);
-    if((_shoeMatch && _shoeMatch[1] < _today) || (_puMatch && _puMatch[1] < _today)) localStorage.removeItem(k);
+    const _xsbMatch  = k.match(/^kfc_xsb_(\d{4}-\d{2}-\d{2})_/);
+    if((_shoeMatch && _shoeMatch[1] < _today) || (_puMatch && _puMatch[1] < _today) || (_xsbMatch && _xsbMatch[1] < _today)) localStorage.removeItem(k);
   });
   // Auto-upgrade: migrate any old Google Script URLs to the Cloudflare Worker proxy
   const WORKER_URL = 'https://virtuo-proxy.kfcstaffco.workers.dev';
@@ -6020,6 +6025,12 @@ async function doLogin(){
         G._cachedPin=pin;
         G._clubPass = !!d.clubPass; // read 21 Club pass status from sheet
         G.playerId = d.playerId || '';
+        // If a pending sync for this user has a higher balance than GAS (stale sheet),
+        // use the pending-sync balance so chips from the last session aren't lost
+        const _pq = getSyncQueue();
+        if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
+          d.balance = _pq.balance;
+        }
         _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0};
         // Clear any session belonging to a different player on this device
         try{
@@ -6901,7 +6912,7 @@ function buildPuPanel(){
   _addRedemption('All Side Bets (Min)', allSBOwned?'Active — next deal covered':'All 4 SBs at min bet',
     'pts-allsb',PTS_COST.allsb, ()=>_redeemAllSB(), G.phase!=='bet', allSBOwned);
 
-  const extraShoesCost = G._clubPass ? PTS_COST.extrashoe_pass : PTS_COST.extrashoe_std;
+  const extraShoesCost = _extraShoeCost();
   _addRedemption('+1 Extra Shoe',_shoesRemaining()+' remaining today',
     'pts-extrashoe',extraShoesCost, ()=>_redeemExtraShoe(), false, false);
 }
@@ -6997,12 +7008,13 @@ function _showAllSBHandChoice(){
 }
 
 function _redeemExtraShoe(){
-  const cost=G._clubPass?PTS_COST.extrashoe_pass:PTS_COST.extrashoe_std;
+  const cost=_extraShoeCost();
   if(!_spendPoints(cost)){notif('Not enough points (need ⭐'+cost+')');return;}
   // Decrement today's shoe counter by 1 (adds one shoe back to allowance)
   const u=G.username||G.player;
   const cur=_shoesPlayedToday(u);
   localStorage.setItem(_shoeKey(u), String(Math.max(0, cur-1)));
+  localStorage.setItem(_xsbKey(u), String(_xsbToday() + 1)); // escalate cost for next buy today
   // If we hit the daily limit at the cut-card, the old deck was never replaced.
   // Build a fresh shoe now so the player gets a real extra shoe, not old remnants
   // that would immediately trigger the deck-low branch after one hand.
@@ -7026,7 +7038,7 @@ function _redeemExtraShoe(){
     if(dbt) dbt.disabled=false;
     msg('PLACE YOUR BET');
   }
-  sfx('cash'); notif('⭐ +1 extra shoe added — '+_shoesRemaining()+' shoes remaining today');
+  sfx('cash'); notif('⭐ +1 extra shoe added (next costs ⭐'+_extraShoeCost()+') — '+_shoesRemaining()+' shoes remaining today');
 }
 
 const PU_IMAGES={

@@ -12213,12 +12213,13 @@ const PM = (() => {
           if(!local){
             // Shoe markets are purely local — never import from GAS (old shoe IDs would re-appear as duplicates)
             if(sm.type === 'shoe') return;
-            // Never re-import stale milestone markets from GAS — block by period and by
-            // "player already has a different open milestone locally" (the correct next one).
+            // Never re-import stale milestone markets from GAS.
             if(sm.type === 'season' && sm.condition && sm.condition.type === 'bankroll_milestone'){
               const smPeriod = sm.condition.params.week || sm.condition.params.month || (sm.condition.params.date||'').slice(0,10);
+              // Block old-week markets entirely
               if(smPeriod && smPeriod < _weekStart()) return;
               if(sm.status === 'open'){
+                // Block stale open markets where player already has the correct milestone locally
                 const smPlayer = (sm.condition.params.player||'').toLowerCase();
                 const smAmount = sm.condition.params.amount;
                 const hasCorrectLocal = _markets.some(m =>
@@ -12227,8 +12228,11 @@ const PM = (() => {
                   (m.condition.params.player||'').toLowerCase()===smPlayer &&
                   m.condition.params.amount !== smAmount
                 );
-                if(hasCorrectLocal) return; // player already has the right milestone locally
+                if(hasCorrectLocal) return;
               }
+              // Block current-week NO settlements — any mid-week NO is a false settlement
+              // from the old prune code (legitimate NOs only happen at week-end expiry)
+              if(sm.status === 'settled' && sm.result === 'NO' && smPeriod === _weekStart()) return;
             }
             // For race/season markets: normalize player name BEFORE logicDup so the dup check
             // can correctly match e.g. incoming "Steven" against local "quindariousgooch".

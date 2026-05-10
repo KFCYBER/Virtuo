@@ -3747,7 +3747,7 @@ const G = {
   _pts: 0,          // loyalty points — in-memory, synced to sheet on earn/spend/cashout
   stake:'low', s: STAKES.low,
   deck:[], shoe:4,
-  hands:[[]], cur:0, splits:0,
+  hands:[[]], cur:0, splits:0, splitBets:[],
   dealer:[],
   mainBet:0, sideBets:{},
   leverage:null, levCards:[], _levCardsPending:[],
@@ -3760,7 +3760,7 @@ const G = {
   _hand2Active:false, mainBet2:0, sideBets2:{},
   log:[],
   url:'', pins:{},
-  preDealBal:0, lastMainBet:0, lastSideBets:{}, lastMainBet2:0, lastSideBets2:{}, cashedOut:false, _atCashout:false, _sessionActive:false, insuranceBet:0, _freeDoubleBet:0,
+  preDealBal:0, lastMainBet:0, lastSideBets:{}, lastMainBet2:0, lastSideBets2:{}, cashedOut:false, _atCashout:false, _sessionActive:false, insuranceBet:0, _freeDoubleBet:0, _freeDoubleHand:-1,
   _insuranceToken:false, // loyalty: covers half bet on bust (stacks with Krueger for full)
   _allSBNextHand:false,  // loyalty: auto-place sMin on all 4 side bets next deal
   _freeSBNames:[],       // SBs placed free by the all-SB token this hand
@@ -7306,19 +7306,26 @@ function dbl(){
     // Free double: house covers the extra stake. Player wins at 2× but only risks original bet on loss.
     G.arrowCounts[G.cur]--;
     const at2=document.getElementById('arrow-toast');if(at2&&G.arrowCounts[G.cur]===0)at2.style.display='none';
-    const originalBet=G.mainBet;
-    G._freeDoubleBet=originalBet; // the house-funded extra stake = original bet amount
-    G.mainBet=originalBet*2;      // doubled for win calculation
-    // Adjust preDealBal: we're giving the player a free extra bet worth originalBet
-    // so on WIN they earn 2×originalBet profit, on LOSS they only lose originalBet
-    // preDealBal stays as-is (no money deducted), settle() will compute:
-    //   win: balance = preDealBal + mainBet*lm = preDealBal + 2×original → profit = original ✓
-    //   loss: balance = preDealBal - original (capped via _freeDoubleBet) ✓
+    if(G.splits>0){
+      const _origSb=G.splitBets[G.cur]||G.mainBet;
+      G._freeDoubleBet=_origSb; G._freeDoubleHand=G.cur;
+      G.splitBets[G.cur]=_origSb*2;
+    } else {
+      const originalBet=G.mainBet;
+      G._freeDoubleBet=originalBet; G._freeDoubleHand=-1;
+      G.mainBet=originalBet*2;
+    }
     updateBetPanel();
     notif('Arrow Card — free double-down');
   } else {
-    if(G.balance<G.mainBet){notif('Not enough balance');return;}
-    G.balance-=G.mainBet; G.mainBet*=2; updateUI(); updateBetPanel();
+    if(G.splits>0){
+      const _sb=G.splitBets[G.cur]||G.mainBet;
+      if(G.balance<_sb){notif('Not enough balance');return;}
+      G.balance-=_sb; G.splitBets[G.cur]=_sb*2; updateUI(); updateBetPanel();
+    } else {
+      if(G.balance<G.mainBet){notif('Not enough balance');return;}
+      G.balance-=G.mainBet; G.mainBet*=2; updateUI(); updateBetPanel();
+    }
   }
   const dblIdx=h.length; // index of the double-down card before push
   drawIntoHand(h, dblIdx, G.cur);
@@ -7331,7 +7338,8 @@ function dbl(){
 function surrender(){
   if(G.phase!=='play'){notif('Not in play phase');return;}
   if(!G.puOwned.has('sally')){notif('Surrender Sally power-up required');return;}
-  const dealerUp=G.dealer[0];
+  // Skip hole card (index 1) and jesters to find the real face-up value card
+  const dealerUp=G.dealer.find((c,i)=>i!==1&&!(c.bonus&&c.bonus.jester));
   if(!dealerUp||cv(dealerUp)!==10){notif('Surrender only available against a dealer 10');return;}
   sfx('button'); notif('Surrender — full bet returned');
   setTimeout(()=>settle('surrender'),300);
@@ -7339,15 +7347,20 @@ function surrender(){
 function split(){
   if(G.phase!=='play')return;
   const hand=G.hands[G.cur];
-  // Block split only if a jester (no value) is in the hand
-  if(hand.some(c=>c.bonus&&c.bonus.jester)){notif('Cannot split — jester card in hand');return;}
-  // Must have exactly 2 cards of equal value (bonus cards use their rep value)
+  // Must have exactly 2 non-jester cards of equal value to split
   const splitValueCards=hand.filter(c=>!(c.bonus&&c.bonus.jester));
   if(splitValueCards.length!==2||cv(splitValueCards[0])!==cv(splitValueCards[1])){notif('Cards must match to split');return;}
   if(G.splits>=2){notif('Maximum 2 splits per hand');return;}
-  if(G.balance<G.mainBet){notif('Not enough balance');return;}
-  G.balance-=G.mainBet; G.splits++; updateUI();
-  const c2=hand.splice(1,1)[0];
+  const _splitBet=G.splits>0?(G.splitBets[G.cur]||G.mainBet):G.mainBet;
+  if(G.balance<_splitBet){notif('Not enough balance');return;}
+  G.balance-=_splitBet; G.splits++; updateUI();
+  // Initialize or extend per-hand bet tracking
+  if(G.splitBets.length===0) G.splitBets=Array.from({length:G.hands.length},()=>G.mainBet);
+  G.splitBets.push(_splitBet);
+  // Find and remove the second non-jester value card (handles jester at any position)
+  let _fvi=-1,_svi=-1;
+  for(let _i=0;_i<hand.length;_i++){if(!(hand[_i].bonus&&hand[_i].bonus.jester)){if(_fvi===-1)_fvi=_i;else{_svi=_i;break;}}}
+  const c2=hand.splice(_svi!==-1?_svi:1,1)[0];
   hand.push(draw());
   const newH=[c2,draw()];
   G.hands.push(newH);
@@ -7617,7 +7630,9 @@ function settle(reason){
     const pv=hv(h); const pb=isBust(h); const pbj=isBJ(h);
     // For second seat (hi===1, no splits), use mainBet2; splits use mainBet
     const _isHand2Seat = hi===1 && G._hand2Active && G.hands.length>1 && G.splits===0;
-    const _betForHand = _isHand2Seat ? G.mainBet2 : G.mainBet;
+    const _betForHand = G.splits>0 && G.splitBets && G.splitBets[hi]!=null
+      ? G.splitBets[hi]
+      : (_isHand2Seat ? G.mainBet2 : G.mainBet);
     const lm=getLevMult(hi);
     let w=0;
     if(reason==='surrender'){
@@ -7682,7 +7697,8 @@ function settle(reason){
     const _djProtected=reason==='player_bj'||(pbj&&reason==='normal')||reason==='push_guard'||_safetyProtected||reason==='desert_push';
     if(G.dealerJester&&!db&&w>=0&&!_djProtected){w=-_betForHand;detail+=' [Dealer Jester]';}
     // Free double-down cap: on loss, player only loses their original stake (pre-double)
-    if(w<0&&G._freeDoubleBet>0&&!_isHand2Seat){
+    const _freeDoubleAppliesToHand=G._freeDoubleBet>0&&(G.splits===0||G._freeDoubleHand===hi);
+    if(w<0&&_freeDoubleAppliesToHand&&!_isHand2Seat){
       const originalStake=_betForHand-G._freeDoubleBet; // what player actually wagered
       w=Math.max(w,-originalStake); // loss capped at original stake
     }
@@ -7761,6 +7777,7 @@ function settle(reason){
   const bonusPLDisplay = (G._bonusPayouts||[]).reduce((acc,b)=>{
     if(b.label&&b.label.startsWith('Plague')) return acc;
     if(b.type==='gain'&&(b.pl||0)>0) return acc+(b.pl||0);
+    if(b.label&&b.label.startsWith('Insurance')&&b.type==='warn') return acc+(b.pl||0); // insurance loss baked into preDealBal — include for display
     return acc;
   },0);
   const levCost=G.leverage==='2x'?G.s.min*2:0; // 2× token cost (card leverages are free)
@@ -7775,7 +7792,9 @@ function settle(reason){
   const breakdown={
     main:{bet:G.mainBet,pl:_h1Res.w,detail:_h1Res.detail},
     hand2: _h2Res ? {bet:G.mainBet2,pl:_h2Res.w,detail:_h2Res.detail} : null,
-    sbs:[],bonus:G._bonusPayouts||[],plague:G._plagueDeducted||0,levCost,total:totalPLForDisplay
+    sbs:[],bonus:G._bonusPayouts||[],plague:G._plagueDeducted||0,levCost,total:totalPLForDisplay,
+    splitBets: G.splits>0 ? [...G.splitBets] : null,
+    handResults: G.splits>0 ? _handResults.map(r=>({...r})) : null,
   };
   // Early SBs (PP, 21+3, C7s)
   (G._earlySBResults||[]).forEach(r=>{
@@ -8220,9 +8239,10 @@ function setActions(playing){
   const splitEl=document.getElementById('btn-split');
   if(splitEl){
     const curHand=G.hands&&G.hands[G.cur];
-    const canSplit=playing && curHand && curHand.length===2 &&
-      cv(curHand[0])===cv(curHand[1]) && G.splits<2 && G.balance>=G.mainBet &&
-      !curHand.some(c=>c.bonus&&c.bonus.jester);
+    const _splitVals=curHand?curHand.filter(c=>!(c.bonus&&c.bonus.jester)):[];
+    const _splitBetNeeded=G.splits>0?(G.splitBets[G.cur]||G.mainBet):G.mainBet;
+    const canSplit=playing && curHand && _splitVals.length===2 &&
+      cv(_splitVals[0])===cv(_splitVals[1]) && G.splits<2 && G.balance>=_splitBetNeeded;
     splitEl.style.display=canSplit?'block':'none';
     splitEl.disabled=!canSplit;
   }
@@ -8267,16 +8287,26 @@ function showResult(pl,detail,bal){
     const bd=lastEntry&&lastEntry.breakdown;
     let bkHtml='';
     if(bd){
-      const totalWagered=G.splits>0?bd.main.bet*(G.splits+1):bd.main.bet;
-      bkHtml+=`<div class="r-row"><span>Main Bet${G.splits>0?' (×'+(G.splits+1)+' hands)':''}</span><span>${fmtKFC(totalWagered)}</span></div>`;
-      if(bd.levCost>0){
-        bkHtml+=`<div class="r-row l"><span>2× Token cost</span><span>-${fmtKFC(bd.levCost)}</span></div>`;
-      }
-      if(bd.hand2){
-        bkHtml+=`<div class="r-row ${bd.main.pl>0?'w':bd.main.pl<0?'l':'p'}"><span>Hand 1 (${fmtKFC(bd.main.bet)})</span><span>${bd.main.pl>=0?'+':''}${fmtKFC(bd.main.pl)} — ${bd.main.detail||''}</span></div>`;
-        bkHtml+=`<div class="r-row ${bd.hand2.pl>0?'w':bd.hand2.pl<0?'l':'p'}"><span>Hand 2 (${fmtKFC(bd.hand2.bet)})</span><span>${bd.hand2.pl>=0?'+':''}${fmtKFC(bd.hand2.pl)} — ${bd.hand2.detail||''}</span></div>`;
+      if(bd.splitBets&&bd.handResults){
+        const totalW=bd.splitBets.reduce((a,b)=>a+b,0);
+        bkHtml+=`<div class="r-row"><span>Main Bet (${bd.splitBets.length} split hands)</span><span>${fmtKFC(totalW)}</span></div>`;
+        if(bd.levCost>0) bkHtml+=`<div class="r-row l"><span>2× Token cost</span><span>-${fmtKFC(bd.levCost)}</span></div>`;
+        bd.handResults.forEach((hr,i)=>{
+          const hbet=bd.splitBets[i]||bd.main.bet;
+          const hpl=hr.w||0;
+          const dblTag=hbet>bd.main.bet?' [2×]':'';
+          bkHtml+=`<div class="r-row ${hpl>0?'w':hpl<0?'l':'p'}"><span>Hand ${i+1}${dblTag} (${fmtKFC(hbet)})</span><span>${hpl>=0?'+':''}${fmtKFC(hpl)} — ${hr.detail||''}</span></div>`;
+        });
       } else {
-        bkHtml+=`<div class="r-row ${bd.main.pl>0?'w':bd.main.pl<0?'l':'p'}"><span>Main result</span><span>${bd.main.pl>=0?'+':''}${fmtKFC(bd.main.pl)}</span></div>`;
+        const totalWagered=G.splits>0?bd.main.bet*(G.splits+1):bd.main.bet;
+        bkHtml+=`<div class="r-row"><span>Main Bet${G.splits>0?' (×'+(G.splits+1)+' hands)':''}</span><span>${fmtKFC(totalWagered)}</span></div>`;
+        if(bd.levCost>0) bkHtml+=`<div class="r-row l"><span>2× Token cost</span><span>-${fmtKFC(bd.levCost)}</span></div>`;
+        if(bd.hand2){
+          bkHtml+=`<div class="r-row ${bd.main.pl>0?'w':bd.main.pl<0?'l':'p'}"><span>Hand 1 (${fmtKFC(bd.main.bet)})</span><span>${bd.main.pl>=0?'+':''}${fmtKFC(bd.main.pl)} — ${bd.main.detail||''}</span></div>`;
+          bkHtml+=`<div class="r-row ${bd.hand2.pl>0?'w':bd.hand2.pl<0?'l':'p'}"><span>Hand 2 (${fmtKFC(bd.hand2.bet)})</span><span>${bd.hand2.pl>=0?'+':''}${fmtKFC(bd.hand2.pl)} — ${bd.hand2.detail||''}</span></div>`;
+        } else {
+          bkHtml+=`<div class="r-row ${bd.main.pl>0?'w':bd.main.pl<0?'l':'p'}"><span>Main result</span><span>${bd.main.pl>=0?'+':''}${fmtKFC(bd.main.pl)}</span></div>`;
+        }
       }
       // Bonus card entries (includes plague if triggered)
       if(bd.bonus&&bd.bonus.length>0){
@@ -8308,10 +8338,10 @@ function closeResult(){
   _betHistory.length=0; // fresh undo stack for new round
   // Full reset for next hand
   G.phase='bet';
-  G.hands=[[]]; G.cur=0; G.splits=0; G.dealer=[];
+  G.hands=[[]]; G.cur=0; G.splits=0; G.splitBets=[]; G.dealer=[];
   G.arrowCounts=[0,0]; G.kruegerOn=[false,false]; G.desertOn=[false,false]; G.steelOn=[false,false]; G.goldOn=false;
   G.stampedOn=false; G._pendingBJ=false; G._pendingStand=false; G.stampedInitialBet=0; G.stampedCardsViewed=0; G.stampedOn2=false; G.stampedInitialBet2=0; G.stampedCardsViewed2=0; G.plagueOn=false;
-  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeSBNames=[];
+  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeDoubleHand=-1; G._freeSBNames=[];
   G._handStartBal=0;
   G.mainBet=0;
   SB_NAMES.forEach(n=>G.sideBets[n]=0);
@@ -9643,8 +9673,8 @@ function _renderLeaderboard(players, errMsg){
     const existing = _seen.get(key);
     if(!existing || (p.balance||0) > (existing.balance||0)) _seen.set(key, p);
   });
-  // Sort by total balance descending
-  const sorted = [..._seen.values()].sort((a,b)=>b.balance - a.balance);
+  // Sort by total balance descending, hide creator account
+  const sorted = [..._seen.values()].filter(p=>(p.username||p.name||'').toLowerCase()!=='creator').sort((a,b)=>b.balance - a.balance);
   const me = (G.username||G.player||'').toLowerCase();
   const rankSymbol = (i) => i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
   const rankClass  = (i) => i===0?'gold':i===1?'silver':i===2?'bronze':'';

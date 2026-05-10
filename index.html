@@ -11650,24 +11650,27 @@ const PM = (() => {
       if(pName.toLowerCase()==='creator') return;
       const pLow = pName.toLowerCase();
       const balance = p.balance || 0;
-      MILESTONE_AMOUNTS.forEach(amount => {
-        if(balance >= amount) return;
+      const nextAmount = MILESTONE_AMOUNTS.find(a => a > balance);
+      if(!nextAmount) return;
+      {
+        const amount = nextAmount;
         const stableId = PM_PFX + 'ms_' + pLow + '_' + amount + '_' + thisWeek;
-        if(_markets.some(m => m.id === stableId)) return;
-        const gap = Math.max(0, amount - balance);
-        const reachable = amount * 0.40 * _weekTimeFactor();
-        const r = reachable / (reachable + gap);
-        const yesBias = gap === 0 ? 0.92 : Math.max(0.05, Math.min(0.92, 0.05 + 0.87 * r));
-        const mkt = _makeMarket('season',
-          'Will '+pName+' reach '+fmtFull(amount)+' this week?',
-          {type:'bankroll_milestone', params:{player:pName, amount, date:today, week:thisWeek}},
-          yesBias, undefined, true
-        );
-        mkt.id = stableId;
-        mkt.expiresAt = expiry;
-        _markets.push(mkt);
-        _syncMarketToGAS(mkt);
-      });
+        if(!_markets.some(m => m.id === stableId)){
+          const gap = Math.max(0, amount - balance);
+          const reachable = amount * 0.40 * _weekTimeFactor();
+          const r = reachable / (reachable + gap);
+          const yesBias = gap === 0 ? 0.92 : Math.max(0.05, Math.min(0.92, 0.05 + 0.87 * r));
+          const mkt = _makeMarket('season',
+            'Will '+pName+' reach '+fmtFull(amount)+' this week?',
+            {type:'bankroll_milestone', params:{player:pName, amount, date:today, week:thisWeek}},
+            yesBias, undefined, true
+          );
+          mkt.id = stableId;
+          mkt.expiresAt = expiry;
+          _markets.push(mkt);
+          _syncMarketToGAS(mkt);
+        }
+      }
     });
     _saveMarkets();
   }
@@ -12256,10 +12259,15 @@ const PM = (() => {
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }
           } else if(sm.status==='open' && local.status==='open'){
-            // Merge rather than replace — keep the max per outcome key so a locally-placed bet
-            // that hasn't reached GAS yet isn't wiped by a stale GAS snapshot
+            // If the player has a pending (unsettled) bet on this market, keep the max
+            // so a locally-placed bet that hasn't reached GAS yet isn't wiped.
+            // If no pending local bets, trust GAS pools directly — this ensures a sheet
+            // clear actually resets the displayed pools / "most bet on" strip.
+            const _pendingLocal = _loadBets().some(b => b.mktId === local.id && b.payout == null);
             if(sm.pools) Object.keys(sm.pools).forEach(k => {
-              local.pools[k] = Math.max(local.pools[k]||0, sm.pools[k]||0);
+              local.pools[k] = _pendingLocal
+                ? Math.max(local.pools[k]||0, sm.pools[k]||0)
+                : (sm.pools[k]||0);
             });
             if(sm.outcomes) local.outcomes = sm.outcomes;
           }

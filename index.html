@@ -7068,6 +7068,7 @@ function _redeemExtraShoe(){
     if(db) db.disabled=false;
     if(dbt) dbt.disabled=false;
     msg('PLACE YOUR BET');
+    G._sessionActive = true; // prevent deal()'s first-deal branch from re-incrementing the shoe counter
   }
   sfx('cash'); notif('⭐ +1 extra shoe added (next costs ⭐'+_extraShoeCost()+') — '+_shoesRemaining()+' shoes remaining today');
 }
@@ -10515,6 +10516,7 @@ const PM = (() => {
   const PM_PFX = 'kfc_pm_';
 
   let _markets = [];
+  let _pmInited = false; // set after _loadMarkets() so onLeaderboardUpdate doesn't create markets before cache is ready
   let _betMktId = null;
   let _betOutcome = null;
   let _pollTimer = null;
@@ -12143,10 +12145,12 @@ const PM = (() => {
       });
     });
 
-    _createPlayerMilestoneMarkets(players);
-    _createRaceMarkets(players);
-    // Immediately dedup after creation — catches duplicates without waiting for next poll
-    _remapAndDedup(players);
+    if(_pmInited){
+      _createPlayerMilestoneMarkets(players);
+      _createRaceMarkets(players);
+      // Immediately dedup after creation — catches duplicates without waiting for next poll
+      _remapAndDedup(players);
+    }
 
     // Settle milestone markets
     players.forEach(p => {
@@ -12730,6 +12734,7 @@ const PM = (() => {
     _seasonHist   = _loadSeasonHist();
     _seasonDates  = _loadSeasonDates();
     _loadMarkets();
+    _pmInited = true;
     // Purge ALL creator markets — open and settled — so they never appear in any view
     _markets = _markets.filter(m =>
       !((m.type==='race' || m.type==='season') &&

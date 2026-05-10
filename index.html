@@ -7000,8 +7000,14 @@ function _redeemExtraShoe(){
   // Decrement today's shoe counter by 1 (adds one shoe back to allowance)
   const u=G.username||G.player;
   const cur=_shoesPlayedToday(u);
-  if(cur>0) localStorage.setItem(_shoeKey(u), String(cur-1));
+  localStorage.setItem(_shoeKey(u), String(Math.max(0, cur-1)));
   buildPuPanel();
+  // Re-enable deal buttons if they were disabled by the daily limit gate
+  if(_shoesRemaining()>0 && G.phase==='bet'){
+    const db=document.getElementById('btn-deal'); if(db) db.disabled=false;
+    const dbt=document.getElementById('btn-deal-top'); if(dbt) dbt.disabled=false;
+    msg('PLACE YOUR BET');
+  }
   sfx('cash'); notif('⭐ +1 extra shoe added — '+_shoesRemaining()+' shoes remaining today');
 }
 

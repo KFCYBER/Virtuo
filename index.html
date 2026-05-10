@@ -10947,7 +10947,7 @@ const PM = (() => {
   // Settle any open race markets where we already know the balance (via _currBalances or G.balance),
   // so they never appear as open in the UI after the threshold has been crossed.
   function _settleKnownRaceMarkets(){
-    const myPid = G.playerId || (G.username||'').toLowerCase();
+    const myUsernameLower = (G.username||'').toLowerCase();
     let changed = false;
     MILESTONE_AMOUNTS.forEach(amount => {
       const openForAmount = _markets.filter(m =>
@@ -10959,10 +10959,11 @@ const PM = (() => {
       const seen = new Set();
       openForAmount.forEach(m => {
         const pid = m.condition.params.player || '';
-        if(seen.has(pid)) return;
-        seen.add(pid);
-        const isMe = myPid && pid === myPid;
-        const bal  = isMe ? G.balance : (_currBalances[pid] || 0);
+        const pidLow = pid.toLowerCase();
+        if(seen.has(pidLow)) return;
+        seen.add(pidLow);
+        const isMe = myUsernameLower && pidLow === myUsernameLower;
+        const bal  = isMe ? G.balance : (_currBalances[pidLow] || 0);
         if(bal < amount) return;
         const winner = openForAmount.find(om => om.condition.params.player === pid);
         if(!winner || winner.status !== 'open') return;
@@ -11189,11 +11190,11 @@ const PM = (() => {
       groups[key].push(m);
     });
 
-    const myPid = G.playerId || (G.username || G.player || '').toLowerCase();
+    const myLow = (G.username || G.player || '').toLowerCase();
     // Sort with local player first
     const sortedKeys = Object.keys(groups).sort((a, b) => {
-      if(a === myPid) return -1;
-      if(b === myPid) return 1;
+      if(a.toLowerCase() === myLow) return -1;
+      if(b.toLowerCase() === myLow) return 1;
       return (groupLabels[a]||a).localeCompare(groupLabels[b]||b);
     });
 
@@ -11205,7 +11206,7 @@ const PM = (() => {
         return am - bm;
       });
       const key = playerKey.replace(/[^a-z0-9]/g,'_');
-      const isMe = playerKey === me;
+      const isMe = playerKey.toLowerCase() === myLow;
       const openCount = mkts.filter(m => m.status==='open').length;
       const settled   = mkts.length - openCount;
       const countTxt  = openCount + ' open' + (settled ? ', '+settled+' settled' : '');
@@ -11383,10 +11384,11 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); return; }
     if(_isShoeWholeLock(mkt)){ notif('Betting locked — shoe already in progress'); return; }
-    // Self-bet guard — compare by playerId (stable) with username fallback
-    const myPid2 = G.playerId || (G.username||G.player||'').toLowerCase();
-    if(myPid2 && (mkt.type==='race' || mkt.type==='season') &&
-       mkt.condition?.params?.player && mkt.condition.params.player === myPid2){
+    // Self-bet guard
+    const myName = (G.username||G.player||'').toLowerCase();
+    if(myName && (mkt.type==='race' || mkt.type==='season') &&
+       mkt.condition?.params?.player &&
+       (mkt.condition.params.player||'').toLowerCase() === myName){
       notif("You can't bet on yourself"); return;
     }
     const isMulti = mkt.outcomes && mkt.outcomes.length;
@@ -11561,15 +11563,14 @@ const PM = (() => {
       const pName = p.username || '';
       if(!pName) return;
       if(pName.toLowerCase()==='creator') return;
-      const pid = p.playerId || pName; // stable key: playerId if available, else username
+      const pLow = pName.toLowerCase();
       const balance = p.balance || 0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance >= amount) return;
-        // Dedup by stable playerId (or username fallback) × amount × month
         const alreadyExists = _markets.some(m =>
           m.type==='season' && m.status==='open' && m.condition &&
           m.condition.type==='bankroll_milestone' &&
-          m.condition.params && m.condition.params.player===pid &&
+          m.condition.params && (m.condition.params.player||'').toLowerCase()===pLow &&
           m.condition.params.amount===amount &&
           (m.condition.params.month || (m.condition.params.date||'').slice(0,7)) === thisMonth
         );
@@ -11579,7 +11580,7 @@ const PM = (() => {
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, balance) * _timeFactor()));
         const mkt = _makeMarket('season',
           'Will '+pName+' reach '+fmtFull(amount)+' this month?',
-          {type:'bankroll_milestone', params:{player:pid, playerName:pName, amount, date:today, month:thisMonth}},
+          {type:'bankroll_milestone', params:{player:pName, amount, date:today, month:thisMonth}},
           yesBias
         );
         mkt.expiresAt = expiry;
@@ -11639,12 +11640,12 @@ const PM = (() => {
       const eligTotal = eligible.reduce((s,p)=>s+(p.balance||0), 0);
       eligible.forEach(p => {
         const pName = p.username; if(!pName) return;
-        const pid = p.playerId || pName; // stable key
+        const pLow  = pName.toLowerCase();
         const alreadyOpen = _markets.some(m =>
           m.type==='race' && m.status==='open' &&
           m.condition && m.condition.type==='bankroll_race_player' &&
           m.condition.params && m.condition.params.amount===amount &&
-          m.condition.params.player===pid
+          (m.condition.params.player||'').toLowerCase()===pLow
         );
         if(alreadyOpen) return;
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
@@ -11652,7 +11653,7 @@ const PM = (() => {
         const yesBias = Math.max(0.05, Math.min(0.92, baseBias * _seasonFactor(pName, p.balance||0) * _timeFactor()));
         _markets.push(_makeMarket('race',
           'Will '+pName+' be first to reach '+fmtFull(amount)+'?',
-          {type:'bankroll_race_player', params:{amount, player:pid, playerName:pName}},
+          {type:'bankroll_race_player', params:{amount, player:pName}},
           yesBias, 'season'
         ));
       });
@@ -11924,34 +11925,32 @@ const PM = (() => {
   // Called from onLeaderboardUpdate AND after poll() imports new markets.
   function _remapAndDedup(players){
     if(!players || !players.length) return;
-    // Build alias map: username/name variants → playerId (or canonical username if no playerId)
-    const aliasMap = {}; // any name variant.lower → stable key (playerId or username)
+    // Build alias map: display-name variants → canonical username
+    const aliasMap = {}; // any name variant.lower → canonical username (original case)
     players.forEach(p => {
-      const pid  = p.playerId || (p.username||'');
-      const uname = (p.username||'').toLowerCase();
-      if(!pid) return;
-      aliasMap[uname] = pid;
+      const canonical = p.username || '';
+      if(!canonical) return;
+      const uname = canonical.toLowerCase();
+      aliasMap[uname] = canonical;
       ['name','player'].forEach(field => {
         const alias = (p[field]||'').toLowerCase();
-        if(alias && alias !== uname) aliasMap[alias] = pid;
+        if(alias && alias !== uname) aliasMap[alias] = canonical;
       });
     });
     _aliasMap = aliasMap; // persist for poll() normalisation
-    // Remap markets whose player field is a display-name alias → stable playerId/username
+    // Remap markets whose player field is a display-name alias → canonical username
     let remapped = false;
     _markets.forEach(m => {
       if(!m.condition?.params) return;
       const pp = m.condition.params;
-      if(pp.player && pp.player.startsWith('kfcpid_')) return; // already a playerId
       const canonical = aliasMap[(pp.player||'').toLowerCase()];
       if(canonical && canonical !== pp.player){
-        if(!pp.playerName) pp.playerName = pp.player;
         pp.player = canonical;
         remapped = true;
       }
     });
     // Deduplicate open season (player+amount+month) and open race (player+amount) markets.
-    // Keys are now stable (playerId), so collisions only happen from MP host/guest double-create.
+    // Keys are lowercased so "Kimmo" and "kimmo" collapse to the same entry.
     const before = _markets.length;
     const seen = new Map();
     const discarded = new Map();
@@ -11963,9 +11962,9 @@ const PM = (() => {
       let key = null;
       if(m.type === 'season' && m.condition.type === 'bankroll_milestone'){
         const month = p.month || (p.date||'').slice(0,7);
-        key = 'season_' + (p.player||'') + '_' + (p.amount||'') + '_' + month;
+        key = 'season_' + (p.player||'').toLowerCase() + '_' + (p.amount||'') + '_' + month;
       } else if(m.type === 'race' && m.condition.type === 'bankroll_race_player'){
-        key = 'race_' + (p.player||'') + '_' + (p.amount||'');
+        key = 'race_' + (p.player||'').toLowerCase() + '_' + (p.amount||'');
       }
       if(!key) return true;
       const existing = seen.get(key);
@@ -12017,17 +12016,16 @@ const PM = (() => {
       _markets.forEach(m => {
         if(m.status !== 'open' || !m.condition?.params) return;
         const pp = m.condition.params;
-        if(!pp.player) return;
+        if(!pp.player || typeof pp.player !== 'string') return;
         const isPid = pp.player.startsWith('kfcpid_');
         if(!isPid){
           // Migrate: swap username key → playerId
           const pid = pidMap[pp.player.toLowerCase()];
           if(!pid) return;
-          if(!pp.playerName) pp.playerName = pp.player; // save display name before overwriting
           pp.player = pid;
           changed = true;
         } else {
-          // Already a playerId — just refresh the display name if it changed
+          // Already a playerId — refresh display name if changed
           const newName = nameMap[pp.player];
           if(newName && newName !== pp.playerName){
             const oldName = pp.playerName || '';
@@ -12040,14 +12038,12 @@ const PM = (() => {
       if(changed) _saveMarkets();
     }
 
-    // Step 1: Remap display-name markets → canonical playerId BEFORE purge.
+    // Step 1: Remap display-name markets → canonical username BEFORE purge.
     _remapAndDedup(players);
 
-    // Step 2: Build live player sets (by playerId where available, username as fallback)
-    const livePlayerIds = new Set(players.map(p => p.playerId).filter(Boolean));
-    const liveUsernames  = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
-    const activeRacers   = new Set(players.filter(p => (p.balance||0) > 0).map(p => p.playerId||'').filter(Boolean));
-    if(G.username){ liveUsernames.add(G.username.toLowerCase()); activeRacers.add(G.username.toLowerCase()); }
+    // Step 2: Build live username set (for reference)
+    const liveUsernames = new Set(players.map(p => (p.username||'').toLowerCase()).filter(Boolean));
+    if(G.username) liveUsernames.add(G.username.toLowerCase());
 
     // Step 3: Purge open race/milestone markets for deleted or inactive players.
     // Also notify GAS (pmSettle) for each purged market so GAS marks them settled —
@@ -12075,21 +12071,21 @@ const PM = (() => {
     _markets = _markets.filter(m => !_shouldPurge(m));
     if(_markets.length !== _beforePurge){ _saveMarkets(); _cleanupOrphanBets(); }
 
-    // Track current balances for session factor (saved to prev at shoe boundaries)
-    // Key _currBalances by playerId (stable) with username fallback for old markets
+    // Track current balances — keyed by username.lower for consistent lookup
     players.forEach(p => {
-      const pid = p.playerId || (p.username||'').toLowerCase();
-      if(pid) _currBalances[pid] = p.balance||0;
+      const ukey = (p.username||'').toLowerCase();
+      if(ukey) _currBalances[ukey] = p.balance||0;
     });
 
     // Recalibrate milestone odds if only house money remains
     players.forEach(p => {
-      const pid = p.playerId || (p.username||'').toLowerCase(); if(!pid) return;
+      const uname = (p.username||''); if(!uname) return;
+      const ulow  = uname.toLowerCase();
       const balance = p.balance||0;
       _markets.filter(m =>
         m.type==='season' && m.status==='open' &&
         m.condition && m.condition.type==='bankroll_milestone' &&
-        m.condition.params && m.condition.params.player===pid &&
+        m.condition.params && (m.condition.params.player||'').toLowerCase()===ulow &&
         m.housePools &&
         m.pools.YES===m.housePools.YES && m.pools.NO===m.housePools.NO
       ).forEach(m => {
@@ -12108,22 +12104,24 @@ const PM = (() => {
     // Immediately dedup after creation — catches duplicates without waiting for next poll
     _remapAndDedup(players);
 
-    // Settle milestone markets — match by playerId (stable) with username fallback
+    // Settle milestone markets
     players.forEach(p => {
-      const pid = p.playerId || (p.username||'').toLowerCase(); if(!pid) return;
-      if((p.username||'').toLowerCase() === 'creator') return;
+      const uname = (p.username||''); if(!uname) return;
+      if(uname.toLowerCase() === 'creator') return;
+      const ulow    = uname.toLowerCase();
       const balance = p.balance||0;
       _markets.filter(m =>
         m.type==='season' && m.status==='open' &&
         m.condition && m.condition.type==='bankroll_milestone' &&
-        m.condition.params && m.condition.params.player===pid
+        m.condition.params && (m.condition.params.player||'').toLowerCase()===ulow
       ).forEach(m => { if(balance>=m.condition.params.amount) settle(m.id,'YES'); });
     });
 
     // Settle race markets — first player to cross the milestone wins; all others lose
     players.forEach(p => {
-      const pid = p.playerId || (p.username||'').toLowerCase(); if(!pid) return;
-      if((p.username||'').toLowerCase() === 'creator') return;
+      const uname = (p.username||''); if(!uname) return;
+      if(uname.toLowerCase() === 'creator') return;
+      const ulow    = uname.toLowerCase();
       const balance = p.balance||0;
       MILESTONE_AMOUNTS.forEach(amount => {
         if(balance < amount) return;
@@ -12133,7 +12131,7 @@ const PM = (() => {
           m.condition.params && m.condition.params.amount===amount
         );
         if(!openForAmount.length) return;
-        const myRace = openForAmount.find(m => m.condition.params.player === pid);
+        const myRace = openForAmount.find(m => (m.condition.params.player||'').toLowerCase() === ulow);
         if(myRace){
           settle(myRace.id, 'YES');
           openForAmount.filter(m => m.id!==myRace.id).forEach(m => settle(m.id,'NO'));
@@ -12770,15 +12768,15 @@ const PM = (() => {
         if(ct === 'dealer_bust_range'){ const p = m.condition.params; return ct+'_'+(p?p.min+'_'+p.max:''); }
         return ct;
       });
-      // Season: key = stable player (playerId or username) + amount (no month — one per player per amount)
+      // Season: key = player (lowercased) + amount (no month — one per player per amount)
       dedupType('season', m => {
         const p = m.condition && m.condition.params; if(!p) return null;
-        return (p.player||'')+'_'+(p.amount||'');
+        return (p.player||'').toLowerCase()+'_'+(p.amount||'');
       });
-      // Race: key = stable player (playerId or username) + target amount
+      // Race: key = player (lowercased) + target amount
       dedupType('race', m => {
         const p = m.condition && m.condition.params; if(!p) return null;
-        return (p.player||'')+'_'+(p.amount||'');
+        return (p.player||'').toLowerCase()+'_'+(p.amount||'');
       });
     })();
     // Refund all open shoe-market bets — shoe state is gone after reload, bets can never settle

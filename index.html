@@ -10667,7 +10667,7 @@ const PM = (() => {
     return Math.round(parseFloat(m[1]) * mult);
   }
 
-  function _makeMarket(type, desc, condition, yesBias, seedType){
+  function _makeMarket(type, desc, condition, yesBias, seedType, skipGasSync){
     const s = _seed(seedType || type);
     const total = s * 2;
     const yesPool = yesBias != null ? Math.round(total * yesBias) : s;
@@ -10682,7 +10682,7 @@ const PM = (() => {
       createdAt: Date.now(), settledAt: null,
       createdStakeIdx: _stkIdx(),
     };
-    _syncMarketToGAS(mkt);
+    if(!skipGasSync) _syncMarketToGAS(mkt);
     return mkt;
   }
 
@@ -11625,11 +11625,12 @@ const PM = (() => {
         const mkt = _makeMarket('season',
           'Will '+pName+' reach '+fmtFull(amount)+' this month?',
           {type:'bankroll_milestone', params:{player:pName, amount, date:today, month:thisMonth}},
-          yesBias
+          yesBias, undefined, true
         );
         mkt.id = stableId;
         mkt.expiresAt = expiry;
         _markets.push(mkt);
+        _syncMarketToGAS(mkt);
       });
     });
     _saveMarkets();
@@ -11694,10 +11695,11 @@ const PM = (() => {
         const mkt = _makeMarket('race',
           'Will '+pName+' be first to reach '+fmtFull(amount)+'?',
           {type:'bankroll_race_player', params:{amount, player:pName}},
-          yesBias, 'season'
+          yesBias, 'season', true
         );
         mkt.id = stableId;
         _markets.push(mkt);
+        _syncMarketToGAS(mkt);
       });
     });
     _saveMarkets();

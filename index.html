@@ -4203,15 +4203,15 @@ const _voicePhrases = {
     "Yes YES YES! Blackjack!",
     "Twenty-one! That's what I'm talking about!",
     "BLACKJACK! You absolute legend!",
-    "Oh she did NOT just hit blackjack!",
+    "No way — a blackjack?!",
   ],
   bigwin: [
     "That is a MASSIVE win!",
-    "Oh, she is on FIRE!",
+    "They are absolutely ON FIRE!",
     "HUGE win! Incredible!",
     "Get IN! What a hand!",
     "Now THAT is how you play blackjack!",
-    "Unbelievable! She cleaned UP!",
+    "Unbelievable! They cleaned UP!",
     "YES! Take the money and RUN!",
     "Oh my god, what a payday!",
   ],
@@ -4224,9 +4224,11 @@ function _getFemaleVoice(){
   if(_cachedVoice) return _cachedVoice;
   const voices = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
   if(!voices.length) return null; // voices not loaded yet — don't cache null
-  // Priority: known good English female voices → any en-GB/en-US → any English
+  // Priority: Irish English → any en-IE → known female English → en-GB → en-US → any English
   const matchers = [
-    v => /samantha|victoria|karen|moira|fiona|zira|hazel|aria|google uk english female/i.test(v.name) && v.lang.startsWith('en'),
+    v => v.lang === 'en-IE',
+    v => /moira|fiona|karen|saoirse/i.test(v.name) && v.lang.startsWith('en'),
+    v => /samantha|victoria|zira|hazel|aria|google uk english female/i.test(v.name) && v.lang.startsWith('en'),
     v => v.name.toLowerCase().includes('female') && v.lang.startsWith('en'),
     v => v.lang === 'en-GB',
     v => v.lang === 'en-US',
@@ -4255,7 +4257,7 @@ function _voiceExclaim(type){
   utt.rate   = 1.05;
   utt.pitch  = 1.15;
   utt.volume = 0.92;
-  utt.lang   = 'en-US'; // explicit language so browser doesn't guess
+  utt.lang   = 'en-IE'; // Irish English accent
   window.speechSynthesis.speak(utt);
 }
 

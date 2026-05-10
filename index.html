@@ -3369,7 +3369,7 @@ body.mp-bet-locked .all-sb-btn {
         <p class="help-lead">Purchasable upgrades that last one shoe. Buy them with loyalty points from the ⭐ panel. Standard players can hold 1 at a time; 21 Club Pass holders can hold 2.</p>
         <div class="help-card">
           <div class="help-card-title">Surrender Sally <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
-          <p>Lets you surrender against a dealer 10-upcard, recovering your full bet. Normally surrender isn't available at KFC.</p>
+          <p>Lets you surrender against a dealer 10-upcard, recovering half your bet. Normally surrender isn't available at KFC.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Safety Net <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
@@ -7491,7 +7491,7 @@ function surrender(){
   // Skip hole card (index 1) and jesters to find the real face-up value card
   const dealerUp=G.dealer.find((c,i)=>i!==1&&!(c.bonus&&c.bonus.jester));
   if(!dealerUp||cv(dealerUp)!==10){notif('Surrender only available against a dealer 10');return;}
-  sfx('button'); notif('Surrender — full bet returned');
+  sfx('button'); notif('Surrender — half bet returned');
   setTimeout(()=>settle('surrender'),300);
 }
 function split(){
@@ -7789,7 +7789,7 @@ function settle(reason){
     const lm=getLevMult(hi);
     let w=0;
     if(reason==='surrender'){
-      w=0; detail='Surrender — full bet returned';
+      w=-Math.floor(_betForHand/2); detail='Surrender — half bet returned';
     }
     else if(reason==='push_guard')      {w=0;detail='BJ Guard — Push';}
     else if(reason==='push_player_bj'){w=0;detail='Both BJ — Push';}

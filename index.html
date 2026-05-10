@@ -10980,11 +10980,11 @@ const PM = (() => {
 
     // Player-only pool — requires housePools to be defined; without it we can't
     // distinguish house seed from player bets, so we treat playerPool as 0.
-    const playerPool = m => {
-      if(!m.housePools) return 0;
-      return Object.keys(m.pools||{}).reduce((s,k) =>
-        s + Math.max(0, (m.pools[k]||0) - ((m.housePools[k])||0)), 0);
-    };
+    // Use local bets as the source of truth — pool math drifts when the GAS sheet is cleared
+    const _hotBets = _loadBets();
+    const playerPool = m => _hotBets
+      .filter(b => b.mktId === m.id)
+      .reduce((s, b) => s + (b.amount||0), 0);
 
     const top = _markets
       .filter(m => m.status === 'open')
@@ -11654,18 +11654,8 @@ const PM = (() => {
       if(!nextAmount) return;
       // Remove any open milestone markets for this player that are NOT the next milestone
       // (leftover from before the single-market-per-player rule, or stale from a previous week).
-      // Also settle them in GAS so they don't re-import on the next poll.
-      _markets.forEach(m => {
-        if(m.type !== 'season' || m.status !== 'open') return;
-        if(!m.condition || m.condition.type !== 'bankroll_milestone') return;
-        const mp = m.condition.params;
-        if((mp.player||'').toLowerCase() !== pLow) return;
-        if(mp.amount === nextAmount) return;
-        if(G.url) {
-          const p = new URLSearchParams({action:'pmSettle', mktId:m.id, result:'NO', settledBy:'system'});
-          fetch(G.url+'?'+p.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
-        }
-      });
+      // Only prune locally — do NOT settle in GAS, which would create false settled records
+      // that re-import on the next poll. Stale GAS records are blocked in the poll import below.
       _markets = _markets.filter(m => {
         if(m.type !== 'season' || m.status !== 'open') return true;
         if(!m.condition || m.condition.type !== 'bankroll_milestone') return true;
@@ -12223,12 +12213,22 @@ const PM = (() => {
           if(!local){
             // Shoe markets are purely local — never import from GAS (old shoe IDs would re-appear as duplicates)
             if(sm.type === 'shoe') return;
-            // Never re-import stale monthly milestone markets from GAS — they were settled locally
-            // and would otherwise come back on every poll as open (breaking the cleanup cycle).
-            if(sm.type === 'season' && sm.status === 'open' &&
-               sm.condition && sm.condition.type === 'bankroll_milestone'){
+            // Never re-import stale milestone markets from GAS — block by period and by
+            // "player already has a different open milestone locally" (the correct next one).
+            if(sm.type === 'season' && sm.condition && sm.condition.type === 'bankroll_milestone'){
               const smPeriod = sm.condition.params.week || sm.condition.params.month || (sm.condition.params.date||'').slice(0,10);
               if(smPeriod && smPeriod < _weekStart()) return;
+              if(sm.status === 'open'){
+                const smPlayer = (sm.condition.params.player||'').toLowerCase();
+                const smAmount = sm.condition.params.amount;
+                const hasCorrectLocal = _markets.some(m =>
+                  m.type==='season' && m.status==='open' &&
+                  m.condition && m.condition.type==='bankroll_milestone' &&
+                  (m.condition.params.player||'').toLowerCase()===smPlayer &&
+                  m.condition.params.amount !== smAmount
+                );
+                if(hasCorrectLocal) return; // player already has the right milestone locally
+              }
             }
             // For race/season markets: normalize player name BEFORE logicDup so the dup check
             // can correctly match e.g. incoming "Steven" against local "quindariousgooch".
@@ -12861,7 +12861,7 @@ const PM = (() => {
     if(changed){ _saveBets(cleaned); updateUI(); _syncBalanceAfterPM(); }
   }
 
-  const PM_CACHE_VER = 'w1'; // bump this to force all clients to wipe cached PM markets
+  const PM_CACHE_VER = 'w2'; // bump this to force all clients to wipe cached PM markets
 
   function init(){
     // Cache-bust: if version changed, wipe PM markets localStorage so everything rebuilds clean

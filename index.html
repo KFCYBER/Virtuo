@@ -3199,6 +3199,12 @@ body.mp-bet-locked .all-sb-btn {
         style="font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:4px 12px;background:transparent;border:1px solid var(--green);border-radius:var(--radius);cursor:pointer;color:var(--green);transition:color .15s,border-color .15s">ON</button>
     </div>
     <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:24px;letter-spacing:1px">Push session results to Telegram on every leave / cashout</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+      <span style="font-family:var(--mono);font-size:12px;color:var(--white);letter-spacing:1px">Win sound mode</span>
+      <button id="audio-mode-toggle" onclick="_toggleAudioMode()"
+        style="font-family:var(--mono);font-size:10px;letter-spacing:2px;padding:4px 12px;background:transparent;border:1px solid var(--green);border-radius:var(--radius);cursor:pointer;color:var(--green);transition:color .15s,border-color .15s">SFX</button>
+    </div>
+    <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:24px;letter-spacing:1px">Classic sound effects or vocal reactions on blackjacks &amp; big wins</div>
     <button class="btn-ghost" style="width:100%" onclick="closeModal('settings-modal')">Close</button>
   </div>
 </div>
@@ -7993,8 +7999,15 @@ function settle(reason){
   // ── Hot/cold shoe update ──
   _updateShoeTemp();
   if(totalPLForDisplay>0){
-    if(totalPLForDisplay>G.s.min*10){ sfx('cash'); _voiceExclaim(reason==='player_bj'?'bj':'bigwin'); }
-    else { sfx('win'); if(reason==='player_bj') _voiceExclaim('bj'); }
+    const _isBig=totalPLForDisplay>G.s.min*10;
+    const _isBJ=reason==='player_bj';
+    if(_isVocalMode()){
+      if(_isBig) sfx('cash'); // cash register still fires — complements the voice
+      if(_isBJ||_isBig) _voiceExclaim(_isBJ?'bj':'bigwin');
+      // small non-BJ wins: no sfx, no voice (voice is reserved for big moments)
+    } else {
+      if(_isBig) sfx('cash'); else sfx('win'); // classic: original behaviour
+    }
   } else if(totalPLForDisplay<0){} else sfx('push');
   // Show missed side bet payouts (including Dealer Bust if it busted)
   if(db){
@@ -8993,8 +9006,25 @@ function saveSettings(){
   closeModal('settings-modal'); notif('Settings saved');
 }
 
+function _getAudioMode(){ return localStorage.getItem('kfc_audio_mode')||'sfx'; }
+function _isVocalMode(){ return _getAudioMode()==='vocal'; }
+function _toggleAudioMode(){
+  const next=_isVocalMode()?'sfx':'vocal';
+  localStorage.setItem('kfc_audio_mode',next);
+  _refreshAudioModeBtn();
+  notif(next==='vocal'?'Vocal stims ON':'Classic SFX ON');
+}
+function _refreshAudioModeBtn(){
+  const btn=document.getElementById('audio-mode-toggle');
+  if(!btn) return;
+  const vocal=_isVocalMode();
+  btn.textContent=vocal?'VOCAL':'SFX';
+  btn.style.borderColor=vocal?'var(--gold)':'var(--green)';
+  btn.style.color=vocal?'var(--gold)':'var(--green)';
+}
+
 // ── MODALS ──────────────────────────────────────────────
-function openModal(id){document.getElementById(id).classList.add('open');if(id==='pu-info-modal')buildPuPriceTable();if(id==='settings-modal')_refreshTgToggle();}
+function openModal(id){document.getElementById(id).classList.add('open');if(id==='pu-info-modal')buildPuPriceTable();if(id==='settings-modal'){_refreshTgToggle();_refreshAudioModeBtn();}}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
 function helpTab(name){
   document.querySelectorAll('.help-tab').forEach(b=>b.classList.remove('active'));

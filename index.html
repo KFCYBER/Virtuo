@@ -12638,8 +12638,9 @@ const PM = (() => {
       timeStatus = `<div style="font-family:var(--mono);font-size:9px;letter-spacing:1px;margin-top:6px;color:${col}">${daysLeft} days left — odds at ${pct}% of full-season strength</div>`;
     }
 
-    // Player history rows
-    const players = Object.keys(_currBalances).sort();
+    // Player history rows — union of live players + anyone already saved in _seasonHist
+    const playerSet = new Set([...Object.keys(_currBalances), ...Object.keys(_seasonHist)]);
+    const players = [...playerSet].filter(p => p && p.toLowerCase() !== 'creator').sort();
     const hasHist = Object.keys(_seasonHist).length > 0;
     let inputRows = players.length
       ? players.map(p => {

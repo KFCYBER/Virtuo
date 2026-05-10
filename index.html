@@ -7506,6 +7506,9 @@ function dbl(){
 function surrender(){
   if(G.phase!=='play'){notif('Not in play phase');return;}
   if(!G.puOwned.has('sally')){notif('Surrender Sally power-up required');return;}
+  // Only allowed before any action — check current hand has exactly 2 non-jester cards
+  const _surrCards=(G.hands[G.cur]||[]).filter(c=>!(c.bonus&&c.bonus.jester));
+  if(_surrCards.length!==2){notif('Surrender only available before hitting');return;}
   // Skip hole card (index 1) and jesters to find the real face-up value card
   const dealerUp=G.dealer.find((c,i)=>i!==1&&!(c.bonus&&c.bonus.jester));
   if(!dealerUp||cv(dealerUp)!==10){notif('Surrender only available against a dealer 10');return;}
@@ -8429,7 +8432,10 @@ function setActions(playing){
   }
   // Surrender (in play-actions)
   const srv=document.getElementById('btn-surrender');
-  if(srv) srv.style.display=(playing&&G.puOwned.has('sally'))?'flex':'none';
+  if(srv){
+    const _sh=(G.hands[G.cur]||[]).filter(c=>!(c.bonus&&c.bonus.jester));
+    srv.style.display=(playing&&G.puOwned.has('sally')&&_sh.length===2)?'flex':'none';
+  }
   // Insurance buttons
   const insY=document.getElementById('btn-insurance-yes');
   const insN=document.getElementById('btn-insurance-no');

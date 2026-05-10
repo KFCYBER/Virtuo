@@ -2314,6 +2314,36 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-summary-val.neg { color:var(--red); }
 .pm-cashout-btn { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:var(--gold-lo); background:rgba(201,168,76,.08); border:1px solid rgba(201,168,76,.3); border-radius:2px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
 .pm-cashout-btn:hover { background:rgba(201,168,76,.18); color:var(--gold-hi); }
+/* ── Portfolio stats grid ── */
+.pm-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--line2); }
+.pm-stats-cell { padding:7px 4px; text-align:center; border-right:1px solid var(--line2); }
+.pm-stats-cell:last-child { border-right:none; }
+.pm-stats-label { font-family:var(--mono); font-size:7px; letter-spacing:1.5px; color:var(--muted); text-transform:uppercase; margin-bottom:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pm-stats-val { font-family:var(--mono); font-size:10px; font-weight:700; color:var(--white); }
+.pm-stats-val.pos { color:var(--green); }
+.pm-stats-val.neg { color:var(--red); }
+.pm-stats-val.muted { color:var(--muted2); }
+.pm-stats-sub { font-family:var(--mono); font-size:8px; color:var(--muted); padding:5px 10px; border-bottom:1px solid var(--line2); display:flex; gap:0; }
+.pm-stats-sub-cell { flex:1; text-align:center; border-right:1px solid var(--line2); padding:0 4px; }
+.pm-stats-sub-cell:last-child { border-right:none; }
+.pm-stats-sub b { color:var(--muted2); font-weight:normal; }
+/* ── Portfolio filter bar ── */
+.pm-filter-bar { display:flex; gap:4px; padding:5px 8px; border-bottom:1px solid var(--line2); overflow-x:auto; scrollbar-width:none; flex-shrink:0; align-items:center; }
+.pm-filter-bar::-webkit-scrollbar { display:none; }
+.pm-filter-pill { font-family:var(--mono); font-size:8px; letter-spacing:1px; text-transform:uppercase; border:1px solid var(--line2); background:transparent; color:var(--muted); border-radius:2px; padding:3px 7px; cursor:pointer; white-space:nowrap; transition:all .12s; flex-shrink:0; }
+.pm-filter-pill:hover { color:var(--white); border-color:var(--muted); }
+.pm-filter-pill.active { background:rgba(201,168,76,.12); border-color:rgba(201,168,76,.45); color:var(--gold-hi); }
+.pm-filter-sep { width:1px; background:var(--line2); align-self:stretch; margin:0 4px; flex-shrink:0; }
+/* ── Portfolio section header (collapsible) ── */
+.pm-port-sec-hdr { display:flex; align-items:center; justify-content:space-between; padding:8px 10px; cursor:pointer; border-bottom:1px solid var(--line); user-select:none; transition:background .12s; }
+.pm-port-sec-hdr:hover { background:rgba(255,255,255,.03); }
+.pm-port-sec-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
+.pm-port-sec-right { display:flex; align-items:center; gap:8px; }
+.pm-port-sec-count { font-family:var(--mono); font-size:8px; color:var(--muted2); }
+.pm-port-sec-chev { color:var(--muted); font-size:9px; transition:transform .2s; display:inline-block; }
+.pm-port-sec-chev.closed { transform:rotate(-90deg); }
+.pm-port-show-more { font-family:var(--mono); font-size:8px; color:var(--gold-lo); letter-spacing:1px; text-align:center; padding:8px; cursor:pointer; border-top:1px solid var(--line2); display:block; width:100%; background:none; border-left:none; border-right:none; border-bottom:none; }
+.pm-port-show-more:hover { color:var(--gold-hi); }
 .pm-odds-delta { font-family: var(--mono); font-size: 8px; font-weight: 700; letter-spacing: 0.5px; margin-top: 1px; }
 .pm-odds-delta.up   { color: var(--green); }
 .pm-odds-delta.down { color: var(--red); }
@@ -10036,6 +10066,18 @@ const PM = (() => {
   let _prevBalances = {};   // snapshot from end of previous shoe, persisted to LS
   let _lastPlayers  = [];   // cached from last leaderboard fetch — used to remap after poll
   let _aliasMap     = {};   // displayName.lower → canonical username, rebuilt each _remapAndDedup
+
+  // Portfolio UI state
+  let _portStatusFilter  = 'all';  // all / open / history
+  let _portTypeFilter    = 'all';  // all / race / season / shoe
+  let _portOpenCollapsed = false;
+  let _portHistCollapsed = true;
+  let _portHistShowAll   = false;
+  function _portSetStatus(f){ _portStatusFilter = f; _portHistShowAll = false; render(); }
+  function _portSetType(f)  { _portTypeFilter   = f; _portHistShowAll = false; render(); }
+  function _portToggleOpen(){ _portOpenCollapsed = !_portOpenCollapsed; render(); }
+  function _portToggleHist(){ _portHistCollapsed = !_portHistCollapsed; render(); }
+  function _portToggleHistAll(){ _portHistShowAll = !_portHistShowAll; render(); }
   const LS_PREV_BAL = 'kfc_pm_prev_bal';
   function _loadPrevBal(){ try{ return JSON.parse(localStorage.getItem(LS_PREV_BAL)||'{}'); }catch(e){ return {}; } }
   function _savePrevBal(s){ try{ localStorage.setItem(LS_PREV_BAL, JSON.stringify(s)); }catch(e){} }
@@ -11698,125 +11740,234 @@ const PM = (() => {
   function _renderPortfolio(){
     const el = document.getElementById('pm-portfolio-content');
     if(!el) return;
-    const bets = _loadBets();
-    if(!bets.length){ el.innerHTML = '<div class="pm-empty">No bets placed yet</div>'; return; }
-    const open   = bets.filter(b => b.payout === null);
-    const closed = [...bets.filter(b => b.payout !== null)].reverse();
+    const allBets = _loadBets();
+    if(!allBets.length){ el.innerHTML = '<div class="pm-empty">No bets placed yet</div>'; return; }
+
+    const allOpen   = allBets.filter(b => b.payout === null);
+    const allClosed = [...allBets.filter(b => b.payout !== null)].reverse(); // newest first
+
+    // ── Compute lifetime stats (unfiltered) ──────────────────────
+    let netPL = 0, wins = 0, losses = 0, totalStaked = 0, biggestBet = 0;
+    allBets.forEach(b => {
+      totalStaked += b.amount;
+      if(b.amount > biggestBet) biggestBet = b.amount;
+    });
+    allClosed.forEach(b => {
+      const pl = (b.payout||0) - b.amount;
+      netPL += pl;
+      if(pl > 0) wins++;
+      else if(pl < 0) losses++;
+    });
+    const totalDecided = wins + losses;
+    const winRate = totalDecided > 0 ? Math.round(wins / totalDecided * 100) : null;
+    const roi     = totalStaked  > 0 ? Math.round(netPL / totalStaked * 100) : null;
+
+    // Streak (newest-first allClosed)
+    let streakStr = '—';
+    if(allClosed.length){
+      const firstPL = (allClosed[0].payout||0) - allClosed[0].amount;
+      if(firstPL !== 0){
+        const dir = firstPL > 0 ? 'W' : 'L';
+        let cnt = 1;
+        for(let i = 1; i < allClosed.length; i++){
+          const pl = (allClosed[i].payout||0) - allClosed[i].amount;
+          if((pl > 0 ? 'W' : pl < 0 ? 'L' : null) === dir) cnt++;
+          else break;
+        }
+        streakStr = `${dir}${cnt}`;
+      }
+    }
+
+    // Open-bets live stats (unfiltered)
+    let totalExposure = 0, totalToWin = 0, totalLivePL = 0;
+    allOpen.forEach(b => {
+      const mkt = _markets.find(m => m.id === b.mktId);
+      totalExposure += b.amount;
+      totalToWin += b.lockedPayout !== undefined ? (b.lockedPayout - b.amount) : 0;
+      if(mkt && (mkt.type === 'race' || mkt.type === 'season')){
+        const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
+        const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+        totalLivePL += (pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount) - b.amount;
+      }
+    });
+
+    const plCls   = netPL > 0 ? 'pos' : netPL < 0 ? 'neg' : 'muted';
+    const roiCls  = roi != null ? (roi > 0 ? 'pos' : roi < 0 ? 'neg' : 'muted') : 'muted';
+    const liveCls = totalLivePL > 0 ? 'pos' : totalLivePL < 0 ? 'neg' : 'muted';
+    const streakCls = streakStr.startsWith('W') ? 'pos' : streakStr.startsWith('L') ? 'neg' : 'muted';
+
     let html = '';
 
-    // ── Summary bar ──────────────────────────────────────────────
-    if(open.length){
-      let totalExposure = 0, totalToWin = 0, totalLivePL = 0;
-      open.forEach(b => {
-        const mkt = _markets.find(m => m.id === b.mktId);
-        totalExposure += b.amount;
-        totalToWin += b.lockedPayout !== undefined ? (b.lockedPayout - b.amount) : 0;
-        if(mkt && (mkt.type === 'race' || mkt.type === 'season')){
-          const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
-          const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
-          const cur = pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount;
-          totalLivePL += cur - b.amount;
-        }
-      });
-      const liveCls = totalLivePL > 0 ? 'pos' : totalLivePL < 0 ? 'neg' : '';
-      html += `<div class="pm-summary-bar">
-        <div class="pm-summary-cell">
-          <div class="pm-summary-label">Exposure</div>
-          <div class="pm-summary-val">${fmtFull(totalExposure)}</div>
+    // ── Stats grid (always visible, unfiltered) ───────────────────
+    html += `<div class="pm-stats-grid">
+      <div class="pm-stats-cell">
+        <div class="pm-stats-label">Net P&amp;L</div>
+        <div class="pm-stats-val ${plCls}">${netPL>=0?'+':''}${fmtFull(netPL)}</div>
+      </div>
+      <div class="pm-stats-cell">
+        <div class="pm-stats-label">W / L</div>
+        <div class="pm-stats-val">${wins}<span style="color:var(--muted);font-size:8px"> / </span>${losses}</div>
+      </div>
+      <div class="pm-stats-cell">
+        <div class="pm-stats-label">Win Rate</div>
+        <div class="pm-stats-val ${winRate!=null?(winRate>=50?'pos':'neg'):'muted'}">${winRate!=null?winRate+'%':'—'}</div>
+      </div>
+      <div class="pm-stats-cell">
+        <div class="pm-stats-label">ROI</div>
+        <div class="pm-stats-val ${roiCls}">${roi!=null?(roi>=0?'+':'')+roi+'%':'—'}</div>
+      </div>
+    </div>`;
+
+    // Open-bets row (only if there are open bets)
+    if(allOpen.length){
+      html += `<div class="pm-stats-grid" style="border-top:none">
+        <div class="pm-stats-cell">
+          <div class="pm-stats-label">Exposure</div>
+          <div class="pm-stats-val">${fmtFull(totalExposure)}</div>
         </div>
-        <div class="pm-summary-cell">
-          <div class="pm-summary-label">To Win</div>
-          <div class="pm-summary-val pos">+${fmtFull(totalToWin)}</div>
+        <div class="pm-stats-cell">
+          <div class="pm-stats-label">To Win</div>
+          <div class="pm-stats-val pos">${totalToWin>0?'+':''}${fmtFull(totalToWin)}</div>
         </div>
-        <div class="pm-summary-cell">
-          <div class="pm-summary-label">Live P&L</div>
-          <div class="pm-summary-val ${liveCls}">${totalLivePL>=0?'+':''}${fmtFull(totalLivePL)}</div>
+        <div class="pm-stats-cell" style="grid-column:span 2">
+          <div class="pm-stats-label">Live P&amp;L</div>
+          <div class="pm-stats-val ${liveCls}">${totalLivePL>=0?'+':''}${fmtFull(totalLivePL)}</div>
         </div>
       </div>`;
     }
 
-    // ── Open positions ────────────────────────────────────────────
-    if(open.length){
-      html += '<div class="pm-section-title">Open Positions</div>';
-      html += open.map(b => {
-        const mkt  = _markets.find(m => m.id === b.mktId);
-        const name = mkt ? mkt.desc : (b.mktDesc || '(market removed)');
-        const curPct = mkt ? _pct(mkt, b.outcome) : 0;
-        const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE')
-                        : (b.mktType ? b.mktType.toUpperCase() : '');
+    // Sub-line: biggest bet + streak
+    html += `<div class="pm-stats-sub">
+      <div class="pm-stats-sub-cell"><b>Biggest bet</b> <span style="color:var(--white);font-weight:700">${fmtFull(biggestBet)}</span></div>
+      <div class="pm-stats-sub-cell"><b>Streak</b> <span class="pm-stats-val ${streakCls}" style="font-size:9px">${streakStr}</span></div>
+    </div>`;
 
-        // To Win (locked)
-        const toWin = b.lockedPayout !== undefined ? b.lockedPayout - b.amount : null;
-        const toWinHTML = toWin !== null
-          ? `<span class="pm-port-to-win">To Win: +${fmtFull(toWin)}</span>`
-          : '';
+    // ── Filter bar ────────────────────────────────────────────────
+    const sp = s => `PM._portSetStatus('${s}')`;
+    const tp = t => `PM._portSetType('${t}')`;
+    html += `<div class="pm-filter-bar">
+      <button class="pm-filter-pill${_portStatusFilter==='all'?' active':''}" onclick="${sp('all')}">All</button>
+      <button class="pm-filter-pill${_portStatusFilter==='open'?' active':''}" onclick="${sp('open')}">Open</button>
+      <button class="pm-filter-pill${_portStatusFilter==='history'?' active':''}" onclick="${sp('history')}">History</button>
+      <div class="pm-filter-sep"></div>
+      <button class="pm-filter-pill${_portTypeFilter==='all'?' active':''}" onclick="${tp('all')}">All</button>
+      <button class="pm-filter-pill${_portTypeFilter==='race'?' active':''}" onclick="${tp('race')}">Race</button>
+      <button class="pm-filter-pill${_portTypeFilter==='season'?' active':''}" onclick="${tp('season')}">Season</button>
+      <button class="pm-filter-pill${_portTypeFilter==='shoe'?' active':''}" onclick="${tp('shoe')}">Shoe</button>
+    </div>`;
 
-        // Odds movement indicator
-        let oddsHTML = '';
-        if(curPct && b.entryOdds != null){
-          const diff = curPct - b.entryOdds;
-          if(Math.abs(diff) >= 1){
-            const dir = diff > 0 ? 'up' : 'down';
-            oddsHTML = `<span class="pm-port-odds-move ${dir}">${diff>0?'▲':'▼'}${Math.abs(diff)}%</span>`;
+    // ── Filtered bet lists ────────────────────────────────────────
+    const typeMatch = b => {
+      if(_portTypeFilter === 'all') return true;
+      const mkt = _markets.find(m => m.id === b.mktId);
+      return (mkt ? mkt.type : (b.mktType||'')) === _portTypeFilter;
+    };
+    const showOpen = _portStatusFilter !== 'history';
+    const showHist = _portStatusFilter !== 'open';
+    const filteredOpen   = showOpen ? allOpen.filter(typeMatch)   : [];
+    const filteredClosed = showHist ? allClosed.filter(typeMatch) : [];
+
+    // ── Open positions section ────────────────────────────────────
+    if(showOpen){
+      const chevCls = _portOpenCollapsed ? 'closed' : '';
+      html += `<div class="pm-port-sec-hdr" onclick="PM._portToggleOpen()">
+        <span class="pm-port-sec-title">Open Positions</span>
+        <span class="pm-port-sec-right">
+          <span class="pm-port-sec-count">${filteredOpen.length}</span>
+          <span class="pm-port-sec-chev ${chevCls}">▾</span>
+        </span>
+      </div>`;
+      if(!_portOpenCollapsed){
+        if(!filteredOpen.length){
+          html += '<div class="pm-empty">No open positions</div>';
+        } else {
+          html += filteredOpen.map(b => {
+            const mkt  = _markets.find(m => m.id === b.mktId);
+            const name = mkt ? mkt.desc : (b.mktDesc || '(market removed)');
+            const curPct = mkt ? _pct(mkt, b.outcome) : 0;
+            const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE')
+                              : (b.mktType ? b.mktType.toUpperCase() : '');
+            const toWin = b.lockedPayout !== undefined ? b.lockedPayout - b.amount : null;
+            const toWinHTML = toWin !== null ? `<span class="pm-port-to-win">+${fmtFull(toWin)}</span>` : '';
+            let oddsHTML = '';
+            if(curPct && b.entryOdds != null){
+              const diff = curPct - b.entryOdds;
+              if(Math.abs(diff) >= 1) oddsHTML = `<span class="pm-port-odds-move ${diff>0?'up':'down'}">${diff>0?'▲':'▼'}${Math.abs(diff)}%</span>`;
+            }
+            const oddsLabel = curPct ? `<span class="pm-port-odds">${curPct}%</span>` : '';
+            let liveHTML = '', cashoutBtn = '';
+            if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
+              const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
+              const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
+              const livePL = (pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount) - b.amount;
+              const lc = livePL > 0 ? 'pos' : livePL < 0 ? 'neg' : 'zero';
+              liveHTML = `<span class="pm-port-live-pl ${lc}">Live: ${livePL>=0?'+':''}${fmtFull(livePL)}</span>`;
+              const esc = b.outcome.replace(/'/g,"\\'");
+              cashoutBtn = `<button class="pm-cashout-btn" onclick="PM._promptCashOut('${b.mktId}','${esc}',${b.ts})">Cash Out</button>`;
+            }
+            const trackerHTML = mkt && mkt.status === 'open' ? _trackerHTML(mkt) : '';
+            return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
+              <div class="pm-port-name">${name}</div>
+              ${trackerHTML}
+              <div class="pm-port-meta">
+                <span class="pm-port-outcome">${b.outcome}</span>
+                <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
+                ${toWinHTML}${oddsLabel}${oddsHTML}${liveHTML}
+                ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
+              </div>
+              ${cashoutBtn ? `<div class="pm-port-cashout" style="justify-content:flex-end">${cashoutBtn}</div>` : ''}
+            </div>`;
+          }).join('');
+        }
+      }
+    }
+
+    // ── History section ───────────────────────────────────────────
+    if(showHist){
+      const chevCls = _portHistCollapsed ? 'closed' : '';
+      html += `<div class="pm-port-sec-hdr" onclick="PM._portToggleHist()">
+        <span class="pm-port-sec-title">History</span>
+        <span class="pm-port-sec-right">
+          <span class="pm-port-sec-count">${filteredClosed.length}</span>
+          <span class="pm-port-sec-chev ${chevCls}">▾</span>
+        </span>
+      </div>`;
+      if(!_portHistCollapsed){
+        if(!filteredClosed.length){
+          html += '<div class="pm-empty">No history yet</div>';
+        } else {
+          const HIST_CAP = 20;
+          const toShow = _portHistShowAll ? filteredClosed : filteredClosed.slice(0, HIST_CAP);
+          html += toShow.map(b => {
+            const mkt  = _markets.find(m => m.id === b.mktId);
+            const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
+            const pl   = (b.payout||0) - b.amount;
+            const plCl = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
+            const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE') : '';
+            const cashoutBadge = b.cashoutEarly
+              ? `<span class="pm-port-type" style="color:var(--muted)">cashed out @ ${b.cashoutOdds??'?'}%</span>`
+              : '';
+            return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
+              <div class="pm-port-name">${name}</div>
+              <div class="pm-port-meta">
+                <span class="pm-port-outcome">${b.outcome}</span>
+                <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
+                ${cashoutBadge}
+                ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
+                <span class="pm-port-pl ${plCl}">${pl>=0?'+':''}${fmtFull(pl)}</span>
+              </div>
+            </div>`;
+          }).join('');
+          if(filteredClosed.length > HIST_CAP){
+            const label = _portHistShowAll
+              ? 'Show less'
+              : `Show all ${filteredClosed.length} bets`;
+            html += `<button class="pm-port-show-more" onclick="PM._portToggleHistAll()">${label}</button>`;
           }
         }
-        const oddsLabel = curPct ? `<span class="pm-port-odds">${curPct}% implied</span>` : '';
-
-        // Live P&L + cashout (race/season only)
-        let liveHTML = '', cashoutBtn = '';
-        if(mkt && mkt.status === 'open' && (mkt.type === 'race' || mkt.type === 'season')){
-          const pOut = Math.max(0,(mkt.pools[b.outcome]||0)-(mkt.housePools[b.outcome]||0));
-          const pTot = Object.keys(mkt.pools).reduce((s,k)=>s+Math.max(0,(mkt.pools[k]||0)-(mkt.housePools[k]||0)),0);
-          const cur  = pOut > 0 ? Math.round((b.amount/pOut)*pTot) : b.amount;
-          const livePL = cur - b.amount;
-          const liveCls = livePL > 0 ? 'pos' : livePL < 0 ? 'neg' : 'zero';
-          liveHTML = `<span class="pm-port-live-pl ${liveCls}">Live: ${livePL>=0?'+':''}${fmtFull(livePL)}</span>`;
-          const esc = b.outcome.replace(/'/g,"\\'");
-          cashoutBtn = `<button class="pm-cashout-btn" onclick="PM._promptCashOut('${b.mktId}','${esc}',${b.ts})">Cash Out</button>`;
-        }
-
-        const hasCashout = cashoutBtn !== '';
-        const trackerHTML = mkt && mkt.status === 'open' ? _trackerHTML(mkt) : '';
-        return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
-          <div class="pm-port-name">${name}</div>
-          ${trackerHTML}
-          <div class="pm-port-meta">
-            <span class="pm-port-outcome">${b.outcome}</span>
-            <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
-            ${toWinHTML}
-            ${oddsLabel}${oddsHTML}
-            ${liveHTML}
-            ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
-          </div>
-          ${hasCashout ? `<div class="pm-port-cashout" style="justify-content:flex-end">${cashoutBtn}</div>` : ''}
-        </div>`;
-      }).join('');
+      }
     }
 
-    // ── History ───────────────────────────────────────────────────
-    if(closed.length){
-      let totalPL = 0;
-      closed.forEach(b=>{ totalPL += (b.payout||0) - b.amount; });
-      html += `<div class="pm-section-title" style="margin-top:${open.length?14:0}px">History</div>`;
-      html += closed.map(b => {
-        const mkt  = _markets.find(m => m.id === b.mktId);
-        const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
-        const pl   = (b.payout||0) - b.amount;
-        const cashoutBadge = b.cashoutEarly
-          ? `<span class="pm-port-type" style="color:var(--muted)">cashed out @ ${b.cashoutOdds??'?'}% implied</span>`
-          : '';
-        return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
-          <div class="pm-port-name">${name}</div>
-          <div class="pm-port-meta">
-            <span class="pm-port-outcome">${b.outcome}</span>
-            <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
-            ${cashoutBadge}
-            <span class="pm-port-pl ${pl>0?'pos':pl<0?'neg':'zero'}">${pl>=0?'+':''}${fmtFull(pl)}</span>
-          </div>
-        </div>`;
-      }).join('');
-      html += `<div class="pm-port-total">Net P&L: <span class="${totalPL>=0?'pos':'neg'}">${totalPL>=0?'+':''}${fmtFull(totalPL)}</span></div>`;
-    }
     el.innerHTML = html;
   }
 
@@ -12194,7 +12345,7 @@ const PM = (() => {
     poll();
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll };
 })();
 
 

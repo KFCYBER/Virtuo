@@ -11003,13 +11003,12 @@ const PM = (() => {
     const strip = document.getElementById('pm-hot-strip');
     if(!area || !strip) return;
 
-    // Shared pool — uses GAS-aggregated pools so all players see the same hot markets.
-    // housePools is the original house seed; anything above it is real player bets.
-    const playerPool = m => {
-      if(!m.housePools) return 0;
-      return Object.keys(m.pools||{}).reduce((s,k) =>
-        s + Math.max(0, (m.pools[k]||0) - (m.housePools[k]||0)), 0);
-    };
+    // Use local bets as source of truth — clears correctly when PM_Bets is wiped,
+    // never shows stale pool data from PM_Markets.
+    const _hotBets = _loadBets();
+    const playerPool = m => _hotBets
+      .filter(b => b.mktId === m.id)
+      .reduce((s, b) => s + (b.amount||0), 0);
 
     const top = _markets
       .filter(m => m.status === 'open')

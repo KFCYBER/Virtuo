@@ -11045,7 +11045,7 @@ const PM = (() => {
       const splitHTML = yPct !== null
         ? `<div class="pm-hot-split-bar"><div class="pm-hot-split-fill" style="width:${yPct}%"></div></div>
            <div class="pm-hot-split-labels"><span class="hs-yes">${yPct}% YES</span><span class="hs-no">${100-yPct}% NO</span></div>`
-        : '';
+        : `<div class="pm-hot-split-labels"><span style="color:var(--muted);font-family:var(--mono);font-size:7px">— YES &nbsp; — NO</span></div>`;
       const name = m.desc.length > 42 ? m.desc.slice(0,40)+'…' : m.desc;
       return `<div class="pm-hot-card" onclick="PM._jumpToMarket('${m.id}')">
         <div class="pm-hot-card-type">${typeLabel(m.type)}</div>
@@ -11662,7 +11662,7 @@ const PM = (() => {
         const _tp = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
         const rawPay = (bet.amount / mkt.pools[result]) * _tp;
         const profit = rawPay - bet.amount;
-        const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
+        const mult = mkt.type === 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
         bet.payout = Math.round(bet.amount + profit * mult);
       }
       myTotal += bet.payout;
@@ -12342,7 +12342,7 @@ const PM = (() => {
               } else {
                 const _stp = Object.values(sm.pools).reduce((a,b)=>a+b,0);
                 const rawPay = (bet.amount / sm.pools[sm.result]) * _stp;
-                const mult = settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
+                const mult = sm.type === 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
                 bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
               }
               credit += bet.payout;
@@ -12695,13 +12695,16 @@ const PM = (() => {
           const toShow = _portHistShowAll ? filteredClosed : filteredClosed.slice(0, HIST_CAP);
           html += toShow.map(b => {
             const mkt  = _markets.find(m => m.id === b.mktId);
-            const name = mkt ? mkt.desc : (b.mktDesc || '(settled market)');
+            const name = mkt ? mkt.desc : (b.mktDesc || (b.refunded ? '(market removed)' : '(settled market)'));
             const pl   = (b.payout||0) - b.amount;
             const plCl = pl > 0 ? 'pos' : pl < 0 ? 'neg' : 'zero';
-            const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE') : '';
+            const tag  = mkt ? (mkt.type==='race'?'RACE':mkt.type==='season'?'SEASON':'SHOE') : (b.mktType ? b.mktType.toUpperCase() : '');
             const cashoutBadge = b.cashoutEarly
               ? `<span class="pm-port-type" style="color:var(--muted)">cashed out @ ${b.cashoutOdds??'?'}%</span>`
-              : '';
+              : b.refunded
+                ? `<span class="pm-port-type" style="color:var(--muted)">refunded</span>`
+                : '';
+            const plDisplay = b.refunded ? `<span class="pm-port-pl muted">±0</span>` : `<span class="pm-port-pl ${plCl}">${pl>=0?'+':''}${fmtFull(pl)}</span>`;
             return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
               <div class="pm-port-name">${name}</div>
               <div class="pm-port-meta">
@@ -12709,7 +12712,7 @@ const PM = (() => {
                 <span class="pm-port-amt">Staked ${fmtFull(b.amount)}</span>
                 ${cashoutBadge}
                 ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
-                <span class="pm-port-pl ${plCl}">${pl>=0?'+':''}${fmtFull(pl)}</span>
+                ${plDisplay}
               </div>
             </div>`;
           }).join('');
@@ -12965,6 +12968,7 @@ const PM = (() => {
       if(_markets.find(m => m.id === b.mktId)) return b;
       G.balance += b.amount;
       b.payout = b.amount; // refund: return exact stake
+      b.refunded = true;   // flag so history shows "Refunded" not "+0"
       changed = true;
       return b;
     });

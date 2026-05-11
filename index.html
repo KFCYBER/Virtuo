@@ -10813,14 +10813,16 @@ const PM = (() => {
     return t ? Math.round((mkt.pools[outcome]||0) / t * 100) : 0;
   }
 
+  const SHOE_HOUSE_EDGE = 0.08; // 8% vig on shoe markets — house keeps this margin on every bet
+
   function _rawPayoutIfWin(mkt, outcome, amount){
     if(amount <= 0) return amount;
-    // Shoe: fixed-odds payout based on deck probability
+    // Shoe: fixed-odds payout with house edge baked in
     if(mkt.type === 'shoe' && mkt.condition){
       const p = _deckProb(mkt.condition) / 100;
       const prob = outcome === 'YES' ? p : (1 - p);
       if(prob <= 0) return amount;
-      return amount / prob;
+      return (amount / prob) * (1 - SHOE_HOUSE_EDGE);
     }
     // Season/Race: use model probability (same source as displayed %) so payout
     // always matches the shown odds — pool ratios drift with stale GAS data.

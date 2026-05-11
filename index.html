@@ -5929,14 +5929,13 @@ function _logSessionToSheet(stakeLabel){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
   if(!G.log || G.log.length === 0) return; // no hands played — nothing meaningful to log
-  const safeBalance = (G.preDealBal > 0 && G.phase !== 'bet') ? G.preDealBal : G.balance;
   const params = new URLSearchParams({
     action:    'updatebalance',
     username:  G.username,
     player:    G.player || G.username,
-    balance:   String(safeBalance),
-    sessionPL: String(safeBalance - (G.sessionStart || safeBalance)),
-    buyIn:     String(G.sessionStart || safeBalance),
+    balance:   String(G.balance),
+    sessionPL: String(G.balance - (G.sessionStart || G.balance)),
+    buyIn:     String(G.sessionStart || G.balance),
     date:      new Date().toISOString(),
     stake:     stakeLabel || 'RELOAD-EXIT',
     pin:       G._cachedPin

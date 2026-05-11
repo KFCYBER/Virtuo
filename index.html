@@ -5654,6 +5654,24 @@ function _updateCreatorBtn(){
 }
 
 // Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
+// Fires immediately on bet commit (deal/double/split) — closes the mid-hand reload exploit
+// where a player clears localStorage and logs in to get back the stale GAS balance.
+async function _syncCommitBalance(){
+  if(_isCreator()) return;
+  if(!G.url || !G.username || !G._cachedPin) return;
+  const params = new URLSearchParams({
+    action:'updatebalance', username:G.username, player:G.player||G.username,
+    balance:String(G.balance),
+    sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+    buyIn:String(G.sessionStart||G.balance),
+    date:new Date().toISOString(),
+    stake:G.s?G.s.label:'auto',
+    pin:G._cachedPin||'',
+    autosave:'true'
+  });
+  try{ fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+}
+
 // Uses autosave=true so GAS skips TX row and games++ increment.
 let _autoSaveHandCount = 0;
 let _handLogOffset = 0;
@@ -7249,6 +7267,7 @@ function deal(){
   [0,300,600,900].forEach(t=>setTimeout(()=>sfx('card'),t));
   // Save session immediately — bet is committed, reload must not refund it
   saveSession();
+  _syncCommitBalance(); // push deducted balance to GAS now — prevents exploit via fresh login on another device
 
   // Helper: fire bonuses for the initial two drawn cards (p1, p2 style),
   // then keep drawing replacements until the hand has 2 non-jester value cards.
@@ -7595,6 +7614,7 @@ function dbl(){
       if(G.balance<G.mainBet){notif('Not enough balance');return;}
       G.balance-=G.mainBet; G.mainBet*=2; updateUI(); updateBetPanel();
     }
+    _syncCommitBalance(); // sync deducted double-down stake to GAS immediately
   }
   const dblIdx=h.length; // index of the double-down card before push
   drawIntoHand(h, dblIdx, G.cur);
@@ -7626,6 +7646,7 @@ function split(){
   const _splitBet=G.splits>0?(G.splitBets[G.cur]||G.mainBet):G.mainBet;
   if(G.balance<_splitBet){notif('Not enough balance');return;}
   G.balance-=_splitBet; G.splits++; updateUI();
+  _syncCommitBalance(); // sync deducted split stake to GAS immediately
   // Initialize or extend per-hand bet tracking
   if(G.splitBets.length===0) G.splitBets=Array.from({length:G.hands.length},()=>G.mainBet);
   G.splitBets.push(_splitBet);
@@ -10817,12 +10838,13 @@ const PM = (() => {
 
   function _rawPayoutIfWin(mkt, outcome, amount){
     if(amount <= 0) return amount;
-    // Shoe: fixed-odds payout with house edge baked in
+    // Shoe: fixed-odds payout — house edge applied to PROFIT only so winners always net positive
     if(mkt.type === 'shoe' && mkt.condition){
       const p = _deckProb(mkt.condition) / 100;
       const prob = outcome === 'YES' ? p : (1 - p);
-      if(prob <= 0) return amount;
-      return (amount / prob) * (1 - SHOE_HOUSE_EDGE);
+      if(prob <= 0 || isNaN(prob)) return amount;
+      const rawProfit = amount / prob - amount;
+      return amount + rawProfit * (1 - SHOE_HOUSE_EDGE);
     }
     // Season/Race: use model probability (same source as displayed %) so payout
     // always matches the shown odds — pool ratios drift with stale GAS data.
@@ -11591,14 +11613,13 @@ const PM = (() => {
     const amt = parseFloat(raw.replace(/,/g,''));
     if(!amt || amt <= 0){ pEl.textContent=''; if(sEl) sEl.textContent=''; return; }
     const rawPay = _rawPayoutIfWin(mkt, _betOutcome, amt);
-    const profit = rawPay - amt;
-    const curIdx = _stkIdx();
-    const mult = mkt.type !== 'shoe' && curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
-    const adjPay = amt + profit * mult;
-    const adjProfit = Math.round(adjPay - amt);
+    const adjProfit = Math.round(rawPay - amt);
     const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
     pEl.textContent = (adjProfit >= 0 ? '+' : '') + fmtFull(adjProfit) + ' profit (' + (retPct >= 0 ? '+' : '') + retPct + '%) — locked at these odds';
-    if(sEl) sEl.textContent = mult > 1 ? 'Stake ×'+fmt(mult)+' bonus on profit' : 'Odds locked at placement — you get exactly this';
+    // Stake note: shoe = fixed odds; race/season = ×10 bonus applied at settlement if at higher stake
+    const _curIdx = _stkIdx();
+    const _higherStake = mkt.type !== 'shoe' && _curIdx > (mkt.createdStakeIdx || 0);
+    if(sEl) sEl.textContent = mkt.type === 'shoe' ? 'Odds locked at placement — you get exactly this' : _higherStake ? 'Stake ×10 bonus on profit applied at settlement' : 'Odds locked at placement — ×10 bonus if stake rises before settlement';
   }
 
   function _confirmBet(){
@@ -11629,11 +11650,8 @@ const PM = (() => {
       if(openWindowBets.length >= 2){ notif('Max 2 open next-N-hands positions per shoe'); return; }
     }
 
-    // Lock the displayed payout at bet time — settlement uses this regardless of later pool changes
-    const _rawPay = _rawPayoutIfWin(mkt, _betOutcome, amount);
-    const _profit = _rawPay - amount;
-    const _mult = mkt.type !== 'shoe' && _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
-    const lockedPayout = Math.round(amount + _profit * _mult);
+    // Lock the BASE payout at bet time — stake ×10 bonus applied dynamically at settlement
+    const lockedPayout = Math.round(_rawPayoutIfWin(mkt, _betOutcome, amount));
     const entryOdds = _pct(mkt, _betOutcome); // implied % at entry — for odds movement indicator
 
     // Deduct from main balance
@@ -11683,16 +11701,12 @@ const PM = (() => {
     bets.forEach(bet => {
       if(bet.mktId !== mktId) return;
       if(bet.outcome !== result){ bet.payout = 0; return; }
-      // Use locked odds from bet time if available — guarantees player gets what was shown
-      if(bet.lockedPayout !== undefined){
-        bet.payout = bet.lockedPayout;
-      } else {
-        const _tp = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
-        const rawPay = (bet.amount / mkt.pools[result]) * _tp;
-        const profit = rawPay - bet.amount;
-        const mult = mkt.type !== 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
-        bet.payout = Math.round(bet.amount + profit * mult);
-      }
+      // Use locked base payout and apply ×10 stake bonus if player is at a higher stake now
+      const _basePay = bet.lockedPayout !== undefined ? bet.lockedPayout
+        : (() => { const _tp=Object.values(mkt.pools).reduce((a,b)=>a+b,0); return (bet.amount/mkt.pools[result])*_tp; })();
+      const _sBonus = mkt.type !== 'shoe' && settleIdx > (bet.stakeIdx||0) ? 10 : 1;
+      const _baseProfit = _basePay - bet.amount;
+      bet.payout = Math.round(bet.amount + _baseProfit * _sBonus);
       myTotal += bet.payout;
     });
     _saveBets(bets);
@@ -12365,14 +12379,10 @@ const PM = (() => {
             bets.forEach(bet => {
               if(bet.mktId!==sm.id || bet.payout!==null) return;
               if(bet.outcome !== sm.result){ bet.payout=0; return; }
-              if(bet.lockedPayout !== undefined){
-                bet.payout = bet.lockedPayout;
-              } else {
-                const _stp = Object.values(sm.pools).reduce((a,b)=>a+b,0);
-                const rawPay = (bet.amount / sm.pools[sm.result]) * _stp;
-                const mult = sm.type !== 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
-                bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
-              }
+              const _bpoll = bet.lockedPayout !== undefined ? bet.lockedPayout
+                : (() => { const _stp=Object.values(sm.pools).reduce((a,b)=>a+b,0); return (bet.amount/sm.pools[sm.result])*_stp; })();
+              const _sbPoll = sm.type !== 'shoe' && settleIdx > (bet.stakeIdx||0) ? 10 : 1;
+              bet.payout = Math.round(bet.amount + (_bpoll - bet.amount) * _sbPoll);
               credit += bet.payout;
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }

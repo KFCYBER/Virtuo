@@ -11558,7 +11558,7 @@ const PM = (() => {
     const rawPay = _rawPayoutIfWin(mkt, _betOutcome, amt);
     const profit = rawPay - amt;
     const curIdx = _stkIdx();
-    const mult = curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
+    const mult = mkt.type === 'shoe' && curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
     const adjPay = amt + profit * mult;
     const adjProfit = Math.round(adjPay - amt);
     const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
@@ -11578,7 +11578,7 @@ const PM = (() => {
     // Lock the displayed payout at bet time — settlement uses this regardless of later pool changes
     const _rawPay = _rawPayoutIfWin(mkt, _betOutcome, amount);
     const _profit = _rawPay - amount;
-    const _mult = _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
+    const _mult = mkt.type === 'shoe' && _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
     const lockedPayout = Math.round(amount + _profit * _mult);
     const entryOdds = _pct(mkt, _betOutcome); // implied % at entry — for odds movement indicator
 
@@ -12321,6 +12321,7 @@ const PM = (() => {
                 : (sm.pools[k]||0);
             });
             if(sm.outcomes) local.outcomes = sm.outcomes;
+            if(sm.betVolume) local.betVolume = Math.max(local.betVolume||0, sm.betVolume||0);
           }
         });
         // Drop local open season/race markets whose ID is absent from GAS response and

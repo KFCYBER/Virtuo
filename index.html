@@ -10799,14 +10799,22 @@ const PM = (() => {
 
   function _rawPayoutIfWin(mkt, outcome, amount){
     if(amount <= 0) return amount;
-    // Shoe: fixed-odds payout based on deck probability (no pool dilution in single-player)
+    // Shoe: fixed-odds payout based on deck probability
     if(mkt.type === 'shoe' && mkt.condition){
       const p = _deckProb(mkt.condition) / 100;
       const prob = outcome === 'YES' ? p : (1 - p);
       if(prob <= 0) return amount;
       return amount / prob;
     }
-    // Race/Season: snapshot pool odds — no self-dilution
+    // Season/Race: use model probability (same source as displayed %) so payout
+    // always matches the shown odds — pool ratios drift with stale GAS data.
+    const modelPct = _fundamentalPct(mkt, outcome);
+    if(modelPct !== null){
+      const prob = modelPct / 100;
+      if(prob <= 0) return amount;
+      return amount / prob;
+    }
+    // Fallback: pool ratio
     const outPool   = mkt.pools[outcome] || 0;
     const totalPool = Object.values(mkt.pools).reduce((a,b)=>a+b, 0);
     if(outPool <= 0 || totalPool <= 0) return amount;
@@ -12311,18 +12319,11 @@ const PM = (() => {
             // If no pending local bets, trust GAS pools directly — this ensures a sheet
             // clear actually resets the displayed pools / "most bet on" strip.
             const _pendingLocal = _loadBets().some(b => b.mktId === local.id && b.payout == null);
-            if(_pendingLocal){
-              if(sm.pools) Object.keys(sm.pools).forEach(k => {
-                local.pools[k] = Math.max(local.pools[k]||0, sm.pools[k]||0);
-              });
-            } else {
-              // No pending bets — trust GAS pools and reset housePools baseline to match.
-              // This clears phantom playerPool that lingers when PM_Markets has stale data.
-              if(sm.pools){
-                Object.keys(sm.pools).forEach(k => { local.pools[k] = sm.pools[k]||0; });
-                local.housePools = {...sm.pools};
-              }
-            }
+            if(sm.pools) Object.keys(sm.pools).forEach(k => {
+              local.pools[k] = _pendingLocal
+                ? Math.max(local.pools[k]||0, sm.pools[k]||0)
+                : (sm.pools[k]||0);
+            });
             if(sm.outcomes) local.outcomes = sm.outcomes;
           }
         });

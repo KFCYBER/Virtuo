@@ -6112,6 +6112,19 @@ async function doLogin(){
         if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
           d.balance = _pq.balance;
         }
+        // Bet lock: if player reloaded mid-hand the lock holds the post-deduction balance.
+        // Cap GAS balance so the wagered chips cannot be recovered via reload.
+        try{
+          const _blRaw = localStorage.getItem('kfc_betlock_'+username.toLowerCase());
+          if(_blRaw){
+            const _bl = JSON.parse(_blRaw);
+            if(_bl && typeof _bl.balance === 'number' && (Date.now() - (_bl.ts||0)) < 4*60*60*1000){
+              if(d.balance > _bl.balance){ d.balance = _bl.balance; }
+            } else {
+              localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); // expired — discard
+            }
+          }
+        }catch(e){}
         _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0};
         // Clear any session belonging to a different player on this device
         try{
@@ -7229,6 +7242,8 @@ function deal(){
   if(G.balance===0) setTimeout(showAllIn, 200); // all-in!
   G._handStartBal=G.balance; // snapshot AFTER deductions — so P&L display is net of all costs
   G._handCommitted=true; // bet is locked — reload must not refund it
+  // Bet lock: synchronous write so doLogin() can cap balance even before the async GAS write lands
+  try{ localStorage.setItem('kfc_betlock_'+(G.username||'').toLowerCase(), JSON.stringify({balance:G.balance, ts:Date.now()})); }catch(e){}
   // Second hand setup: only activate if mainBet2 meets minimum
   const _deal2 = G._hand2Active && (G.mainBet2||0) >= G.s.min;
   G.hands=_deal2 ? [[], []] : [[]]; G.cur=0; G.splits=0; G.dealer=[];
@@ -8644,6 +8659,7 @@ function closeResult(){
   closeModal('result-modal');
   hideStampedBoost();
   G._handCommitted=false;
+  try{ localStorage.removeItem('kfc_betlock_'+(G.username||'').toLowerCase()); }catch(e){}
   _betHistory.length=0; // fresh undo stack for new round
   // Full reset for next hand
   G.phase='bet';
@@ -11135,7 +11151,11 @@ const PM = (() => {
         changed = true;
       });
     });
-    if(changed){ _saveMarkets(); _syncBalanceAfterPM(); }
+    if(changed){
+      _saveMarkets(); _syncBalanceAfterPM();
+      // Immediately respawn "next to reach" markets for remaining eligible players
+      if(_lastPlayers && _lastPlayers.length) _createRaceMarkets(_lastPlayers);
+    }
   }
 
   // ── Render ─────────────────────────────────────────────────────────────────
@@ -11841,6 +11861,8 @@ const PM = (() => {
         const pLow  = pName.toLowerCase();
         const stableId = PM_PFX + 'rc_' + pLow + '_' + amount;
         if(_markets.some(m => m.id === stableId && m.status === 'open')) return;
+        // Remove any previously settled market with this stableId before respawning
+        _markets = _markets.filter(m => !(m.id === stableId && m.status === 'settled'));
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
         const yesBias = Math.max(0.05, Math.min(0.92, 0.10 + 0.80 * ratio));
         const mkt = _makeMarket('race',

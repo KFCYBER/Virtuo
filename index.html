@@ -12281,6 +12281,11 @@ const PM = (() => {
               _markets.push(sm);
             }
           } else if(sm.status==='settled' && local.status==='open'){
+            // Block false NO settlements from old prune code overwriting a live open market
+            if(sm.result === 'NO' && sm.condition && sm.condition.type === 'bankroll_milestone'){
+              const _sp = sm.condition.params.week || (sm.condition.params.date||'').slice(0,10);
+              if(_sp === _weekStart()) return;
+            }
             Object.assign(local, sm);
             // Credit won bets to main balance
             const bets = _loadBets();
@@ -12895,7 +12900,7 @@ const PM = (() => {
     // Cache-bust: if version changed, wipe PM markets localStorage so everything rebuilds clean
     if(localStorage.getItem('kfc_pm_cache_ver') !== PM_CACHE_VER){
       localStorage.removeItem(PM_PFX+'markets');
-      localStorage.removeItem(PM_PFX+'bets_'+(G.username||'').toLowerCase());
+      // Never wipe bets on a cache reset — they carry real payout data
       localStorage.setItem('kfc_pm_cache_ver', PM_CACHE_VER);
     }
     _prevBalances = _loadPrevBal();

@@ -11021,12 +11021,19 @@ const PM = (() => {
     const strip = document.getElementById('pm-hot-strip');
     if(!area || !strip) return;
 
-    // GAS-tracked betVolume — shared across all players, resets cleanly when sheet is cleared.
-    const playerPool = m => m.betVolume || 0;
+    // Net active volume: gross betVolume minus any amounts the current player has cashed out.
+    // Other players' cashouts aren't tracked locally so they stay in the number.
+    const myBets = _loadBets();
+    const myCashedOut = {}; // mktId → total cashed-out amount by this player
+    myBets.forEach(b => {
+      if(b.payout !== null && b.payout !== undefined)
+        myCashedOut[b.mktId] = (myCashedOut[b.mktId] || 0) + b.amount;
+    });
+    const netPool = m => Math.max(0, (m.betVolume || 0) - (myCashedOut[m.id] || 0));
 
     const top = _markets
       .filter(m => m.status === 'open')
-      .map(m => ({ m, pool: playerPool(m) }))
+      .map(m => ({ m, pool: netPool(m) }))
       .filter(x => x.pool > 0)
       .sort((a,b) => b.pool - a.pool)
       .slice(0, 5);
@@ -11586,7 +11593,7 @@ const PM = (() => {
     const rawPay = _rawPayoutIfWin(mkt, _betOutcome, amt);
     const profit = rawPay - amt;
     const curIdx = _stkIdx();
-    const mult = mkt.type === 'shoe' && curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
+    const mult = mkt.type !== 'shoe' && curIdx > mkt.createdStakeIdx ? Math.pow(10, curIdx - mkt.createdStakeIdx) : 1;
     const adjPay = amt + profit * mult;
     const adjProfit = Math.round(adjPay - amt);
     const retPct = amt > 0 ? Math.round((adjProfit / amt) * 100) : 0;
@@ -11606,7 +11613,7 @@ const PM = (() => {
     // Lock the displayed payout at bet time — settlement uses this regardless of later pool changes
     const _rawPay = _rawPayoutIfWin(mkt, _betOutcome, amount);
     const _profit = _rawPay - amount;
-    const _mult = mkt.type === 'shoe' && _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
+    const _mult = mkt.type !== 'shoe' && _stkIdx() > mkt.createdStakeIdx ? Math.pow(10, _stkIdx() - mkt.createdStakeIdx) : 1;
     const lockedPayout = Math.round(amount + _profit * _mult);
     const entryOdds = _pct(mkt, _betOutcome); // implied % at entry — for odds movement indicator
 
@@ -11664,7 +11671,7 @@ const PM = (() => {
         const _tp = Object.values(mkt.pools).reduce((a,b)=>a+b,0);
         const rawPay = (bet.amount / mkt.pools[result]) * _tp;
         const profit = rawPay - bet.amount;
-        const mult = mkt.type === 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
+        const mult = mkt.type !== 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx - bet.stakeIdx) : 1;
         bet.payout = Math.round(bet.amount + profit * mult);
       }
       myTotal += bet.payout;
@@ -12344,7 +12351,7 @@ const PM = (() => {
               } else {
                 const _stp = Object.values(sm.pools).reduce((a,b)=>a+b,0);
                 const rawPay = (bet.amount / sm.pools[sm.result]) * _stp;
-                const mult = sm.type === 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
+                const mult = sm.type !== 'shoe' && settleIdx > bet.stakeIdx ? Math.pow(10, settleIdx-bet.stakeIdx) : 1;
                 bet.payout = Math.round(bet.amount + (rawPay-bet.amount)*mult);
               }
               credit += bet.payout;

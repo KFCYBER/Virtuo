@@ -3798,10 +3798,10 @@ function _shoesPlayedToday(username){ return parseInt(localStorage.getItem(_shoe
 function _incrementShoesPlayed(username){ localStorage.setItem(_shoeKey(username), _shoesPlayedToday(username)+1); }
 function _shoeLimit(){ return G._clubPass ? SHOES_PER_DAY_PASS : SHOES_PER_DAY_STANDARD; }
 function _shoesRemaining(){ return Math.max(0, _shoeLimit() - _shoesPlayedToday(G.username||G.player)); }
-// Extra shoe escalating cost — starts at 40, +10 per buy today, resets daily with shoe counter
+// Extra shoe escalating cost — starts at 100, +10 per buy today, resets daily with shoe counter
 function _xsbKey(u){ return 'kfc_xsb_'+new Date().toISOString().slice(0,10)+'_'+(u||'').toLowerCase(); }
 function _xsbToday(){ return parseInt(localStorage.getItem(_xsbKey(G.username||G.player))||'0',10); }
-function _extraShoeCost(){ return 40 + _xsbToday() * 10; }
+function _extraShoeCost(){ return 100 + _xsbToday() * 10; }
 
 const G = {
   player:'', username:'', balance:0, sessionStart:0, _totalBalance:0,

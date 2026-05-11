@@ -11060,7 +11060,17 @@ const PM = (() => {
     _switchTab('markets');
     setTimeout(() => {
       const el = document.querySelector(`.pm-market[data-mktid="${id}"]`);
-      if(el) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+      if(!el) return;
+      // Expand any collapsed group ancestor so the market is visible before scrolling.
+      let node = el.parentElement;
+      while(node){
+        if(node.classList && node.classList.contains('pm-player-markets') && node.classList.contains('collapsed')){
+          const key = (node.id||'').replace('pm-pm-','');
+          if(key) _togglePlayerGroup(key);
+        }
+        node = node.parentElement;
+      }
+      el.scrollIntoView({ behavior:'smooth', block:'nearest' });
     }, 60);
   }
 
@@ -11788,7 +11798,7 @@ const PM = (() => {
         const pName = p.username; if(!pName) return;
         const pLow  = pName.toLowerCase();
         const stableId = PM_PFX + 'rc_' + pLow + '_' + amount;
-        if(_markets.some(m => m.id === stableId)) return;
+        if(_markets.some(m => m.id === stableId && m.status === 'open')) return;
         const ratio = eligTotal > 0 ? (p.balance||0) / eligTotal : 1/eligible.length;
         const yesBias = Math.max(0.05, Math.min(0.92, 0.10 + 0.80 * ratio));
         const mkt = _makeMarket('race',
@@ -12780,6 +12790,10 @@ const PM = (() => {
       _saveBets(bets);
       _saveMarkets();
       _syncBalanceAfterPM();
+      if(G.url && G.username){
+        const _cp = new URLSearchParams({ action:'pmCashOut', mktId, outcome, ts:String(ts), payout:String(bet.amount), username:G.username });
+        fetch(G.url+'?'+_cp.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
+      }
       notif('Cashed out at cost — no opposing bets yet');
       _renderPortfolio();
       render();
@@ -12796,6 +12810,11 @@ const PM = (() => {
     _saveBets(bets);
     _saveMarkets();
     _syncBalanceAfterPM();
+    // Persist cash-out to GAS so other devices see the closed position on next poll.
+    if(G.url && G.username){
+      const _cp = new URLSearchParams({ action:'pmCashOut', mktId, outcome, ts:String(ts), payout:String(payout), username:G.username });
+      fetch(G.url+'?'+_cp.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
+    }
     const pl = payout - bet.amount;
     notif('Cashed out — ' + (pl >= 0 ? '+' : '') + fmtFull(pl), 'win');
     _renderPortfolio();

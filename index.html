@@ -5946,6 +5946,22 @@ window.addEventListener('pagehide', ()=>{
   if(G.player && !G.cashedOut && !G._atCashout && G._sessionActive){
     if(!G.mpMode) saveSession(); // MP already called saveSession() in its beforeunload handler
     if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
+    // If PM bets moved the balance but no hands were played, auto-save won't have fired.
+    // Use a keepalive fetch to sync the updated balance to GAS before the page dies.
+    const _pmHandCount = G.log ? G.log.length : _autoSaveHandCount;
+    if(_pmHandCount === 0 && G.url && G.username && G._cachedPin &&
+       G.balance !== (G.sessionStart || G.balance)){
+      try{
+        const _p = new URLSearchParams({
+          action: 'updatebalance', username: G.username,
+          player: G.player||G.username, balance: String(G.balance),
+          sessionPL: String(G.balance - (G.sessionStart||G.balance)),
+          buyIn: String(G.sessionStart||G.balance),
+          date: new Date().toISOString(), stake: 'PM-ONLY', pin: G._cachedPin
+        });
+        fetch(G.url+'?'+_p.toString(), {method:'GET', keepalive:true, cache:'no-store'}).catch(()=>{});
+      }catch(e){}
+    }
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
       if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }

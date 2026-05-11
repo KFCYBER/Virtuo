@@ -11610,6 +11610,25 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
+    // Max 2 open shoe market bets per shoe
+    if(mkt.type === 'shoe'){
+      const openShoeBets = _loadBets().filter(b => {
+        if(b.payout !== null && b.payout !== undefined) return false;
+        const bm = _markets.find(m => m.id === b.mktId);
+        return bm && bm.type === 'shoe';
+      });
+      if(openShoeBets.length >= 2){ notif('Max 2 shoe market bets per shoe'); return; }
+    }
+    // Max 2 open "bet any time" window shoe market bets per shoe
+    if(mkt.type === 'shoe' && _isWindowShoeType(mkt)){
+      const openWindowBets = _loadBets().filter(b => {
+        if(b.payout !== null && b.payout !== undefined) return false;
+        const bm = _markets.find(m => m.id === b.mktId);
+        return bm && bm.type === 'shoe' && _isWindowShoeType(bm);
+      });
+      if(openWindowBets.length >= 2){ notif('Max 2 open next-N-hands positions per shoe'); return; }
+    }
+
     // Lock the displayed payout at bet time — settlement uses this regardless of later pool changes
     const _rawPay = _rawPayoutIfWin(mkt, _betOutcome, amount);
     const _profit = _rawPay - amount;

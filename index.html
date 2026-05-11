@@ -12442,6 +12442,32 @@ const PM = (() => {
           });
         });
         _saveMarkets(); render();
+
+        // Merge server-side bets into localStorage so portfolio is cross-device.
+        if(Array.isArray(d.bets) && d.bets.length){
+          const local = _loadBets();
+          // Build index of existing bets by mktId+outcome+ts for O(1) dedup.
+          const localKeys = new Set(local.map(b => b.mktId+'|'+b.outcome+'|'+b.ts));
+          let changed = false;
+          d.bets.forEach(sb => {
+            if(!sb.mktId || !sb.ts) return;
+            const key = sb.mktId+'|'+sb.outcome+'|'+sb.ts;
+            if(localKeys.has(key)){
+              // Bet already known locally — sync payout if GAS settled it.
+              const lb = local.find(b => b.mktId===sb.mktId && b.outcome===sb.outcome && b.ts===sb.ts);
+              if(lb && lb.payout===null && sb.payout!==null){
+                lb.payout = sb.payout;
+                changed = true;
+              }
+            } else {
+              // Bet from another device — add it. If payout already set, don't re-credit balance.
+              local.push(sb);
+              localKeys.add(key);
+              changed = true;
+            }
+          });
+          if(changed) _saveBets(local);
+        }
       }
     }catch(e){}
     render();

@@ -11605,6 +11605,18 @@ const PM = (() => {
     mkt.pools[_betOutcome] += amount;
     mkt.betVolume = (mkt.betVolume || 0) + amount; // update locally for immediate strip refresh
 
+    // Immediately sync deducted balance to GAS — guarantees the deduction persists
+    // even if the player leaves without playing any hands (pagehide is unreliable with GAS redirects)
+    if(G.url && G.username && G._cachedPin){
+      const _bp = new URLSearchParams({
+        action:'updatebalance', username:G.username, autosave:'true',
+        balance:String(G.balance),
+        sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+        pin:G._cachedPin
+      });
+      fetch(G.url+'?'+_bp.toString(), {method:'GET', redirect:'follow', cache:'no-store'}).catch(()=>{});
+    }
+
     const bets = _loadBets();
     bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, entryOdds, mktDesc: mkt.desc, mktType: mkt.type });
     _saveBets(bets);

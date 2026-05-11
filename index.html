@@ -13143,6 +13143,20 @@ const PM = (() => {
     if(_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(poll, 45000);
     poll();
+    // Retroactive cash-out repair: push any locally-cashed-out bets that were never written to GAS
+    // (bets placed before the pmCashOut GAS action existed). Runs once per device per username.
+    // GAS handler is idempotent — skips bets whose payout column is already set.
+    setTimeout(() => {
+      if(!G.url || !G.username) return;
+      const _repairKey = PM_PFX + 'co_repair_' + G.username.toLowerCase();
+      if(localStorage.getItem(_repairKey)) return; // already ran on this device for this user
+      const _repairBets = _loadBets().filter(b => b.cashoutEarly && b.payout !== null && b.payout !== undefined);
+      _repairBets.forEach(b => {
+        const _cp = new URLSearchParams({ action:'pmCashOut', mktId:b.mktId, outcome:b.outcome, ts:String(b.ts||0), payout:String(b.payout), username:G.username });
+        fetch(G.url+'?'+_cp.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
+      });
+      localStorage.setItem(_repairKey, '1');
+    }, 3000); // delay slightly so GAS url is confirmed ready
   }
 
   async function _exportHandLog(){

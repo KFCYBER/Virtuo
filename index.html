@@ -11003,13 +11003,8 @@ const PM = (() => {
     const strip = document.getElementById('pm-hot-strip');
     if(!area || !strip) return;
 
-    // Shared pool — all players see the same strip based on GAS-aggregated bet volume.
-    // housePools is the original house seed; anything above it is real player bets.
-    const playerPool = m => {
-      if(!m.housePools) return 0;
-      return Object.keys(m.pools||{}).reduce((s,k) =>
-        s + Math.max(0, (m.pools[k]||0) - (m.housePools[k]||0)), 0);
-    };
+    // GAS-tracked betVolume — shared across all players, resets cleanly when sheet is cleared.
+    const playerPool = m => m.betVolume || 0;
 
     const top = _markets
       .filter(m => m.status === 'open')
@@ -11592,6 +11587,7 @@ const PM = (() => {
     updateUI();
 
     mkt.pools[_betOutcome] += amount;
+    mkt.betVolume = (mkt.betVolume || 0) + amount; // update locally for immediate strip refresh
 
     const bets = _loadBets();
     bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, entryOdds, mktDesc: mkt.desc, mktType: mkt.type });

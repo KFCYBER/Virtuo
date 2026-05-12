@@ -3618,6 +3618,7 @@ const POWERUPS = [
 ];
 
 const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
+const STAKE_DOWN_LOSS_THRESHOLD = 0.50; // fraction of total wallet balance that must be lost from stake entry to allow stepping down
 
 // Peak balance per stake — used for downgrade guard (loaded once, persisted to LS)
 let _stakePeaks = (function(){ try{ return JSON.parse(localStorage.getItem('kfc_stake_peaks')||'{}'); }catch(e){ return {}; } })();
@@ -8926,7 +8927,7 @@ function buildStakeList(){
     const isDowngrade=thisIdx<curIdx;
     const tooManySteps=isDowngrade&&(curIdx-thisIdx>1);
     const _loginBal=G._walletBalAtLogin||G.balance;
-    const _stakeFloor=Math.max(0,(G.sessionStart||G.balance)-_loginBal*0.5);
+    const _stakeFloor=Math.max(0,(G.sessionStart||G.balance)-_loginBal*STAKE_DOWN_LOSS_THRESHOLD);
     const belowHalfTotal=G.balance<=_stakeFloor;
     const downgradeBlocked=isDowngrade&&(!belowHalfTotal||tooManySteps);
     if(canAffordSt && !downgradeBlocked){
@@ -8959,7 +8960,7 @@ function selectStake(key){
     }
     // Must have lost 50% of total wallet balance from this stake's entry point
     const _loginBal = G._walletBalAtLogin || G.balance;
-    const _stakeFloor = Math.max(0, (G.sessionStart||G.balance) - _loginBal * 0.5);
+    const _stakeFloor = Math.max(0, (G.sessionStart||G.balance) - _loginBal * STAKE_DOWN_LOSS_THRESHOLD);
     if(G.balance > _stakeFloor){
       notif('Must lose 50% of total balance from this stake — need below '+fmtKFC(Math.ceil(_stakeFloor)));
       return;
@@ -10713,6 +10714,17 @@ const PM = (() => {
     try{ return JSON.parse(localStorage.getItem(_bk())||'[]'); }catch(e){ return []; }
   }
   function _saveBets(b){ localStorage.setItem(_bk(), JSON.stringify(b)); }
+
+  // One-time migration: wipe stale settled/cashed bets left over from before the
+  // cashoutEarly fix. Settled bets (payout !== null) are already credited — keeping
+  // them only pollutes the hot-markets strip. Runs once per user per device.
+  (function _purgeStaleBets(){
+    const _migKey = PM_PFX + 'bets_migrated_v1_' + (G.username||G.player||'guest').toLowerCase();
+    if(localStorage.getItem(_migKey)) return;
+    const cleaned = _loadBets().filter(b => b.payout == null);
+    _saveBets(cleaned);
+    localStorage.setItem(_migKey, '1');
+  })();
 
   // Push the current balance to GAS immediately after any PM credit/refund.
   // Called whenever G.balance is modified by PM logic (settle, cashout, refund, orphan cleanup).

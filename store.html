@@ -328,6 +328,58 @@ body {
 .order-msg.ok { color: var(--green); }
 .order-msg.err { color: var(--red); }
 
+/* ── ORDER CONFIRMATION ── */
+@keyframes confirmIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.drawer-confirm {
+  display: none; flex-direction: column; align-items: center; justify-content: center;
+  flex: 1; padding: 36px 28px; text-align: center;
+  animation: confirmIn .3s ease;
+}
+.drawer-confirm.visible { display: flex; }
+
+.confirm-check {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: rgba(63,185,80,0.12); border: 1px solid rgba(63,185,80,0.3);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; margin-bottom: 22px;
+}
+.confirm-heading {
+  font-size: 15px; font-weight: 700; letter-spacing: 2px; color: var(--white);
+  text-transform: uppercase; margin-bottom: 8px;
+}
+.confirm-sub {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.7;
+  margin-bottom: 8px;
+}
+.confirm-ref {
+  font-family: var(--mono); font-size: 11px; color: var(--gold);
+  background: rgba(201,168,76,0.08); border: 1px solid rgba(201,168,76,0.2);
+  border-radius: var(--radius); padding: 7px 14px; margin-bottom: 28px;
+  letter-spacing: 2px;
+}
+.confirm-actions {
+  display: flex; flex-direction: column; gap: 10px; width: 100%;
+}
+.btn-confirm-primary {
+  width: 100%; background: var(--gold); color: var(--bg);
+  font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: 3px; text-transform: uppercase;
+  border: none; cursor: pointer; padding: 12px;
+  border-radius: var(--radius); transition: background .15s;
+}
+.btn-confirm-primary:hover { background: var(--gold-hi); }
+.btn-confirm-secondary {
+  width: 100%; background: transparent; color: var(--muted2);
+  font-family: var(--sans); font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase;
+  border: 1px solid var(--line2); cursor: pointer; padding: 11px;
+  border-radius: var(--radius); transition: all .15s;
+}
+.btn-confirm-secondary:hover { border-color: var(--muted2); color: var(--white); }
+
 /* ── DISCLAIMER ── */
 .disclaimer {
   font-family: var(--mono); font-size: 10px; color: var(--muted);
@@ -404,13 +456,15 @@ body {
 <div class="overlay" id="cart-overlay" onclick="overlayClick(event)">
   <div class="drawer" id="cart-drawer">
     <div class="drawer-header">
-      <span class="drawer-title">Your Cart</span>
+      <span class="drawer-title" id="drawer-title">Your Cart</span>
       <button class="drawer-close" onclick="closeCart()">✕</button>
     </div>
+
+    <!-- CART STATE -->
     <div class="drawer-body" id="cart-body">
       <div class="cart-empty">Your cart is empty.</div>
     </div>
-    <div class="drawer-footer">
+    <div class="drawer-footer" id="cart-footer">
       <div class="cart-total-row">
         <span class="cart-total-label">Total</span>
         <span class="cart-total-val" id="cart-total">CHF 0.00</span>
@@ -420,6 +474,18 @@ body {
         <input class="checkout-input" id="checkout-username" type="text" placeholder="Enter your username…" autocomplete="off" />
         <button class="btn-order" id="btn-order" onclick="placeOrder()">Place Order</button>
         <div class="order-msg" id="order-msg"></div>
+      </div>
+    </div>
+
+    <!-- CONFIRMATION STATE -->
+    <div class="drawer-confirm" id="drawer-confirm">
+      <div class="confirm-check">✓</div>
+      <div class="confirm-heading">Thank You!</div>
+      <div class="confirm-sub">Your order has been placed.<br>Items will be delivered before your next session.</div>
+      <div class="confirm-ref" id="confirm-ref">KFC-XXXXX</div>
+      <div class="confirm-actions">
+        <button class="btn-confirm-primary" onclick="backToStore()">Continue Shopping</button>
+        <button class="btn-confirm-secondary" onclick="window.close()">Back to Game</button>
       </div>
     </div>
   </div>
@@ -632,6 +698,14 @@ function openCart() {
 }
 function closeCart() {
   document.getElementById('cart-overlay').classList.remove('open');
+  // Reset confirmation state so reopening shows the cart
+  const confirm = document.getElementById('drawer-confirm');
+  if (confirm.classList.contains('visible')) {
+    confirm.classList.remove('visible');
+    document.getElementById('cart-body').style.display   = '';
+    document.getElementById('cart-footer').style.display = '';
+    document.getElementById('drawer-title').textContent  = 'Your Cart';
+  }
 }
 function overlayClick(e) {
   if (e.target === document.getElementById('cart-overlay')) closeCart();
@@ -697,13 +771,11 @@ async function placeOrder() {
       order_details: orderDetails,
       total_chf:     total,
     });
-    msg.className = 'order-msg ok';
-    msg.textContent = '✓ Order sent! Ref: ' + orderId + ' — items delivered before your next session.';
     Object.keys(cart).forEach(k => delete cart[k]);
     updateCartUI();
-    document.getElementById('checkout-username').value = '';
     btn.textContent = 'Place Order';
     btn.disabled = false;
+    showOrderConfirmation(orderId);
   } catch (e) {
     msg.className = 'order-msg err';
     const detail = (e && (e.text || e.message || JSON.stringify(e))) || 'unknown error';
@@ -711,6 +783,32 @@ async function placeOrder() {
     btn.textContent = 'Place Order';
     btn.disabled = false;
   }
+}
+
+function showOrderConfirmation(orderId) {
+  document.getElementById('cart-body').style.display    = 'none';
+  document.getElementById('cart-footer').style.display  = 'none';
+  document.getElementById('confirm-ref').textContent    = orderId;
+  document.getElementById('drawer-title').textContent   = 'Order Placed';
+  document.getElementById('drawer-confirm').classList.add('visible');
+}
+
+function backToStore() {
+  document.getElementById('drawer-confirm').classList.remove('visible');
+  document.getElementById('cart-body').style.display   = '';
+  document.getElementById('cart-footer').style.display = '';
+  document.getElementById('drawer-title').textContent  = 'Your Cart';
+  document.getElementById('checkout-username').value   = '';
+  document.getElementById('order-msg').textContent     = '';
+  // re-apply username autofill
+  try {
+    const saved = localStorage.getItem('kfc_last_user') || '';
+    if (saved) {
+      const input = document.getElementById('checkout-username');
+      input.value = saved; input.readOnly = true; input.style.color = 'var(--muted2)';
+    }
+  } catch(e) {}
+  closeCart();
 }
 
 // ── PRODUCT LOOKUP MAP — avoids JSON-in-onclick escaping issues ───

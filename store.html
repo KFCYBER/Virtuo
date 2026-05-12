@@ -389,6 +389,8 @@ body {
 
 <script>
 // ── PRODUCT DATA ──────────────────────────────────────────────────
+// deliveryItems: structured items sent to GAS when order is placed.
+// To change product contents: edit contents[] (display) + deliveryItems[] (delivery).
 const CRATES = [
   {
     id: 'starter_crate',
@@ -398,6 +400,10 @@ const CRATES = [
     desc: 'A light advantage to start a fresh season.',
     contents: ['1,000 KFC', '1× Leverage Token (2×)'],
     price: 1.00,
+    deliveryItems: [
+      {type:'kfc',             qty:1000, name:'1,000 KFC'},
+      {type:'leverage_token',  qty:1,    name:'Leverage Token (2×)'},
+    ],
   },
   {
     id: 'booster_crate',
@@ -407,6 +413,10 @@ const CRATES = [
     desc: "Also known as 'success in a bottle' — this crate is an all-around steal.",
     contents: ['1,750 KFC', '1× Leverage Token (2×)'],
     price: 1.50,
+    deliveryItems: [
+      {type:'kfc',             qty:1750, name:'1,750 KFC'},
+      {type:'leverage_token',  qty:1,    name:'Leverage Token (2×)'},
+    ],
   },
   {
     id: 'value_crate',
@@ -416,6 +426,10 @@ const CRATES = [
     desc: 'For those who know what they\'re doing. This crate turns risk into reward.',
     contents: ['4,000 KFC', '2× Leverage Token (2×)'],
     price: 5.50,
+    deliveryItems: [
+      {type:'kfc',             qty:4000, name:'4,000 KFC'},
+      {type:'leverage_token',  qty:2,    name:'Leverage Token (2×)'},
+    ],
   },
   {
     id: 'elite_crate',
@@ -425,6 +439,10 @@ const CRATES = [
     desc: 'Unlike the show, this is worth it. The Elite Crate is your best friend to win.',
     contents: ['8,000 KFC', '3× Leverage Token (2×)'],
     price: 7.50,
+    deliveryItems: [
+      {type:'kfc',             qty:8000, name:'8,000 KFC'},
+      {type:'leverage_token',  qty:3,    name:'Leverage Token (2×)'},
+    ],
   },
   {
     id: 'las_vegas_crate',
@@ -432,8 +450,13 @@ const CRATES = [
     img: 'store/crates/las_vegas_crate.png',
     delay: 'anim-d5',
     desc: 'Living up to its name — the ultimate package, paving your way to victory.',
-    contents: ['12,000 KFC', '2× Leverage Token (2×)', '1× Novak Power-Up (full session)'],
+    contents: ['12,000 KFC', '2× Leverage Token (2×)', '1× BJ Novak Power-Up'],
     price: 11.50,
+    deliveryItems: [
+      {type:'kfc',             qty:12000, name:'12,000 KFC'},
+      {type:'leverage_token',  qty:2,     name:'Leverage Token (2×)'},
+      {type:'power_up',        id:'novak', qty:1, name:'BJ Novak Power-Up'},
+    ],
   },
 ];
 
@@ -446,6 +469,7 @@ const CURRENCY_PACKS = [
     desc: 'A humble handful — just enough to keep the reels spinning and your luck sizzling.',
     contents: ['500 KFC'],
     price: 0.50,
+    deliveryItems: [{type:'kfc', qty:500, name:'500 KFC'}],
   },
   {
     id: 'mini_bucket',
@@ -455,6 +479,7 @@ const CURRENCY_PACKS = [
     desc: 'Small in size, big on flavour — perfect for spicing up your next winning streak.',
     contents: ['1,100 KFC'],
     price: 1.00,
+    deliveryItems: [{type:'kfc', qty:1100, name:'1,100 KFC'}],
   },
   {
     id: 'bucket',
@@ -464,6 +489,7 @@ const CURRENCY_PACKS = [
     desc: 'A full Bucket overflowing with fortune — perfect for players hungry for value.',
     contents: ['3,500 KFC'],
     price: 3.00,
+    deliveryItems: [{type:'kfc', qty:3500, name:'3,500 KFC'}],
   },
   {
     id: 'barrel',
@@ -473,6 +499,7 @@ const CURRENCY_PACKS = [
     desc: 'Big, bold, and built for players who like their bets served in XL portions.',
     contents: ['6,500 KFC'],
     price: 6.00,
+    deliveryItems: [{type:'kfc', qty:6500, name:'6,500 KFC'}],
   },
   {
     id: 'chest',
@@ -482,6 +509,7 @@ const CURRENCY_PACKS = [
     desc: 'Stuffed with treasure, swagger, and enough currency to turn heads at the table.',
     contents: ['8,500 KFC'],
     price: 8.00,
+    deliveryItems: [{type:'kfc', qty:8500, name:'8,500 KFC'}],
   },
   {
     id: 'vault',
@@ -491,6 +519,7 @@ const CURRENCY_PACKS = [
     desc: 'Where the real riches live — only the bold dare to feast.',
     contents: ['13,000 KFC'],
     price: 11.50,
+    deliveryItems: [{type:'kfc', qty:13000, name:'13,000 KFC'}],
   },
 ];
 
@@ -587,6 +616,15 @@ async function placeOrder() {
   }
 
   const orderId = 'KFC-' + Math.random().toString(36).toUpperCase().slice(2, 7);
+
+  // Flatten all delivery items across cart (multiply by qty)
+  const allDeliveryItems = [];
+  Object.values(cart).forEach(({ product, qty }) => {
+    (product.deliveryItems || []).forEach(item => {
+      allDeliveryItems.push({ ...item, qty: item.qty * qty });
+    });
+  });
+
   const lines = Object.values(cart).map(({ product, qty }) =>
     `${qty}× ${product.name} — CHF ${(product.price * qty).toFixed(2)}`
   );
@@ -597,16 +635,31 @@ async function placeOrder() {
   btn.textContent = 'Sending…';
   msg.textContent = '';
 
+  // POST order to GAS (creates KFC_ORDERS row with status: pending)
+  const gasUrl = (typeof localStorage !== 'undefined' && localStorage.getItem('kfc_url')) || '';
+  if (gasUrl) {
+    try {
+      const params = new URLSearchParams({
+        action:    'storeorder',
+        order_id:  orderId,
+        username:  username.toLowerCase(),
+        items:     JSON.stringify(allDeliveryItems),
+        total_chf: total,
+      });
+      await fetch(gasUrl + '?' + params.toString(), { method: 'GET', redirect: 'follow', cache: 'no-store' });
+    } catch(_) { /* GAS post failure is non-blocking — email still sends */ }
+  }
+
+  // Send email notification via EmailJS
   try {
     await emailjs.send(EJS_SERVICE_ID, EJS_TEMPLATE_ID, {
-      order_id: orderId,
+      order_id:      orderId,
       username,
       order_details: orderDetails,
-      total_chf: total,
+      total_chf:     total,
     });
     msg.className = 'order-msg ok';
     msg.textContent = '✓ Order sent! Ref: ' + orderId + ' — items delivered before your next session.';
-    // Clear cart
     Object.keys(cart).forEach(k => delete cart[k]);
     updateCartUI();
     document.getElementById('checkout-username').value = '';

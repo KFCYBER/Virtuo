@@ -4867,7 +4867,7 @@ function finaliseLogin(stakeKey){
   G._inventory = {
     leverage:   parseInt(_inv.leverage)  || 0,
     insurance:  parseInt(_inv.insurance) || 0,
-    power_ups:  Array.isArray(_inv.power_ups) ? [..._inv.power_ups] : [],
+    power_ups:  (_inv.power_ups && typeof _inv.power_ups === 'object' && !Array.isArray(_inv.power_ups)) ? {..._inv.power_ups} : {},
   };
   // Apply KFC credit from approved store orders and immediately sync balance
   const _kfcCredit = parseInt(_pendingLogin.kfcCredit) || 0;
@@ -6938,7 +6938,7 @@ function buildPuPanel(){
     const minIdx=STAKE_ORDER.indexOf(pu.minStake);
     const available=stakeIdx>=minIdx;
     const owned=G.puOwned.has(pu.id);
-    const inInventory=(G._inventory&&G._inventory.power_ups||[]).includes(pu.id)&&!owned;
+    const inInventory=(G._inventory&&(G._inventory.power_ups[pu.id]||0)>0)&&!owned;
     const kfcCost=G.s.min*(pu.ratio||5);
     const ptsCost=PTS_COST[pu.id]||60;
     const isFreeNext=_freePuAvailable()&&!owned;
@@ -7038,8 +7038,9 @@ function buyPu(pu,cost){
   if(G.phase==='play'||G.phase==='dealer'){notif('Power-ups must be bought before dealing');return;}
 
   // Free from store inventory
-  if(G._inventory && G._inventory.power_ups && G._inventory.power_ups.includes(pu.id)){
-    G._inventory.power_ups = G._inventory.power_ups.filter(id => id !== pu.id);
+  if(G._inventory && (G._inventory.power_ups[pu.id]||0) > 0){
+    G._inventory.power_ups[pu.id]--;
+    if(G._inventory.power_ups[pu.id] === 0) delete G._inventory.power_ups[pu.id];
     G.puOwned.add(pu.id); updateUI(); buildPuPanel();
     sfx('buy'); notif('📦 '+pu.label+' activated FREE (store delivery) — good for this shoe');
     return;

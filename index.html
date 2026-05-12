@@ -3385,7 +3385,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">BJ Novak <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
-          <p>Your Blackjack pays 2:1 instead of 3:2 for the whole shoe. Stack it with a Steel Card for maximum effect.</p>
+          <p>Your Blackjack pays 2:1 instead of 3:2 for the whole shoe. Does not stack with a Steel Card — both give 2:1.</p>
         </div>
         <div class="help-note">Points can also be spent on tokens: 2× Leverage (⭐35), Insurance token (⭐25), All Side Bets min (⭐40), Extra shoe (⭐50 standard / ⭐30 pass).</div>
       </div>
@@ -3432,8 +3432,8 @@ body.mp-bet-locked .all-sb-btn {
         <div class="help-card">
           <div class="help-card-title">What to Spend On</div>
           <div class="help-row"><span class="help-row-label">Power-Ups (Sally, Net, Seeker…)</span><span class="help-row-val">35–60 pts</span></div>
-          <div class="help-row"><span class="help-row-label">2× Leverage token</span><span class="help-row-val">35 pts</span></div>
-          <div class="help-row"><span class="help-row-label">Insurance token</span><span class="help-row-val">25 pts</span></div>
+          <div class="help-row"><span class="help-row-label">2× Leverage token</span><span class="help-row-val">45 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Insurance token</span><span class="help-row-val">40 pts</span></div>
           <div class="help-row"><span class="help-row-label">All Side Bets min</span><span class="help-row-val">30 pts</span></div>
           <div class="help-row"><span class="help-row-label">Extra shoe (standard)</span><span class="help-row-val">50 pts</span></div>
           <div class="help-row"><span class="help-row-label">Extra shoe (pass)</span><span class="help-row-val">40 pts</span></div>
@@ -3611,8 +3611,8 @@ const POWERUPS = [
   { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10',   minStake:'mid',       chf:2.50, ratio:5 },
   { id:'net',    label:'Safety Net',      sub:'Any 22 this shoe → push',  minStake:'mid',       chf:2.00, ratio:4 },
   { id:'seeker', label:'Seven-Seeker',    sub:'+2× on Crazy 7s',          minStake:'high',      chf:2.00, ratio:4 },
-  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → push',         minStake:'legendary', chf:1.50, ratio:3 },
-  { id:'novak',  label:'BJ Novak',        sub:'Blackjack pays 2:1',        minStake:'legendary', chf:1.50, ratio:3 },
+  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → push',         minStake:'legendary', chf:1.50, ratio:5 },
+  { id:'novak',  label:'BJ Novak',        sub:'Blackjack pays 2:1',        minStake:'legendary', chf:1.50, ratio:5 },
 ];
 
 const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
@@ -3665,8 +3665,8 @@ const PTS_PER_BJ          = 3;   // per blackjack that shoe
 const PTS_PASS_MULTIPLIER = 1.5; // pass players earn 1.5×
 const PTS_COST = {
   sally:60, net:50, seeker:50, guard:35, novak:35, // power-ups
-  lev2x:35,           // 2× leverage token (high-roller+ only)
-  insurance:25,       // insurance token (all stakes)
+  lev2x:45,           // 2× leverage token (high-roller+ only)
+  insurance:40,       // insurance token (all stakes)
   allsb:30,           // all side bets min next hand
   extrashoe_std:50,   // +1 shoe for standard players
   extrashoe_pass:40,  // +1 shoe for pass players
@@ -6118,19 +6118,10 @@ async function doLogin(){
         if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
           d.balance = _pq.balance;
         }
-        // Bet lock: if player reloaded mid-hand the lock holds the post-deduction balance.
-        // Cap GAS balance so the wagered chips cannot be recovered via reload.
-        try{
-          const _blRaw = localStorage.getItem('kfc_betlock_'+username.toLowerCase());
-          if(_blRaw){
-            const _bl = JSON.parse(_blRaw);
-            if(_bl && typeof _bl.balance === 'number' && (Date.now() - (_bl.ts||0)) < 4*60*60*1000){
-              if(d.balance > _bl.balance){ d.balance = _bl.balance; }
-            } else {
-              localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); // expired — discard
-            }
-          }
-        }catch(e){}
+        // GAS is the source of truth for balance on reload — betlock cap removed.
+        // _syncCommitBalance() writes the committed balance to GAS immediately at deal,
+        // so wagered chips are already reflected there before any reload.
+        try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
         _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0};
         // Clear any session belonging to a different player on this device
         try{
@@ -6864,7 +6855,7 @@ function buildLevPanel(){
   const c=document.getElementById('panel-lev');
   c.innerHTML='';
   if(!['highroller','champion'].includes(G.stake)){
-    const cost=G.s.min*2;
+    const cost=G.s.min*3;
     addItemBtn(c,'2× Token',fmtKFC(cost),'lev-2x',G.leverage==='2x','',()=>toggleLev('2x'));
   }
   G.levCards.forEach((lc,i)=>{
@@ -7234,7 +7225,7 @@ function deal(){
     notif('⭐ Side bets covered ('+fmtKFC(G.s.sMin)+' each — free)');
   }
   const _freeSBTotal = G._freeSBNames.reduce((a,n)=>a+(G.sideBets[n]||0),0);
-  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'&&!G._levFree?G.s.min*2:0)
+  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'&&!G._levFree?G.s.min*3:0)
     +((G._hand2Active&&(G.mainBet2||0)>=G.s.min)?(G.mainBet2+Object.values(G.sideBets2||{}).reduce((a,b)=>a+b,0)):0);
   if(G.balance<totalDeducted){notif('Not enough balance');return;}
   let puCost=0;
@@ -7979,7 +7970,7 @@ function settle(reason){
       // Only push the hand that triggered the safety net; other hands settle on their own merit
       if(hi===(G.safetyTriggerHand||0)){w=0;detail='Safety Net — Push';}
       else if(pb){ const freeLev=G.leverage&&G.leverage.startsWith('c'); w=-_betForHand; detail='Bust'+(freeLev?' [Lev card — lose stake only]':''); }
-      else if(pbj){ if(isBJ(G.dealer)){w=0;detail='Push — both BJ';} else{const _sOn=G.steelOn[hi]||false;const r=G.puOwned.has('novak')||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':''}`;sfx('bj');} }
+      else if(pbj){ if(isBJ(G.dealer)){w=0;detail='Push — both BJ';} else{const _sOn=G.steelOn[hi]||false;const _nOn=G.puOwned.has('novak');const r=_nOn||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':_nOn?' (Novak)':''}`;sfx('bj');} }
       else if(db){ w=_betForHand*lm; const levDesc=lm>1?(G.leverage.startsWith('c')?' ('+lm+'× free card)':' ('+lm+'× token)'):''; detail='Dealer Bust'+levDesc; }
       else if(pv>dv){ w=_betForHand*lm; const levDescW=lm>1?(G.leverage.startsWith('c')?' ('+lm+'× card)':' ('+lm+'× token)'):''; detail=`${pv} vs ${dv}`+levDescW; }
       else if(pv===dv){ w=0; detail='Push'; }
@@ -7998,7 +7989,7 @@ function settle(reason){
         detail='Bust'+(freeLev?' [Lev card — lose stake only]':'');
       }
     }
-    else if(reason==='player_bj')  {const _sOn=G.steelOn[hi]||false;const r=G.puOwned.has('novak')||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':''}`;}
+    else if(reason==='player_bj')  {const _sOn=G.steelOn[hi]||false;const _nOn=G.puOwned.has('novak');const r=_nOn||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':_nOn?' (Novak)':''}`;  }
     else if(reason==='dealer_bj'){
       const freeLev4=G.leverage&&G.leverage.startsWith('c');
       w=-_betForHand;detail='Dealer BJ'; // leverage card: lose full stake
@@ -8006,7 +7997,7 @@ function settle(reason){
     else if(pbj&&reason==='normal'){
       // BJ on a hand that went through normal dealer play (split hand, or hand 0 in 2-hand mode)
       if(isBJ(G.dealer)){w=0;detail='Push — both BJ';}
-      else{const _sOn=G.steelOn[hi]||false;const r=G.puOwned.has('novak')||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':''}`;sfx('bj');}
+      else{const _sOn=G.steelOn[hi]||false;const _nOn=G.puOwned.has('novak');const r=_nOn||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':_nOn?' (Novak)':''}`;sfx('bj');}
     }
     else if(db){
       w=_betForHand*lm;
@@ -8116,7 +8107,7 @@ function settle(reason){
     if(b.label&&b.label.startsWith('Insurance')&&b.type==='warn') return acc+(b.pl||0); // insurance loss baked into preDealBal — include for display
     return acc;
   },0);
-  const levCost=(G.leverage==='2x'&&!G._levFree)?G.s.min*2:0; // 2× token cost (card leverages and pts-redeemed token are free)
+  const levCost=(G.leverage==='2x'&&!G._levFree)?G.s.min*3:0; // 2× token cost (card leverages and pts-redeemed token are free)
   const totalPLForDisplay = mainPL + earlySBPL + sidePL + bonusPLDisplay - levCost;
   updateUI();
 
@@ -11660,24 +11651,18 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
-    // Max 2 open shoe market bets per shoe
+    // Shoe bet cap: 4 standard / 8 Club pass
+    const _shoeBetMax = G._clubPass ? 8 : 4;
     if(mkt.type === 'shoe'){
       const openShoeBets = _loadBets().filter(b => {
         if(b.payout !== null && b.payout !== undefined) return false;
         const bm = _markets.find(m => m.id === b.mktId);
         return bm && bm.type === 'shoe';
       });
-      if(openShoeBets.length >= 2){ notif('Max 2 shoe market bets per shoe'); return; }
+      if(openShoeBets.length >= _shoeBetMax){ notif('Max '+_shoeBetMax+' shoe market bets per shoe'); return; }
     }
-    // Max 2 open "bet any time" window shoe market bets per shoe
+    // End-of-shoe lockout for window markets: block when fewer than 15 hands remain
     if(mkt.type === 'shoe' && _isWindowShoeType(mkt)){
-      const openWindowBets = _loadBets().filter(b => {
-        if(b.payout !== null && b.payout !== undefined) return false;
-        const bm = _markets.find(m => m.id === b.mktId);
-        return bm && bm.type === 'shoe' && _isWindowShoeType(bm);
-      });
-      if(openWindowBets.length >= 2){ notif('Max 2 open next-N-hands positions per shoe'); return; }
-      // End-of-shoe lockout: block new bets when fewer than 15 hands remain
       const _shoeHandsLeft = Math.floor((G.deck ? G.deck.filter(x=>!x.cutCard).length : 0) / 6);
       if(_shoeHandsLeft < 15){ notif('Shoe too close to end — next-N-hands bets locked'); return; }
     }

@@ -6090,7 +6090,7 @@ async function doLogin(){
         // _syncCommitBalance() writes the committed balance to GAS immediately at deal,
         // so wagered chips are already reflected there before any reload.
         try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
-        _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||''};
+        _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
         // Clear any session belonging to a different player on this device
         try{
           const _oldSnap=localStorage.getItem(SESSION_KEY);
@@ -11863,16 +11863,21 @@ const PM = (() => {
       const balance = p.balance || 0;
       const nextAmount = MILESTONE_AMOUNTS.find(a => a > balance);
       if(!nextAmount) return;
-      // Remove any open milestone markets for this player that are NOT the next milestone
-      // (leftover from before the single-market-per-player rule, or stale from a previous week).
-      // Only prune locally — do NOT settle in GAS, which would create false settled records
-      // that re-import on the next poll. Stale GAS records are blocked in the poll import below.
+      // Remove open milestone markets for this player that are NOT the next milestone,
+      // and settled NO markets from previous weeks (week expired, player didn't reach it —
+      // these are noise; keep settled YES so reached milestones stay in history).
+      const _curWeekStr = thisWeek;
       _markets = _markets.filter(m => {
-        if(m.type !== 'season' || m.status !== 'open') return true;
+        if(m.type !== 'season') return true;
         if(!m.condition || m.condition.type !== 'bankroll_milestone') return true;
         const mp = m.condition.params;
         if((mp.player||'').toLowerCase() !== pLow) return true;
-        return mp.amount === nextAmount;
+        if(m.status === 'open') return mp.amount === nextAmount;
+        if(m.status === 'settled' && m.result === 'NO'){
+          const mPeriod = mp.week || mp.month || (mp.date||'').slice(0,10);
+          return mPeriod >= _curWeekStr; // keep only current-week NO (still settling); prune old ones
+        }
+        return true; // keep settled YES
       });
       {
         const amount = nextAmount;

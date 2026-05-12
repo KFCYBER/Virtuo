@@ -11676,7 +11676,7 @@ const PM = (() => {
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
     // Shoe bet cap: 4 total standard / 8 total Club pass; whole-shoe sub-cap: 2 standard / 4 Club pass
-    const _shoeBetMax = G._clubPass ? 8 : 4;
+    const _shoeBetMax = G._clubPass ? 4 : 2;
     const _wholeShoeBetMax = G._clubPass ? 4 : 2;
     if(mkt.type === 'shoe'){
       const openShoeBets = _loadBets().filter(b => {

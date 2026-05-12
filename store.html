@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>KFC Store — In-Game Purchases</title>
+<link rel="icon" type="image/png" href="KFC_LOGO.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<!-- EmailJS — fill in your public key below -->
+<script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
+<script>
+  // ── EmailJS config ──────────────────────────────────────────────
+  // 1. Sign up at https://www.emailjs.com (free)
+  // 2. Add a Gmail service → copy the Service ID below
+  // 3. Create an email template with variables: {{order_id}}, {{username}}, {{order_details}}, {{total_chf}}
+  //    Copy the Template ID below
+  // 4. Go to Account → copy your Public Key below
+  const EJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
+  const EJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
+  const EJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
+  emailjs.init(EJS_PUBLIC_KEY);
+</script>
+<style>
+:root {
+  --bg:      #0A0B0D;
+  --bg1:     #141313;
+  --bg2:     #111214;
+  --bg3:     #18191C;
+  --line:    #232529;
+  --line2:   #35373D;
+  --gold:    #C9A84C;
+  --gold-hi: #EFC84A;
+  --gold-lo: #7A6530;
+  --white:   #F0EDE8;
+  --muted:   #6E7681;
+  --muted2:  #8B949E;
+  --green:   #3FB950;
+  --red:     #F85149;
+  --radius:  2px;
+  --mono:    'DM Mono', monospace;
+  --sans:    'Oxanium', sans-serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--sans);
+  font-size: 14px;
+  min-height: 100%;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: var(--bg1); }
+::-webkit-scrollbar-thumb { background: var(--line2); }
+
+/* ── TOP BAR ── */
+.topbar {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 200;
+  height: 52px;
+  background: var(--bg1);
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px;
+}
+.topbar-left { display: flex; align-items: center; gap: 8px; }
+.topbar-logo { font-size: 11px; letter-spacing: 4px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
+.topbar-sep { color: var(--line2); font-size: 16px; }
+.topbar-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; }
+.topbar-right { display: flex; align-items: center; gap: 8px; }
+
+.btn-ghost {
+  background: transparent; border: 1px solid var(--line2);
+  color: var(--muted2); font-family: var(--sans); font-size: 11px; font-weight: 600;
+  letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+  padding: 6px 14px; border-radius: var(--radius); transition: all .15s;
+  text-decoration: none; display: inline-flex; align-items: center;
+}
+.btn-ghost:hover { border-color: var(--muted2); color: var(--white); }
+
+/* ── MAIN LAYOUT ── */
+.page { max-width: 1100px; margin: 0 auto; padding: 80px 20px 120px; }
+
+/* ── PAGE HEADER ── */
+.page-title {
+  font-size: 11px; letter-spacing: 5px; color: var(--gold); font-weight: 700;
+  text-transform: uppercase; margin-bottom: 4px;
+}
+.page-sub {
+  font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 32px;
+}
+
+/* ── TABS ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 36px; border-bottom: 1px solid var(--line); }
+.tab-btn {
+  background: none; border: none; font-family: var(--sans); font-size: 11px;
+  font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+  color: var(--muted); cursor: pointer; padding: 10px 18px;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s;
+}
+.tab-btn.active { color: var(--gold); border-bottom-color: var(--gold); }
+.tab-btn:hover:not(.active) { color: var(--white); }
+
+/* ── SECTION ── */
+.section { display: none; }
+.section.active { display: block; }
+
+.section-label {
+  font-size: 10px; letter-spacing: 4px; color: var(--muted); font-weight: 700;
+  text-transform: uppercase; margin-bottom: 6px;
+}
+.section-note {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); margin-bottom: 24px;
+  padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--bg2);
+}
+
+/* ── PRODUCT GRID ── */
+.product-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+/* ── PRODUCT CARD ── */
+.product-card {
+  background: var(--bg1);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 20px 18px 16px;
+  display: flex; flex-direction: column;
+  transition: border-color .15s;
+}
+.product-card:hover { border-color: var(--line2); }
+
+.product-icon {
+  font-size: 40px; text-align: center; margin-bottom: 14px;
+  line-height: 1;
+}
+.product-name {
+  font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 6px;
+}
+.product-desc {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.5;
+  margin-bottom: 12px; flex: 1;
+}
+.product-contents {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  margin-bottom: 14px; line-height: 1.7;
+}
+.product-contents span { color: var(--white); }
+
+.product-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  border-top: 1px solid var(--line); padding-top: 12px; margin-top: auto;
+}
+.product-price {
+  font-size: 14px; font-weight: 700; color: var(--white);
+}
+.product-price small {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); display: block;
+  font-weight: 400;
+}
+
+.btn-add {
+  background: transparent; border: 1px solid var(--gold-lo);
+  color: var(--gold); font-family: var(--sans); font-size: 10px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+  padding: 6px 12px; border-radius: var(--radius); transition: all .15s;
+  white-space: nowrap;
+}
+.btn-add:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+
+/* ── CART FAB ── */
+#cart-fab {
+  position: fixed; bottom: 28px; right: 24px; z-index: 300;
+  background: var(--gold); color: var(--bg);
+  font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: 2px; text-transform: uppercase;
+  border: none; cursor: pointer;
+  padding: 12px 20px; border-radius: 2px;
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: 0 4px 24px rgba(201,168,76,0.25);
+  transition: background .15s;
+}
+#cart-fab:hover { background: var(--gold-hi); }
+#cart-count {
+  background: var(--bg); color: var(--gold);
+  font-size: 10px; font-weight: 800;
+  border-radius: 50%; width: 18px; height: 18px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* ── CART DRAWER ── */
+.overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: rgba(0,0,0,0.7); display: none; align-items: flex-start; justify-content: flex-end;
+}
+.overlay.open { display: flex; }
+.drawer {
+  width: 380px; max-width: 95vw; height: 100vh;
+  background: var(--bg1); border-left: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  animation: slideIn .2s ease;
+}
+@keyframes slideIn { from { transform: translateX(100%); } to { transform: translateX(0); } }
+
+.drawer-header {
+  padding: 20px; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+}
+.drawer-title {
+  font-size: 11px; font-weight: 700; letter-spacing: 3px; color: var(--gold); text-transform: uppercase;
+}
+.drawer-close {
+  background: none; border: none; color: var(--muted2); font-size: 18px; cursor: pointer;
+  line-height: 1; padding: 4px;
+}
+.drawer-close:hover { color: var(--white); }
+
+.drawer-body { flex: 1; overflow-y: auto; padding: 16px 20px; }
+.cart-empty { font-family: var(--mono); font-size: 11px; color: var(--muted); text-align: center; padding: 40px 0; }
+
+/* ── CART ITEM ── */
+.cart-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 0; border-bottom: 1px solid var(--line);
+}
+.cart-item-icon { font-size: 22px; flex-shrink: 0; }
+.cart-item-info { flex: 1; }
+.cart-item-name { font-size: 11px; font-weight: 700; letter-spacing: 1px; color: var(--white); }
+.cart-item-price { font-family: var(--mono); font-size: 10px; color: var(--muted2); margin-top: 2px; }
+.cart-item-qty {
+  display: flex; align-items: center; gap: 6px;
+}
+.qty-btn {
+  background: var(--bg3); border: 1px solid var(--line2);
+  color: var(--white); width: 22px; height: 22px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 13px; cursor: pointer; border-radius: var(--radius); line-height: 1;
+  flex-shrink: 0;
+}
+.qty-btn:hover { border-color: var(--muted2); }
+.qty-val { font-family: var(--mono); font-size: 11px; min-width: 16px; text-align: center; }
+
+/* ── DRAWER FOOTER ── */
+.drawer-footer { padding: 16px 20px; border-top: 1px solid var(--line); flex-shrink: 0; }
+.cart-total-row {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;
+}
+.cart-total-label { font-size: 10px; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; }
+.cart-total-val { font-size: 16px; font-weight: 700; color: var(--gold); }
+
+/* ── CHECKOUT FORM ── */
+.checkout-section { margin-top: 14px; }
+.checkout-label {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 1px;
+  margin-bottom: 6px; display: block;
+}
+.checkout-input {
+  width: 100%; background: var(--bg2); border: 1px solid var(--line2);
+  color: var(--white); font-family: var(--mono); font-size: 12px;
+  padding: 9px 12px; border-radius: var(--radius); outline: none;
+  transition: border-color .15s;
+}
+.checkout-input:focus { border-color: var(--gold-lo); }
+.checkout-input::placeholder { color: var(--muted); }
+
+.btn-order {
+  width: 100%; margin-top: 12px;
+  background: var(--gold); color: var(--bg);
+  font-family: var(--sans); font-size: 11px; font-weight: 800;
+  letter-spacing: 3px; text-transform: uppercase;
+  border: none; cursor: pointer; padding: 12px;
+  border-radius: var(--radius); transition: background .15s;
+}
+.btn-order:hover { background: var(--gold-hi); }
+.btn-order:disabled { background: var(--line2); color: var(--muted); cursor: not-allowed; }
+
+.order-msg {
+  font-family: var(--mono); font-size: 10px; margin-top: 8px; min-height: 14px;
+  text-align: center;
+}
+.order-msg.ok { color: var(--green); }
+.order-msg.err { color: var(--red); }
+
+/* ── DISCLAIMER ── */
+.disclaimer {
+  font-family: var(--mono); font-size: 10px; color: var(--muted);
+  border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 14px; margin-top: 28px; line-height: 1.6;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .product-grid { grid-template-columns: 1fr 1fr; }
+  .drawer { width: 100vw; }
+}
+@media (max-width: 400px) {
+  .product-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <span class="topbar-logo">KFC</span>
+    <span class="topbar-sep">|</span>
+    <span class="topbar-sub">IN-GAME PURCHASES</span>
+  </div>
+  <div class="topbar-right">
+    <a href="index_v2.html" class="btn-ghost">← Back to Game</a>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="page">
+  <div class="page-title">KFC Store</div>
+  <div class="page-sub">All purchases are processed manually — you'll receive your items before your next session.</div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('crates')">Crates</button>
+    <button class="tab-btn" onclick="switchTab('currency')">Currency Packs</button>
+  </div>
+
+  <!-- CRATES -->
+  <div class="section active" id="tab-crates">
+    <div class="section-note">
+      Crates are bonus chests that provide players with a gambling advantage. Various items appear in different crates, from chips to tokens, etc. (always may be more in the future).<br>
+      <strong style="color:var(--white)">Accepted currencies:</strong> CHF (Twint &amp; Cash) · Velo Snus VS (Level 3 &amp; 4 accepted)
+    </div>
+    <div class="product-grid" id="grid-crates"></div>
+    <div class="disclaimer">⚠ Crates can only be purchased with CHF (Twint &amp; Cash accepted) or Velo Snus VS (Level 3 &amp; 4 accepted).</div>
+  </div>
+
+  <!-- CURRENCY PACKS -->
+  <div class="section" id="tab-currency">
+    <div class="section-note">
+      Currency packs top up your KFC balance directly.<br>
+      <strong style="color:var(--white)">Accepted currencies:</strong> CHF (Twint &amp; Cash) · Velo Snus VS (Level 3 &amp; 4 accepted)
+    </div>
+    <div class="product-grid" id="grid-currency"></div>
+    <div class="disclaimer">⚠ Currency packs can only be purchased with CHF (Twint &amp; Cash accepted) or Velo Snus VS (Level 3 &amp; 4 accepted).</div>
+  </div>
+</div>
+
+<!-- CART FAB -->
+<button id="cart-fab" onclick="openCart()" style="display:none">
+  🛒 Cart <span id="cart-count">0</span>
+</button>
+
+<!-- CART DRAWER -->
+<div class="overlay" id="cart-overlay" onclick="overlayClick(event)">
+  <div class="drawer" id="cart-drawer">
+    <div class="drawer-header">
+      <span class="drawer-title">Your Cart</span>
+      <button class="drawer-close" onclick="closeCart()">✕</button>
+    </div>
+    <div class="drawer-body" id="cart-body">
+      <div class="cart-empty">Your cart is empty.</div>
+    </div>
+    <div class="drawer-footer">
+      <div class="cart-total-row">
+        <span class="cart-total-label">Total</span>
+        <span class="cart-total-val" id="cart-total">CHF 0.00</span>
+      </div>
+      <div class="checkout-section">
+        <label class="checkout-label">Your KFC Username</label>
+        <input class="checkout-input" id="checkout-username" type="text" placeholder="Enter your username…" autocomplete="off" />
+        <button class="btn-order" id="btn-order" onclick="placeOrder()">Place Order</button>
+        <div class="order-msg" id="order-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── PRODUCT DATA ──────────────────────────────────────────────────
+const CRATES = [
+  {
+    id: 'starter_crate',
+    name: 'Starter Crate',
+    icon: '📦',
+    desc: 'A light advantage to start a fresh season.',
+    contents: ['1,000 KFC', '1× Leverage Token (2×)'],
+    price: 1.00,
+  },
+  {
+    id: 'booster_crate',
+    name: 'Booster Crate',
+    icon: '🎁',
+    desc: "Also known as 'success in a bottle' — this crate is an all-around steal.",
+    contents: ['1,750 KFC', '1× Leverage Token (2×)'],
+    price: 1.50,
+  },
+  {
+    id: 'value_crate',
+    name: 'Value Crate',
+    icon: '🧰',
+    desc: 'For those who know what they\'re doing. This crate turns risk into reward.',
+    contents: ['4,000 KFC', '2× Leverage Token (2×)'],
+    price: 5.50,
+  },
+  {
+    id: 'elite_crate',
+    name: 'Elite Crate',
+    icon: '💎',
+    desc: 'Unlike the show, this is worth it. The Elite Crate is your best friend to win.',
+    contents: ['8,000 KFC', '3× Leverage Token (2×)'],
+    price: 7.50,
+  },
+  {
+    id: 'las_vegas_crate',
+    name: 'Las Vegas Crate',
+    icon: '🎰',
+    desc: 'Living up to its name — the ultimate package, paving your way to victory.',
+    contents: ['12,000 KFC', '2× Leverage Token (2×)', '1× Novak Power-Up (full session)'],
+    price: 11.50,
+  },
+];
+
+const CURRENCY_PACKS = [
+  {
+    id: 'handful',
+    name: 'Handful of Chips',
+    icon: '🪙',
+    desc: 'A humble handful — just enough to keep the reels spinning and your luck sizzling.',
+    contents: ['500 KFC'],
+    price: 0.50,
+  },
+  {
+    id: 'mini_bucket',
+    name: 'Mini Bucket of Chips',
+    icon: '🪣',
+    desc: 'Small in size, big on flavour — perfect for spicing up your next winning streak.',
+    contents: ['1,100 KFC'],
+    price: 1.00,
+  },
+  {
+    id: 'bucket',
+    name: 'Bucket of Chips',
+    icon: '🍗',
+    desc: 'A full Bucket overflowing with fortune — perfect for players hungry for value.',
+    contents: ['3,500 KFC'],
+    price: 3.00,
+  },
+  {
+    id: 'barrel',
+    name: 'Barrel of Chips',
+    icon: '🛢️',
+    desc: 'Big, bold, and built for players who like their bets served in XL portions.',
+    contents: ['6,500 KFC'],
+    price: 6.00,
+  },
+  {
+    id: 'chest',
+    name: 'Chest of Chips',
+    icon: '🎒',
+    desc: 'Stuffed with treasure, swagger, and enough currency to turn heads at the table.',
+    contents: ['8,500 KFC'],
+    price: 8.00,
+  },
+  {
+    id: 'vault',
+    name: 'Vault of Chips',
+    icon: '🏦',
+    desc: 'Where the real riches live — only the bold dare to feast.',
+    contents: ['13,000 KFC'],
+    price: 11.50,
+  },
+];
+
+// ── CART STATE ────────────────────────────────────────────────────
+const cart = {}; // { productId: { product, qty } }
+
+function addToCart(product) {
+  if (cart[product.id]) {
+    cart[product.id].qty++;
+  } else {
+    cart[product.id] = { product, qty: 1 };
+  }
+  updateCartUI();
+  // Brief fab pulse
+  const fab = document.getElementById('cart-fab');
+  fab.style.transform = 'scale(1.12)';
+  setTimeout(() => fab.style.transform = '', 150);
+}
+
+function setQty(id, delta) {
+  if (!cart[id]) return;
+  cart[id].qty += delta;
+  if (cart[id].qty <= 0) delete cart[id];
+  updateCartUI();
+}
+
+function cartTotal() {
+  return Object.values(cart).reduce((s, e) => s + e.product.price * e.qty, 0);
+}
+
+function cartCount() {
+  return Object.values(cart).reduce((s, e) => s + e.qty, 0);
+}
+
+function updateCartUI() {
+  const count = cartCount();
+  const fab = document.getElementById('cart-fab');
+  fab.style.display = count > 0 ? 'flex' : 'none';
+  document.getElementById('cart-count').textContent = count;
+  document.getElementById('cart-total').textContent = 'CHF ' + cartTotal().toFixed(2);
+  renderCartBody();
+}
+
+function renderCartBody() {
+  const body = document.getElementById('cart-body');
+  const items = Object.values(cart);
+  if (!items.length) {
+    body.innerHTML = '<div class="cart-empty">Your cart is empty.</div>';
+    return;
+  }
+  body.innerHTML = items.map(({ product, qty }) => `
+    <div class="cart-item">
+      <div class="cart-item-icon">${product.icon}</div>
+      <div class="cart-item-info">
+        <div class="cart-item-name">${product.name}</div>
+        <div class="cart-item-price">CHF ${(product.price * qty).toFixed(2)}${qty > 1 ? ' (×' + qty + ')' : ''}</div>
+      </div>
+      <div class="cart-item-qty">
+        <button class="qty-btn" onclick="setQty('${product.id}', -1)">−</button>
+        <span class="qty-val">${qty}</span>
+        <button class="qty-btn" onclick="setQty('${product.id}', 1)">+</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── CART OPEN/CLOSE ───────────────────────────────────────────────
+function openCart() {
+  document.getElementById('cart-overlay').classList.add('open');
+  document.getElementById('order-msg').textContent = '';
+}
+function closeCart() {
+  document.getElementById('cart-overlay').classList.remove('open');
+}
+function overlayClick(e) {
+  if (e.target === document.getElementById('cart-overlay')) closeCart();
+}
+
+// ── ORDER ─────────────────────────────────────────────────────────
+async function placeOrder() {
+  const username = document.getElementById('checkout-username').value.trim();
+  const msg = document.getElementById('order-msg');
+  const btn = document.getElementById('btn-order');
+
+  if (!username) {
+    msg.className = 'order-msg err';
+    msg.textContent = 'Please enter your KFC username.';
+    return;
+  }
+  if (cartCount() === 0) {
+    msg.className = 'order-msg err';
+    msg.textContent = 'Your cart is empty.';
+    return;
+  }
+
+  const orderId = 'KFC-' + Math.random().toString(36).toUpperCase().slice(2, 7);
+  const lines = Object.values(cart).map(({ product, qty }) =>
+    `${qty}× ${product.name} — CHF ${(product.price * qty).toFixed(2)}`
+  );
+  const orderDetails = lines.join('\n');
+  const total = 'CHF ' + cartTotal().toFixed(2);
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  msg.textContent = '';
+
+  try {
+    await emailjs.send(EJS_SERVICE_ID, EJS_TEMPLATE_ID, {
+      order_id: orderId,
+      username,
+      order_details: orderDetails,
+      total_chf: total,
+    });
+    msg.className = 'order-msg ok';
+    msg.textContent = '✓ Order sent! Ref: ' + orderId + ' — items delivered before your next session.';
+    // Clear cart
+    Object.keys(cart).forEach(k => delete cart[k]);
+    updateCartUI();
+    document.getElementById('checkout-username').value = '';
+    btn.textContent = 'Place Order';
+    btn.disabled = false;
+  } catch (e) {
+    msg.className = 'order-msg err';
+    msg.textContent = 'Failed to send — please contact staff directly.';
+    btn.textContent = 'Place Order';
+    btn.disabled = false;
+  }
+}
+
+// ── RENDER PRODUCTS ───────────────────────────────────────────────
+function renderProducts(products, containerId) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = products.map(p => `
+    <div class="product-card">
+      <div class="product-icon">${p.icon}</div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-desc">${p.desc}</div>
+      <div class="product-contents">
+        ${p.contents.map(c => `<span>${c}</span><br>`).join('')}
+      </div>
+      <div class="product-footer">
+        <div class="product-price">
+          CHF ${p.price.toFixed(2)}
+        </div>
+        <button class="btn-add" onclick='addToCart(${JSON.stringify(p)})'>+ Add</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+// ── TABS ──────────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ── INIT ──────────────────────────────────────────────────────────
+renderProducts(CRATES, 'grid-crates');
+renderProducts(CURRENCY_PACKS, 'grid-currency');
+</script>
+</body>
+</html>

@@ -109,36 +109,61 @@ body {
 .product-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
+  gap: 20px;
 }
 
 /* ── PRODUCT CARD ── */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(201,168,76,0.2)); }
+  50%       { filter: drop-shadow(0 0 16px rgba(201,168,76,0.65)); }
+}
+@keyframes shimmer {
+  0%   { background-position: -200% center; }
+  100% { background-position: 200% center; }
+}
+@keyframes borderPulse {
+  0%, 100% { border-color: var(--line); }
+  50%       { border-color: rgba(201,168,76,0.3); }
+}
+
 .product-card {
   background: var(--bg1);
   border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 20px 18px 16px;
+  border-radius: 6px;
+  padding: 28px 22px 20px;
   display: flex; flex-direction: column;
-  transition: border-color .15s;
+  position: relative; overflow: hidden;
+  transition: transform .2s ease, border-color .2s ease, box-shadow .2s ease;
+  animation: borderPulse 4s ease-in-out infinite;
 }
-.product-card:hover { border-color: var(--line2); }
-
-@keyframes float {
-  0%, 100% { transform: translateY(0px); }
-  50%       { transform: translateY(-7px); }
+.product-card::before {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(135deg, rgba(201,168,76,0.04) 0%, transparent 60%);
+  pointer-events: none;
 }
-@keyframes glow {
-  0%, 100% { filter: drop-shadow(0 0 4px rgba(201,168,76,0.25)); }
-  50%       { filter: drop-shadow(0 0 12px rgba(201,168,76,0.6)); }
+.product-card:hover {
+  transform: translateY(-4px);
+  border-color: rgba(201,168,76,0.45);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 20px rgba(201,168,76,0.08);
+  animation: none;
+}
+.product-card:hover .product-icon img {
+  filter: drop-shadow(0 0 18px rgba(201,168,76,0.8));
 }
 
 .product-icon {
   display: flex; align-items: center; justify-content: center;
-  height: 96px; margin-bottom: 14px;
+  height: 120px; margin-bottom: 18px;
 }
 .product-icon img {
-  max-height: 90px; max-width: 100%; object-fit: contain;
+  max-height: 110px; max-width: 100%; object-fit: contain;
   animation: float 3.2s ease-in-out infinite, glow 3.2s ease-in-out infinite;
+  transition: filter .2s ease;
 }
 .product-icon img.anim-d1 { animation-delay: 0s; }
 .product-icon img.anim-d2 { animation-delay: 0.4s; }
@@ -146,17 +171,18 @@ body {
 .product-icon img.anim-d4 { animation-delay: 1.2s; }
 .product-icon img.anim-d5 { animation-delay: 1.6s; }
 .product-icon img.anim-d6 { animation-delay: 2.0s; }
+
 .product-name {
-  font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
-  color: var(--gold); margin-bottom: 6px;
+  font-size: 13px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--gold); margin-bottom: 8px;
 }
 .product-desc {
-  font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.5;
-  margin-bottom: 12px; flex: 1;
+  font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.6;
+  margin-bottom: 14px; flex: 1;
 }
 .product-contents {
   font-family: var(--mono); font-size: 10px; color: var(--muted);
-  margin-bottom: 14px; line-height: 1.7;
+  margin-bottom: 16px; line-height: 1.9;
 }
 .product-contents span { color: var(--white); }
 
@@ -173,13 +199,21 @@ body {
 }
 
 .btn-add {
-  background: transparent; border: 1px solid var(--gold-lo);
+  background: linear-gradient(135deg, rgba(201,168,76,0.12), rgba(201,168,76,0.04));
+  border: 1px solid var(--gold-lo);
   color: var(--gold); font-family: var(--sans); font-size: 10px; font-weight: 700;
   letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
-  padding: 6px 12px; border-radius: var(--radius); transition: all .15s;
-  white-space: nowrap;
+  padding: 8px 16px; border-radius: var(--radius); transition: all .2s;
+  white-space: nowrap; position: relative; overflow: hidden;
 }
-.btn-add:hover { border-color: var(--gold); background: rgba(201,168,76,0.08); }
+.btn-add::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.08) 50%, transparent 100%);
+  background-size: 200% 100%; background-position: -200% center;
+  transition: background-position .4s ease;
+}
+.btn-add:hover { border-color: var(--gold); background: rgba(201,168,76,0.18); transform: scale(1.03); }
+.btn-add:hover::after { background-position: 200% center; }
 
 /* ── CART FAB ── */
 #cart-fab {
@@ -313,22 +347,25 @@ body {
 </head>
 <body>
 
+<!-- BACKGROUND CANVAS -->
+<canvas id="store-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.4"></canvas>
+
 <!-- TOP BAR -->
-<div class="topbar">
+<div class="topbar" style="z-index:200">
   <div class="topbar-left">
     <span class="topbar-logo">KFC</span>
     <span class="topbar-sep">|</span>
     <span class="topbar-sub">IN-GAME PURCHASES</span>
   </div>
   <div class="topbar-right">
-    <a href="index.html" class="btn-ghost">← Back to Game</a>
+    <button onclick="window.close()" class="btn-ghost">✕ Close</button>
   </div>
 </div>
 
 <!-- MAIN -->
-<div class="page">
+<div class="page" style="position:relative;z-index:1">
   <div class="page-title">KFC Store</div>
-  <div class="page-sub">All purchases are processed manually — you'll receive your items before your next session.</div>
+  <div class="page-sub">All purchases are processed manually — items delivered before your next session. Accepted: CHF (Twint &amp; Cash).</div>
 
   <!-- TABS -->
   <div class="tabs">
@@ -338,22 +375,14 @@ body {
 
   <!-- CRATES -->
   <div class="section active" id="tab-crates">
-    <div class="section-note">
-      Crates are bonus chests that provide players with a gambling advantage. Various items appear in different crates, from chips to tokens, etc. (always may be more in the future).<br>
-      <strong style="color:var(--white)">Accepted currency:</strong> CHF (Twint &amp; Cash)
-    </div>
     <div class="product-grid" id="grid-crates"></div>
-    <div class="disclaimer">⚠ Crates can only be purchased with CHF (Twint &amp; Cash accepted).</div>
+    <div class="disclaimer">⚠ Purchased with CHF (Twint &amp; Cash) only.</div>
   </div>
 
   <!-- CURRENCY PACKS -->
   <div class="section" id="tab-currency">
-    <div class="section-note">
-      Currency packs top up your KFC balance directly.<br>
-      <strong style="color:var(--white)">Accepted currency:</strong> CHF (Twint &amp; Cash)
-    </div>
     <div class="product-grid" id="grid-currency"></div>
-    <div class="disclaimer">⚠ Currency packs can only be purchased with CHF (Twint &amp; Cash accepted).</div>
+    <div class="disclaimer">⚠ Purchased with CHF (Twint &amp; Cash) only.</div>
   </div>
 </div>
 
@@ -407,11 +436,12 @@ const CRATES = [
     img: 'store/crates/starter_crate.png',
     delay: 'anim-d1',
     desc: 'A light advantage to start a fresh season.',
-    contents: ['1,000 KFC', '1× Leverage Token (2×)'],
+    contents: ['1,000 KFC', '1× Leverage Token (2×)', '1× Insurance Token'],
     price: 1.00,
     deliveryItems: [
-      {type:'kfc',             qty:1000, name:'1,000 KFC'},
-      {type:'leverage_token',  qty:1,    name:'Leverage Token (2×)'},
+      {type:'kfc',               qty:1000, name:'1,000 KFC'},
+      {type:'leverage_token',    qty:1,    name:'Leverage Token (2×)'},
+      {type:'insurance_token',   qty:1,    name:'Insurance Token'},
     ],
   },
   {
@@ -420,11 +450,11 @@ const CRATES = [
     img: 'store/crates/booster_crate.png',
     delay: 'anim-d2',
     desc: "Also known as 'success in a bottle' — this crate is an all-around steal.",
-    contents: ['1,750 KFC', '1× Leverage Token (2×)'],
+    contents: ['1,750 KFC', '2× Leverage Token (2×)'],
     price: 1.50,
     deliveryItems: [
       {type:'kfc',             qty:1750, name:'1,750 KFC'},
-      {type:'leverage_token',  qty:1,    name:'Leverage Token (2×)'},
+      {type:'leverage_token',  qty:2,    name:'Leverage Token (2×)'},
     ],
   },
   {
@@ -433,10 +463,10 @@ const CRATES = [
     img: 'store/crates/value_crate.png',
     delay: 'anim-d3',
     desc: 'For those who know what they\'re doing. This crate turns risk into reward.',
-    contents: ['4,000 KFC', '2× Leverage Token (2×)'],
-    price: 5.50,
+    contents: ['6,000 KFC', '2× Leverage Token (2×)'],
+    price: 4.50,
     deliveryItems: [
-      {type:'kfc',             qty:4000, name:'4,000 KFC'},
+      {type:'kfc',             qty:6000, name:'6,000 KFC'},
       {type:'leverage_token',  qty:2,    name:'Leverage Token (2×)'},
     ],
   },
@@ -446,11 +476,11 @@ const CRATES = [
     img: 'store/crates/elite_crate.png',
     delay: 'anim-d4',
     desc: 'Unlike the show, this is worth it. The Elite Crate is your best friend to win.',
-    contents: ['8,000 KFC', '3× Leverage Token (2×)'],
-    price: 7.50,
+    contents: ['10,000 KFC', '3× Leverage Token (2×)'],
+    price: 7.00,
     deliveryItems: [
-      {type:'kfc',             qty:8000, name:'8,000 KFC'},
-      {type:'leverage_token',  qty:3,    name:'Leverage Token (2×)'},
+      {type:'kfc',             qty:10000, name:'10,000 KFC'},
+      {type:'leverage_token',  qty:3,     name:'Leverage Token (2×)'},
     ],
   },
   {
@@ -459,10 +489,10 @@ const CRATES = [
     img: 'store/crates/las_vegas_crate.png',
     delay: 'anim-d5',
     desc: 'Living up to its name — the ultimate package, paving your way to victory.',
-    contents: ['12,000 KFC', '2× Leverage Token (2×)', '1× BJ Novak Power-Up'],
-    price: 11.50,
+    contents: ['25,000 KFC', '2× Leverage Token (2×)', '1× BJ Novak Power-Up'],
+    price: 12.00,
     deliveryItems: [
-      {type:'kfc',             qty:12000, name:'12,000 KFC'},
+      {type:'kfc',             qty:25000, name:'25,000 KFC'},
       {type:'leverage_token',  qty:2,     name:'Leverage Token (2×)'},
       {type:'power_up',        id:'novak', qty:1, name:'BJ Novak Power-Up'},
     ],
@@ -486,9 +516,9 @@ const CURRENCY_PACKS = [
     img: 'store/currency packs/mini_bucket_of_chips.png',
     delay: 'anim-d2',
     desc: 'Small in size, big on flavour — perfect for spicing up your next winning streak.',
-    contents: ['1,100 KFC'],
-    price: 1.00,
-    deliveryItems: [{type:'kfc', qty:1100, name:'1,100 KFC'}],
+    contents: ['1,300 KFC'],
+    price: 0.80,
+    deliveryItems: [{type:'kfc', qty:1300, name:'1,300 KFC'}],
   },
   {
     id: 'bucket',
@@ -496,9 +526,9 @@ const CURRENCY_PACKS = [
     img: 'store/currency packs/bucket_of_chips.png',
     delay: 'anim-d3',
     desc: 'A full Bucket overflowing with fortune — perfect for players hungry for value.',
-    contents: ['3,500 KFC'],
-    price: 3.00,
-    deliveryItems: [{type:'kfc', qty:3500, name:'3,500 KFC'}],
+    contents: ['4,500 KFC'],
+    price: 2.50,
+    deliveryItems: [{type:'kfc', qty:4500, name:'4,500 KFC'}],
   },
   {
     id: 'barrel',
@@ -506,9 +536,9 @@ const CURRENCY_PACKS = [
     img: 'store/currency packs/barrel_of_chips.png',
     delay: 'anim-d4',
     desc: 'Big, bold, and built for players who like their bets served in XL portions.',
-    contents: ['6,500 KFC'],
-    price: 6.00,
-    deliveryItems: [{type:'kfc', qty:6500, name:'6,500 KFC'}],
+    contents: ['9,000 KFC'],
+    price: 5.00,
+    deliveryItems: [{type:'kfc', qty:9000, name:'9,000 KFC'}],
   },
   {
     id: 'chest',
@@ -516,9 +546,9 @@ const CURRENCY_PACKS = [
     img: 'store/currency packs/chest_of_chips.png',
     delay: 'anim-d5',
     desc: 'Stuffed with treasure, swagger, and enough currency to turn heads at the table.',
-    contents: ['8,500 KFC'],
-    price: 8.00,
-    deliveryItems: [{type:'kfc', qty:8500, name:'8,500 KFC'}],
+    contents: ['12,000 KFC'],
+    price: 7.00,
+    deliveryItems: [{type:'kfc', qty:12000, name:'12,000 KFC'}],
   },
   {
     id: 'vault',
@@ -526,9 +556,9 @@ const CURRENCY_PACKS = [
     img: 'store/currency packs/vault_of_chips.png',
     delay: 'anim-d6',
     desc: 'Where the real riches live — only the bold dare to feast.',
-    contents: ['13,000 KFC'],
-    price: 11.50,
-    deliveryItems: [{type:'kfc', qty:13000, name:'13,000 KFC'}],
+    contents: ['19,000 KFC'],
+    price: 10.00,
+    deliveryItems: [{type:'kfc', qty:19000, name:'19,000 KFC'}],
   },
 ];
 
@@ -729,6 +759,55 @@ function switchTab(tab) {
 const EJS_PUBLIC_KEY  = 'RSujIHSWQZvXi_Vrw';
 const EJS_SERVICE_ID  = 'service_ov7ta7o';
 const EJS_TEMPLATE_ID = 'template_3c7trbe';
+
+// ── BACKGROUND CANVAS ─────────────────────────────────────────────
+(function initBg() {
+  const canvas = document.getElementById('store-bg');
+  const ctx    = canvas.getContext('2d');
+  const GOLD   = [201, 168, 76];
+  const particles = [];
+
+  function resize() {
+    canvas.width  = window.innerWidth;
+    canvas.height = window.innerHeight;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  function rnd(a, b) { return a + Math.random() * (b - a); }
+
+  for (let i = 0; i < 80; i++) {
+    particles.push({
+      x:    rnd(0, canvas.width),
+      y:    rnd(0, canvas.height),
+      r:    rnd(0.5, 2.2),
+      dx:   rnd(-0.15, 0.15),
+      dy:   rnd(-0.4, -0.08),
+      alpha: rnd(0.08, 0.55),
+      da:   rnd(0.002, 0.006) * (Math.random() < 0.5 ? 1 : -1),
+    });
+  }
+
+  function tick() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const p of particles) {
+      p.x += p.dx;
+      p.y += p.dy;
+      p.alpha += p.da;
+      if (p.alpha > 0.55) { p.alpha = 0.55; p.da *= -1; }
+      if (p.alpha < 0.04) { p.alpha = 0.04; p.da *= -1; }
+      if (p.y < -4)  p.y = canvas.height + 4;
+      if (p.x < -4)  p.x = canvas.width  + 4;
+      if (p.x > canvas.width  + 4) p.x = -4;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(${GOLD[0]},${GOLD[1]},${GOLD[2]},${p.alpha.toFixed(3)})`;
+      ctx.fill();
+    }
+    requestAnimationFrame(tick);
+  }
+  tick();
+})();
 
 // ── INIT ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

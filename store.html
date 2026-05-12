@@ -123,10 +123,29 @@ body {
 }
 .product-card:hover { border-color: var(--line2); }
 
-.product-icon {
-  font-size: 40px; text-align: center; margin-bottom: 14px;
-  line-height: 1;
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-7px); }
 }
+@keyframes glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(201,168,76,0.25)); }
+  50%       { filter: drop-shadow(0 0 12px rgba(201,168,76,0.6)); }
+}
+
+.product-icon {
+  display: flex; align-items: center; justify-content: center;
+  height: 96px; margin-bottom: 14px;
+}
+.product-icon img {
+  max-height: 90px; max-width: 100%; object-fit: contain;
+  animation: float 3.2s ease-in-out infinite, glow 3.2s ease-in-out infinite;
+}
+.product-icon img.anim-d1 { animation-delay: 0s; }
+.product-icon img.anim-d2 { animation-delay: 0.4s; }
+.product-icon img.anim-d3 { animation-delay: 0.8s; }
+.product-icon img.anim-d4 { animation-delay: 1.2s; }
+.product-icon img.anim-d5 { animation-delay: 1.6s; }
+.product-icon img.anim-d6 { animation-delay: 2.0s; }
 .product-name {
   font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase;
   color: var(--gold); margin-bottom: 6px;
@@ -374,7 +393,8 @@ const CRATES = [
   {
     id: 'starter_crate',
     name: 'Starter Crate',
-    icon: '📦',
+    img: 'store/crates/starter_crate.png',
+    delay: 'anim-d1',
     desc: 'A light advantage to start a fresh season.',
     contents: ['1,000 KFC', '1× Leverage Token (2×)'],
     price: 1.00,
@@ -382,7 +402,8 @@ const CRATES = [
   {
     id: 'booster_crate',
     name: 'Booster Crate',
-    icon: '🎁',
+    img: 'store/crates/booster_crate.png',
+    delay: 'anim-d2',
     desc: "Also known as 'success in a bottle' — this crate is an all-around steal.",
     contents: ['1,750 KFC', '1× Leverage Token (2×)'],
     price: 1.50,
@@ -390,7 +411,8 @@ const CRATES = [
   {
     id: 'value_crate',
     name: 'Value Crate',
-    icon: '🧰',
+    img: 'store/crates/value_crate.png',
+    delay: 'anim-d3',
     desc: 'For those who know what they\'re doing. This crate turns risk into reward.',
     contents: ['4,000 KFC', '2× Leverage Token (2×)'],
     price: 5.50,
@@ -398,7 +420,8 @@ const CRATES = [
   {
     id: 'elite_crate',
     name: 'Elite Crate',
-    icon: '💎',
+    img: 'store/crates/elite_crate.png',
+    delay: 'anim-d4',
     desc: 'Unlike the show, this is worth it. The Elite Crate is your best friend to win.',
     contents: ['8,000 KFC', '3× Leverage Token (2×)'],
     price: 7.50,
@@ -406,7 +429,8 @@ const CRATES = [
   {
     id: 'las_vegas_crate',
     name: 'Las Vegas Crate',
-    icon: '🎰',
+    img: 'store/crates/las_vegas_crate.png',
+    delay: 'anim-d5',
     desc: 'Living up to its name — the ultimate package, paving your way to victory.',
     contents: ['12,000 KFC', '2× Leverage Token (2×)', '1× Novak Power-Up (full session)'],
     price: 11.50,
@@ -417,7 +441,8 @@ const CURRENCY_PACKS = [
   {
     id: 'handful',
     name: 'Handful of Chips',
-    icon: '🪙',
+    img: 'store/currency packs/handful_of_chips.png',
+    delay: 'anim-d1',
     desc: 'A humble handful — just enough to keep the reels spinning and your luck sizzling.',
     contents: ['500 KFC'],
     price: 0.50,
@@ -425,7 +450,8 @@ const CURRENCY_PACKS = [
   {
     id: 'mini_bucket',
     name: 'Mini Bucket of Chips',
-    icon: '🪣',
+    img: 'store/currency packs/mini_bucket_of_chips.png',
+    delay: 'anim-d2',
     desc: 'Small in size, big on flavour — perfect for spicing up your next winning streak.',
     contents: ['1,100 KFC'],
     price: 1.00,
@@ -433,7 +459,8 @@ const CURRENCY_PACKS = [
   {
     id: 'bucket',
     name: 'Bucket of Chips',
-    icon: '🍗',
+    img: 'store/currency packs/bucket_of_chips.png',
+    delay: 'anim-d3',
     desc: 'A full Bucket overflowing with fortune — perfect for players hungry for value.',
     contents: ['3,500 KFC'],
     price: 3.00,
@@ -441,7 +468,8 @@ const CURRENCY_PACKS = [
   {
     id: 'barrel',
     name: 'Barrel of Chips',
-    icon: '🛢️',
+    img: 'store/currency packs/barrel_of_chips.png',
+    delay: 'anim-d4',
     desc: 'Big, bold, and built for players who like their bets served in XL portions.',
     contents: ['6,500 KFC'],
     price: 6.00,
@@ -449,7 +477,8 @@ const CURRENCY_PACKS = [
   {
     id: 'chest',
     name: 'Chest of Chips',
-    icon: '🎒',
+    img: 'store/currency packs/chest_of_chips.png',
+    delay: 'anim-d5',
     desc: 'Stuffed with treasure, swagger, and enough currency to turn heads at the table.',
     contents: ['8,500 KFC'],
     price: 8.00,
@@ -457,7 +486,8 @@ const CURRENCY_PACKS = [
   {
     id: 'vault',
     name: 'Vault of Chips',
-    icon: '🏦',
+    img: 'store/currency packs/vault_of_chips.png',
+    delay: 'anim-d6',
     desc: 'Where the real riches live — only the bold dare to feast.',
     contents: ['13,000 KFC'],
     price: 11.50,
@@ -513,7 +543,7 @@ function renderCartBody() {
   }
   body.innerHTML = items.map(({ product, qty }) => `
     <div class="cart-item">
-      <div class="cart-item-icon">${product.icon}</div>
+      <div class="cart-item-icon"><img src="${product.img}" style="width:32px;height:32px;object-fit:contain"></div>
       <div class="cart-item-info">
         <div class="cart-item-name">${product.name}</div>
         <div class="cart-item-price">CHF ${(product.price * qty).toFixed(2)}${qty > 1 ? ' (×' + qty + ')' : ''}</div>
@@ -595,7 +625,7 @@ function renderProducts(products, containerId) {
   const el = document.getElementById(containerId);
   el.innerHTML = products.map(p => `
     <div class="product-card">
-      <div class="product-icon">${p.icon}</div>
+      <div class="product-icon"><img src="${p.img}" alt="${p.name}" class="${p.delay}"></div>
       <div class="product-name">${p.name}</div>
       <div class="product-desc">${p.desc}</div>
       <div class="product-contents">
@@ -624,9 +654,9 @@ function switchTab(tab) {
 // 2. Email Services → your service ID
 // 3. Email Templates → your template ID
 // Template must contain: {{order_id}}, {{username}}, {{order_details}}, {{total_chf}}
-const EJS_PUBLIC_KEY  = 'FgkCtu3VJt0A2BBeC';
-const EJS_SERVICE_ID  = 'service_ov7ta7o';
-const EJS_TEMPLATE_ID = 'template_3c7trbe';
+const EJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
+const EJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
+const EJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
 
 // ── INIT ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

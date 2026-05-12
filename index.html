@@ -3397,10 +3397,12 @@ body.mp-bet-locked .all-sb-btn {
         <div class="help-card">
           <div class="help-card-title">Shoe Markets — Bet Any Time</div>
           <p>Short-window bets that reset each shoe. Examples: "Blackjack in the next 3 hands?", "Dealer busts 2+ times in the next 5 hands?". Each market shows a live tracker so you can follow progress. Odds are fixed at the moment you bet — what you see is what you get.</p>
+          <p style="margin-top:6px">Max open shoe market bets per shoe: <strong>4 standard / 8 Club Pass</strong> (across all shoe market types combined).</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Whole-Shoe Markets</div>
           <p>Bigger bets that run the length of a shoe: "Player wins 5 in a row this shoe?", "Dealer busts 15–17 times?". These lock once the shoe starts — bet before the first hand.</p>
+          <p style="margin-top:6px">Whole-shoe sub-cap: <strong>2 standard / 4 Club Pass</strong> (counts toward your overall shoe market limit).</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Season Markets</div>
@@ -3427,7 +3429,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">21 Club Pass Bonus</div>
-          <p>Pass holders earn 1.5× on all points. They also get 15 shoes per day (vs 5 for standard), 2 power-up slots per shoe, and access to a free daily power-up.</p>
+          <p>Pass holders earn 1.5× on all points. They also get 15 shoes per day (vs 5 for standard), 2 power-up slots per shoe, access to a free daily power-up, and higher shoe market bet caps (8 total / 4 whole-shoe vs 4 total / 2 whole-shoe for standard).</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">What to Spend On</div>
@@ -11673,8 +11675,9 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
-    // Shoe bet cap: 4 standard / 8 Club pass
+    // Shoe bet cap: 4 total standard / 8 total Club pass; whole-shoe sub-cap: 2 standard / 4 Club pass
     const _shoeBetMax = G._clubPass ? 8 : 4;
+    const _wholeShoeBetMax = G._clubPass ? 4 : 2;
     if(mkt.type === 'shoe'){
       const openShoeBets = _loadBets().filter(b => {
         if(b.payout !== null && b.payout !== undefined) return false;
@@ -11682,6 +11685,13 @@ const PM = (() => {
         return bm && bm.type === 'shoe';
       });
       if(openShoeBets.length >= _shoeBetMax){ notif('Max '+_shoeBetMax+' shoe market bets per shoe'); return; }
+      if(!_isWindowShoeType(mkt)){
+        const openWholeShoeBets = openShoeBets.filter(b => {
+          const bm = _markets.find(m => m.id === b.mktId);
+          return bm && !_isWindowShoeType(bm);
+        });
+        if(openWholeShoeBets.length >= _wholeShoeBetMax){ notif('Max '+_wholeShoeBetMax+' whole-shoe bets per shoe'); return; }
+      }
     }
     // End-of-shoe lockout for window markets: block when fewer than 15 hands remain
     if(mkt.type === 'shoe' && _isWindowShoeType(mkt)){

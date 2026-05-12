@@ -6742,7 +6742,7 @@ function clearBets(){
   _betHistory.length=0; // clear undo stack on full clear
   G.mainBet=0;
   SB_NAMES.forEach(n=>G.sideBets[n]=0);
-  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null;
+  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null; G._levFree=false;
   if(G._hand2Active){ clearHand2(); }
   updateBetPanel();   // updates bet circle + deal btn
   buildSideBets();
@@ -6887,7 +6887,7 @@ function toggleLev(key){
   }
   // Deactivate if already selected
   if(G.leverage===key){
-    G.leverage=null; G._levTargetHand=0;
+    G.leverage=null; G._levTargetHand=0; G._levFree=false;
     buildLevPanel(); updateBetPanel(); updateInventoryBar();
     return;
   }
@@ -6909,7 +6909,7 @@ function confirmLevHand(handIdx){
   notif('Blood Jester → Hand '+(handIdx+1)+' (2× multiplier)');
 }
 function cancelLevHand(){
-  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null;
+  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null; G._levFree=false;
   closeModal('lev-hand-modal');
   buildLevPanel(); updateBetPanel(); updateInventoryBar();
 }
@@ -7061,7 +7061,7 @@ function _redeemLev2x(){
   if(G.leverage==='2x'){notif('2× Token already active');return;}
   if(G.phase!=='bet'){notif('Must redeem before dealing');return;}
   if(!_spendPoints(PTS_COST.lev2x)){notif('Not enough points (need ⭐'+PTS_COST.lev2x+')');return;}
-  G.leverage='2x'; buildLevPanel(); updateBetPanel(); updateInventoryBar();
+  G.leverage='2x'; G._levFree=true; buildLevPanel(); updateBetPanel(); updateInventoryBar();
   sfx('buy'); notif('⭐ 2× Leverage Token activated');
 }
 
@@ -7234,7 +7234,7 @@ function deal(){
     notif('⭐ Side bets covered ('+fmtKFC(G.s.sMin)+' each — free)');
   }
   const _freeSBTotal = G._freeSBNames.reduce((a,n)=>a+(G.sideBets[n]||0),0);
-  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'?G.s.min*2:0)
+  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'&&!G._levFree?G.s.min*2:0)
     +((G._hand2Active&&(G.mainBet2||0)>=G.s.min)?(G.mainBet2+Object.values(G.sideBets2||{}).reduce((a,b)=>a+b,0)):0);
   if(G.balance<totalDeducted){notif('Not enough balance');return;}
   let puCost=0;
@@ -8116,7 +8116,7 @@ function settle(reason){
     if(b.label&&b.label.startsWith('Insurance')&&b.type==='warn') return acc+(b.pl||0); // insurance loss baked into preDealBal — include for display
     return acc;
   },0);
-  const levCost=G.leverage==='2x'?G.s.min*2:0; // 2× token cost (card leverages are free)
+  const levCost=(G.leverage==='2x'&&!G._levFree)?G.s.min*2:0; // 2× token cost (card leverages and pts-redeemed token are free)
   const totalPLForDisplay = mainPL + earlySBPL + sidePL + bonusPLDisplay - levCost;
   updateUI();
 
@@ -8698,7 +8698,7 @@ function closeResult(){
   // Also reset hand2 bets so they must be re-placed each round
   G.mainBet2=0;
   if(G.sideBets2) SB_NAMES.forEach(n=>G.sideBets2[n]=0);
-  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null;
+  G.leverage=null; G._levTargetHand=0; G._pendingLevKey=null; G._levFree=false;
   if(_autoSameBet&&G.lastMainBet>0){
     G.mainBet=Math.min(G.lastMainBet, G.s.max);
     SB_NAMES.forEach(n=>G.sideBets[n]=_clampSB(G.lastSideBets&&G.lastSideBets[n]));

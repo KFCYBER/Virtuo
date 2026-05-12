@@ -667,10 +667,20 @@ async function placeOrder() {
     btn.disabled = false;
   } catch (e) {
     msg.className = 'order-msg err';
-    msg.textContent = 'Failed to send — please contact staff directly.';
+    const detail = (e && (e.text || e.message || JSON.stringify(e))) || 'unknown error';
+    msg.textContent = 'Failed to send: ' + detail;
     btn.textContent = 'Place Order';
     btn.disabled = false;
   }
+}
+
+// ── PRODUCT LOOKUP MAP — avoids JSON-in-onclick escaping issues ───
+const PRODUCT_MAP = {};
+[...CRATES, ...CURRENCY_PACKS].forEach(p => { PRODUCT_MAP[p.id] = p; });
+
+function addToCartById(id) {
+  const p = PRODUCT_MAP[id];
+  if (p) addToCart(p);
 }
 
 // ── RENDER PRODUCTS ───────────────────────────────────────────────
@@ -688,7 +698,7 @@ function renderProducts(products, containerId) {
         <div class="product-price">
           CHF ${p.price.toFixed(2)}
         </div>
-        <button class="btn-add" onclick='addToCart(${JSON.stringify(p)})'>+ Add</button>
+        <button class="btn-add" onclick="addToCartById('${p.id}')">+ Add</button>
       </div>
     </div>
   `).join('');
@@ -707,9 +717,9 @@ function switchTab(tab) {
 // 2. Email Services → your service ID
 // 3. Email Templates → your template ID
 // Template must contain: {{order_id}}, {{username}}, {{order_details}}, {{total_chf}}
-const EJS_PUBLIC_KEY  = 'FgkCtu3VJt0A2BBeC';
-const EJS_SERVICE_ID  = 'service_ov7ta7o';
-const EJS_TEMPLATE_ID = 'template_3c7trbe';
+const EJS_PUBLIC_KEY  = 'YOUR_PUBLIC_KEY';
+const EJS_SERVICE_ID  = 'YOUR_SERVICE_ID';
+const EJS_TEMPLATE_ID = 'YOUR_TEMPLATE_ID';
 
 // ── INIT ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {

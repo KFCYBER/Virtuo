@@ -7,20 +7,8 @@
 <link rel="icon" type="image/png" href="KFC_LOGO.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
-<!-- EmailJS — fill in your public key below -->
+<!-- EmailJS -->
 <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js"></script>
-<script>
-  // ── EmailJS config ──────────────────────────────────────────────
-  // 1. Sign up at https://www.emailjs.com (free)
-  // 2. Add a Gmail service → copy the Service ID below
-  // 3. Create an email template with variables: {{order_id}}, {{username}}, {{order_details}}, {{total_chf}}
-  //    Copy the Template ID below
-  // 4. Go to Account → copy your Public Key below
-  const EJS_PUBLIC_KEY  = 'FgkCtu3VJt0A2BBeC';
-  const EJS_SERVICE_ID  = 'service_ov7ta7o';
-  const EJS_TEMPLATE_ID = 'template_3c7trbe';
-  emailjs.init(EJS_PUBLIC_KEY);
-</script>
 <style>
 :root {
   --bg:      #0A0B0D;
@@ -631,9 +619,33 @@ function switchTab(tab) {
   event.target.classList.add('active');
 }
 
+// ── EMAILJS CONFIG — replace with your real values ───────────────
+// 1. emailjs.com → Account → Public Key
+// 2. Email Services → your service ID
+// 3. Email Templates → your template ID
+// Template must contain: {{order_id}}, {{username}}, {{order_details}}, {{total_chf}}
+const EJS_PUBLIC_KEY  = 'FgkCtu3VJt0A2BBeC';
+const EJS_SERVICE_ID  = 'service_ov7ta7o';
+const EJS_TEMPLATE_ID = 'template_3c7trbe';
+
 // ── INIT ──────────────────────────────────────────────────────────
-renderProducts(CRATES, 'grid-crates');
-renderProducts(CURRENCY_PACKS, 'grid-currency');
+document.addEventListener('DOMContentLoaded', () => {
+  emailjs.init(EJS_PUBLIC_KEY);
+  renderProducts(CRATES, 'grid-crates');
+  renderProducts(CURRENCY_PACKS, 'grid-currency');
+
+  // Auto-fill username from the game session (same origin localStorage)
+  try {
+    const saved = localStorage.getItem('kfc_last_user') || '';
+    if (saved) {
+      const input = document.getElementById('checkout-username');
+      input.value = saved;
+      input.readOnly = true;
+      input.style.color = 'var(--muted2)';
+      input.title = 'Logged in as ' + saved;
+    }
+  } catch(e) {}
+});
 </script>
 </body>
 </html>

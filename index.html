@@ -11881,10 +11881,10 @@ const PM = (() => {
   }
 
   function _createRaceMarkets(players){
-    if(!players || players.length < 2) return;
+    if(!players || !players.length) return;
     MILESTONE_AMOUNTS.forEach(amount => {
       const eligible = players.filter(p => (p.balance||0) < amount && p.username && (p.username||'').toLowerCase()!=='creator');
-      if(eligible.length < 2) return;
+      if(eligible.length < 1) return;
       const eligTotal = eligible.reduce((s,p)=>s+(p.balance||0), 0);
       eligible.forEach(p => {
         const pName = p.username; if(!pName) return;
@@ -14250,6 +14250,8 @@ const MP2 = {
   <div class="pt-row"><span>🎁</span><span class="pt-val">1 free power-up/day</span></div>
   <div class="pt-row"><span>🌡️</span><span class="pt-val">Hot/cold shoe preview</span></div>
   <div class="pt-row"><span>🎨</span><span class="pt-val">Table colour toggle</span><span class="pt-sub">5 colours</span></div>
+  <div class="pt-row"><span>📊</span><span class="pt-val">8 shoe market bets/shoe</span><span class="pt-sub">standard: 4</span></div>
+  <div class="pt-row"><span>🔒</span><span class="pt-val">4 whole-shoe bets/shoe</span><span class="pt-sub">standard: 2</span></div>
 </div>
 <!-- LOYALTY POINTS TOOLTIP -->
 <div id="pts-tooltip">

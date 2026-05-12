@@ -108,7 +108,7 @@ body {
 /* ── PRODUCT GRID ── */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(3, 1fr);
   gap: 16px;
 }
 
@@ -302,12 +302,12 @@ body {
 }
 
 /* ── RESPONSIVE ── */
-@media (max-width: 600px) {
-  .product-grid { grid-template-columns: 1fr 1fr; }
-  .drawer { width: 100vw; }
+@media (max-width: 900px) {
+  .product-grid { grid-template-columns: repeat(2, 1fr); }
 }
-@media (max-width: 400px) {
+@media (max-width: 560px) {
   .product-grid { grid-template-columns: 1fr; }
+  .drawer { width: 100vw; }
 }
 </style>
 </head>
@@ -321,7 +321,7 @@ body {
     <span class="topbar-sub">IN-GAME PURCHASES</span>
   </div>
   <div class="topbar-right">
-    <a href="index_v2.html" class="btn-ghost">← Back to Game</a>
+    <a href="index.html" class="btn-ghost">← Back to Game</a>
   </div>
 </div>
 
@@ -340,22 +340,31 @@ body {
   <div class="section active" id="tab-crates">
     <div class="section-note">
       Crates are bonus chests that provide players with a gambling advantage. Various items appear in different crates, from chips to tokens, etc. (always may be more in the future).<br>
-      <strong style="color:var(--white)">Accepted currencies:</strong> CHF (Twint &amp; Cash) · Velo Snus VS (Level 3 &amp; 4 accepted)
+      <strong style="color:var(--white)">Accepted currency:</strong> CHF (Twint &amp; Cash)
     </div>
     <div class="product-grid" id="grid-crates"></div>
-    <div class="disclaimer">⚠ Crates can only be purchased with CHF (Twint &amp; Cash accepted) or Velo Snus VS (Level 3 &amp; 4 accepted).</div>
+    <div class="disclaimer">⚠ Crates can only be purchased with CHF (Twint &amp; Cash accepted).</div>
   </div>
 
   <!-- CURRENCY PACKS -->
   <div class="section" id="tab-currency">
     <div class="section-note">
       Currency packs top up your KFC balance directly.<br>
-      <strong style="color:var(--white)">Accepted currencies:</strong> CHF (Twint &amp; Cash) · Velo Snus VS (Level 3 &amp; 4 accepted)
+      <strong style="color:var(--white)">Accepted currency:</strong> CHF (Twint &amp; Cash)
     </div>
     <div class="product-grid" id="grid-currency"></div>
-    <div class="disclaimer">⚠ Currency packs can only be purchased with CHF (Twint &amp; Cash accepted) or Velo Snus VS (Level 3 &amp; 4 accepted).</div>
+    <div class="disclaimer">⚠ Currency packs can only be purchased with CHF (Twint &amp; Cash accepted).</div>
   </div>
 </div>
+
+<!-- FOOTER -->
+<footer style="border-top:1px solid var(--line);margin-top:60px;padding:40px 20px;text-align:center;background:var(--bg1)">
+  <img src="KFC_LOGO.png" alt="KFC Logo" style="height:48px;margin-bottom:14px;opacity:0.9">
+  <div style="font-size:13px;letter-spacing:4px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:4px">Kimmo's Fabulous Casino</div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:2px;text-transform:uppercase">Premium Gambling &amp; Entertainment</div>
+  <div style="font-family:var(--mono);font-size:10px;color:var(--muted2);font-style:italic;margin-bottom:16px">"Where the odds are ever in your favor"</div>
+  <a href="mailto:kfcstaffco@gmail.com" style="font-family:var(--mono);font-size:10px;color:var(--muted);text-decoration:none;letter-spacing:1px">kfcstaffco@gmail.com</a>
+</footer>
 
 <!-- CART FAB -->
 <button id="cart-fab" onclick="openCart()" style="display:none">

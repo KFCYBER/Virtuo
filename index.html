@@ -8925,17 +8925,18 @@ function buildStakeList(){
     const thisIdx=STAKE_ORDER.indexOf(key);
     const isDowngrade=thisIdx<curIdx;
     const tooManySteps=isDowngrade&&(curIdx-thisIdx>1);
-    const peak=_stakePeaks[G.stake]||G.balance;
-    const belowHalfPeak=G.balance<=peak*0.5;
-    const downgradeBlocked=isDowngrade&&(!belowHalfPeak||tooManySteps);
+    const _loginBal=G._walletBalAtLogin||G.balance;
+    const _stakeFloor=Math.max(0,(G.sessionStart||G.balance)-_loginBal*0.5);
+    const belowHalfTotal=G.balance<=_stakeFloor;
+    const downgradeBlocked=isDowngrade&&(!belowHalfTotal||tooManySteps);
     if(canAffordSt && !downgradeBlocked){
       el.onclick=()=>{selectStake(key);};
     } else if(tooManySteps){
       el.style.opacity='0.35'; el.style.cursor='not-allowed';
       el.title='Can only drop one stake level at a time';
-    } else if(isDowngrade && !belowHalfPeak){
+    } else if(isDowngrade && !belowHalfTotal){
       el.style.opacity='0.35'; el.style.cursor='not-allowed';
-      el.title='Must drop below '+fmtKFC(Math.ceil(peak*0.5))+' (50% of your '+fmtKFC(peak)+' '+G.s.label+' peak)';
+      el.title='Must lose 50% of total balance from this stake (need below '+fmtKFC(Math.ceil(_stakeFloor))+') to step down';
     } else {
       el.style.opacity='0.4'; el.style.cursor='not-allowed';
       el.title='Need '+fmt(s.min)+' KFC';
@@ -8956,10 +8957,11 @@ function selectStake(key){
       notif('Can only drop one stake level at a time');
       return;
     }
-    // Must have lost >50% of peak balance at current stake
-    const peak = _stakePeaks[G.stake] || G.balance;
-    if(G.balance > peak * 0.5){
-      notif('Need to drop below '+fmtKFC(Math.ceil(peak*0.5))+' to leave '+G.s.label+' (50% of your '+fmtKFC(peak)+' peak)');
+    // Must have lost 50% of total wallet balance from this stake's entry point
+    const _loginBal = G._walletBalAtLogin || G.balance;
+    const _stakeFloor = Math.max(0, (G.sessionStart||G.balance) - _loginBal * 0.5);
+    if(G.balance > _stakeFloor){
+      notif('Must lose 50% of total balance from this stake — need below '+fmtKFC(Math.ceil(_stakeFloor)));
       return;
     }
   }
@@ -11111,13 +11113,11 @@ const PM = (() => {
     const strip = document.getElementById('pm-hot-strip');
     if(!area || !strip) return;
 
-    // Net active volume: gross betVolume minus any amounts the current player has cashed out.
-    // Other players' cashouts aren't tracked locally so they stay in the number.
+    // Net active volume: gross betVolume minus early cash-outs by this player only.
     const myBets = _loadBets();
-    const myCashedOut = {}; // mktId → total cashed-out amount by this player
+    const myCashedOut = {}; // mktId → total early-cashed-out stake by this player
     myBets.forEach(b => {
-      if(b.payout !== null && b.payout !== undefined)
-        myCashedOut[b.mktId] = (myCashedOut[b.mktId] || 0) + b.amount;
+      if(b.cashoutEarly) myCashedOut[b.mktId] = (myCashedOut[b.mktId] || 0) + b.amount;
     });
     const netPool = m => Math.max(0, (m.betVolume || 0) - (myCashedOut[m.id] || 0));
 
@@ -12460,6 +12460,9 @@ const PM = (() => {
               _markets.push(sm);
             }
           } else if(sm.status==='settled' && local.status==='open'){
+            // Don't overwrite a locally-respawned race market — if the local open market was
+            // created after GAS says it was settled, it's a "next to reach" respawn, not a stale open.
+            if(sm.type === 'race' && (local.createdAt||0) > (sm.settledAt||0)) return;
             // Block false NO settlements from old prune code overwriting a live open market
             if(sm.result === 'NO' && sm.condition && sm.condition.type === 'bankroll_milestone'){
               const _sp = sm.condition.params.week || (sm.condition.params.date||'').slice(0,10);
@@ -12916,9 +12919,10 @@ const PM = (() => {
     bet.payout       = payout;
     bet.cashoutEarly = true;
     bet.cashoutOdds  = curOdds;
-    // Remove stake from pool (floor at house pool to keep liquidity)
+    // Remove stake from pool and betVolume (floor at house pool to keep liquidity)
     const _hp2 = mkt.housePools||{};
     mkt.pools[outcome] = Math.max((_hp2[outcome]||0), mkt.pools[outcome] - bet.amount);
+    mkt.betVolume = Math.max(0, (mkt.betVolume || 0) - bet.amount);
     G.balance += payout;
     updateUI();
     _saveBets(bets);

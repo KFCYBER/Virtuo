@@ -3828,6 +3828,7 @@ const G = {
   url:'', pins:{},
   preDealBal:0, lastMainBet:0, lastSideBets:{}, lastMainBet2:0, lastSideBets2:{}, cashedOut:false, _atCashout:false, _sessionActive:false, insuranceBet:0, _freeDoubleBet:0, _freeDoubleHand:-1,
   _insuranceToken:false, // loyalty: covers half bet on bust (stacks with Krueger for full)
+  _inventory:{ leverage:0, insurance:0, power_ups:[] }, // store-purchased items pending use
   _allSBNextHand:false,  // loyalty: auto-place sMin on all 4 side bets next deal
   _freeSBNames:[],       // SBs placed free by the all-SB token this hand
   _bonusPayouts:[], // [{label, pl}] — instant bonus card payouts to show in result
@@ -4861,6 +4862,19 @@ function finaliseLogin(stakeKey){
   G._clubPass=!!(_pendingLogin.clubPass); // carry through from auth response
   // Load loyalty points from sheet (authoritative) — falls back to localStorage if offline
   _loadPtsFromLogin(_pendingLogin.loyaltyPoints||0);
+  // Load store inventory
+  const _inv = _pendingLogin.inventory || {};
+  G._inventory = {
+    leverage:   parseInt(_inv.leverage)  || 0,
+    insurance:  parseInt(_inv.insurance) || 0,
+    power_ups:  Array.isArray(_inv.power_ups) ? [..._inv.power_ups] : [],
+  };
+  // Apply KFC credit from approved store orders and immediately sync balance
+  const _kfcCredit = parseInt(_pendingLogin.kfcCredit) || 0;
+  if(_kfcCredit > 0){
+    _pendingLogin.balance = (_pendingLogin.balance||0) + _kfcCredit;
+    _pendingLogin.totalBalance = (_pendingLogin.totalBalance||_pendingLogin.balance);
+  }
   G._sessionActive=false;
   // Record who just logged in — used to prevent auto-restoring a different player's session on reload
   localStorage.setItem('kfc_last_user', (G.username||'').toLowerCase());
@@ -4876,8 +4890,12 @@ function finaliseLogin(stakeKey){
     }catch(e){ localStorage.removeItem(SESSION_KEY); }
   }
   document.getElementById('login').style.display='none';
+  const _loginDeliveries = _pendingLogin.deliveries||[];
+  const _loginKfcCredit  = parseInt(_pendingLogin.kfcCredit)||0;
   openApp(_pendingLogin.name, _pendingLogin.balance);
   _pendingLogin=null; _selectedStakeKey=null;
+  // Show delivery notification if items arrived from the store
+  if(_loginDeliveries.length > 0) setTimeout(()=>_showDeliveryModal(_loginDeliveries, _loginKfcCredit), 900);
 }
 
 
@@ -5599,6 +5617,8 @@ function _updateCreatorBtn(){
   btn.style.color = live ? '#ff5050' : '#64c8ff';
 }
 
+function _inventoryJson(){ try{ return JSON.stringify(G._inventory||{leverage:0,insurance:0,power_ups:[]}); }catch(e){ return '{}'; } }
+
 // Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
 // Fires immediately on bet commit (deal/double/split) — closes the mid-hand reload exploit
 // where a player clears localStorage and logs in to get back the stale GAS balance.
@@ -5613,6 +5633,7 @@ async function _syncCommitBalance(){
     date:new Date().toISOString(),
     stake:G.s?G.s.label:'auto',
     pin:G._cachedPin||'',
+    inventory:_inventoryJson(),
     autosave:'true'
   });
   try{
@@ -5640,6 +5661,7 @@ async function _autoSaveToSheet(){
     date:new Date().toISOString(),
     stake:G.s?G.s.label:'auto',
     pin:G._cachedPin||'',
+    inventory:_inventoryJson(),
     autosave:'true'
   });
   try{
@@ -6609,6 +6631,37 @@ function _topUpMax(){
   return Math.max(0, walletAtLogin - originalBuyIn - (G._topUpTotal || 0));
 }
 
+// ── STORE DELIVERY NOTIFICATION ──────────────────────────────────
+function _showDeliveryModal(deliveries, kfcCredit){
+  const existing = document.getElementById('delivery-modal');
+  if(existing) existing.remove();
+
+  const ICONS = { kfc:'🪙', leverage_token:'🎰', insurance_token:'🛡️', power_up:'⚡' };
+  const rows = deliveries.map(d=>{
+    const icon = ICONS[d.type]||'📦';
+    const qty  = d.qty > 1 ? d.qty+'× ' : '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)">
+      <span style="font-size:20px">${icon}</span>
+      <span style="font-family:var(--mono);font-size:11px;color:var(--white)">${qty}${d.name}</span>
+    </div>`;
+  }).join('');
+
+  const modal = document.createElement('div');
+  modal.id = 'delivery-modal';
+  modal.style.cssText = 'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.75)';
+  modal.innerHTML = `
+    <div style="background:var(--bg1);border:1px solid var(--gold-lo);border-radius:4px;padding:28px 28px 22px;max-width:340px;width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.6)">
+      <div style="font-size:10px;letter-spacing:4px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:4px">📦 Store Delivery</div>
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:16px">Items from your order have arrived</div>
+      <div style="margin-bottom:${kfcCredit>0?'0':'14px'}">${rows}</div>
+      ${kfcCredit>0?`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;margin-bottom:14px;border-bottom:1px solid var(--line)"><span style="font-size:20px">💰</span><span style="font-family:var(--mono);font-size:11px;color:var(--green)">+${kfcCredit.toLocaleString()} KFC added to balance</span></div>`:''}
+      <button onclick="document.getElementById('delivery-modal').remove()" style="width:100%;background:var(--gold);color:var(--bg);font-family:var(--sans);font-size:11px;font-weight:800;letter-spacing:3px;text-transform:uppercase;border:none;cursor:pointer;padding:10px;border-radius:2px">Collect</button>
+    </div>`;
+  document.body.appendChild(modal);
+  // Trigger immediate balance sync so KFC credit is persisted
+  if(kfcCredit > 0) setTimeout(attemptSync, 1500);
+}
+
 function showTopUp(){
   if(G.phase!=='bet'){ notif('Finish the current hand first'); return; }
   const _maxTopUp = _topUpMax();
@@ -6803,7 +6856,9 @@ function buildLevPanel(){
   c.innerHTML='';
   if(!['highroller','champion'].includes(G.stake)){
     const cost=G.s.min*3;
-    addItemBtn(c,'2× Token',fmtKFC(cost),'lev-2x',G.leverage==='2x','',()=>toggleLev('2x'));
+    const invLev=(G._inventory&&G._inventory.leverage||0);
+    const levSub=G.leverage==='2x'?'Active — next hand':invLev>0?'FREE (store) · '+invLev+' owned':fmtKFC(cost);
+    addItemBtn(c,'2× Token',levSub,'lev-2x',G.leverage==='2x','',()=>toggleLev('2x'));
   }
   G.levCards.forEach((lc,i)=>{
     const label=lc==='blood'?'Blood Jester (2×)':'Bone Jester (3×)';
@@ -6834,6 +6889,13 @@ function toggleLev(key){
     G._pendingLevKey=key;
     openModal('lev-hand-modal');
     return;
+  }
+  // Use inventory token if available (free, no chip cost)
+  if(key==='2x' && G._inventory && G._inventory.leverage > 0){
+    G._levFree=true;
+    G._inventory.leverage--;
+  } else {
+    G._levFree=false;
   }
   G.leverage=key; G._levTargetHand=0;
   buildLevPanel(); updateBetPanel(); updateInventoryBar();
@@ -6876,10 +6938,11 @@ function buildPuPanel(){
     const minIdx=STAKE_ORDER.indexOf(pu.minStake);
     const available=stakeIdx>=minIdx;
     const owned=G.puOwned.has(pu.id);
+    const inInventory=(G._inventory&&G._inventory.power_ups||[]).includes(pu.id)&&!owned;
     const kfcCost=G.s.min*(pu.ratio||5);
     const ptsCost=PTS_COST[pu.id]||60;
     const isFreeNext=_freePuAvailable()&&!owned;
-    const costLabel=isFreeNext?'FREE (pass perk)':fmtKFC(kfcCost);
+    const costLabel=inInventory?'FREE (store)':isFreeNext?'FREE (pass perk)':fmtKFC(kfcCost);
     const subText=owned?'Active — expires end of shoe':pu.sub+' · '+costLabel;
     const itemDiv=document.createElement('div');
     addItemBtn(itemDiv,pu.label,subText,'pu-'+pu.id,owned,(!available&&!owned)?'locked':null,()=>buyPu(pu,kfcCost));
@@ -6939,11 +7002,15 @@ function buildPuPanel(){
   // 2× Leverage token (high-roller+ only)
   const levActive = G.leverage==='2x';
   const canLev = !['highroller','champion'].includes(G.stake) && !levActive;
-  _addRedemption('2× Leverage Token', levActive?'Active — next hand':'Double leverage — next hand',
+  const _invLevCount = G._inventory&&G._inventory.leverage||0;
+  const levLabel = levActive?'Active — next hand':_invLevCount>0?'FREE (store) · '+_invLevCount+' owned':'Double leverage — next hand';
+  _addRedemption('2× Leverage Token', levLabel,
     'pts-lev2x',PTS_COST.lev2x, ()=>_redeemLev2x(), !canLev || G.phase!=='bet', levActive);
 
   const insOwned = G._insuranceToken;
-  _addRedemption('Insurance Token', insOwned?'Active — bust protected':'Half-bet covered on bust',
+  const _invInsCount = G._inventory&&G._inventory.insurance||0;
+  const insLabel = insOwned?'Active — bust protected':_invInsCount>0?'FREE (store) · '+_invInsCount+' owned':'Half-bet covered on bust';
+  _addRedemption('Insurance Token', insLabel,
     'pts-insurance',PTS_COST.insurance, ()=>_redeemInsurance(), false, insOwned);
 
   const allSBOwned = G._allSBNextHand;
@@ -6969,6 +7036,14 @@ function buyPu(pu,cost){
   const stakeIdx=STAKE_ORDER.indexOf(G.stake); const minIdx=STAKE_ORDER.indexOf(pu.minStake);
   if(stakeIdx < minIdx){notif('Unlocks at '+pu.minStake.charAt(0).toUpperCase()+pu.minStake.slice(1)+' stakes');return;}
   if(G.phase==='play'||G.phase==='dealer'){notif('Power-ups must be bought before dealing');return;}
+
+  // Free from store inventory
+  if(G._inventory && G._inventory.power_ups && G._inventory.power_ups.includes(pu.id)){
+    G._inventory.power_ups = G._inventory.power_ups.filter(id => id !== pu.id);
+    G.puOwned.add(pu.id); updateUI(); buildPuPanel();
+    sfx('buy'); notif('📦 '+pu.label+' activated FREE (store delivery) — good for this shoe');
+    return;
+  }
 
   // Free daily power-up for pass players
   if(_freePuAvailable()){
@@ -7005,6 +7080,13 @@ function _redeemLev2x(){
 
 function _redeemInsurance(){
   if(G._insuranceToken){notif('Insurance Token already active');return;}
+  // Use store inventory token first (free)
+  if(G._inventory && G._inventory.insurance > 0){
+    G._inventory.insurance--;
+    G._insuranceToken=true; buildPuPanel();
+    sfx('buy'); notif('📦 Insurance Token active (store delivery) — half-bet covered on next bust');
+    return;
+  }
   if(!_spendPoints(PTS_COST.insurance)){notif('Not enough points (need ⭐'+PTS_COST.insurance+')');return;}
   G._insuranceToken=true; buildPuPanel();
   sfx('buy'); notif('⭐ Insurance Token active — half-bet covered on next bust'+(G.kruegerOn[0]||G.kruegerOn[1]?' (+Krueger = full cover)':''));

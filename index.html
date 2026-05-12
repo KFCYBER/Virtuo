@@ -5669,7 +5669,14 @@ async function _syncCommitBalance(){
     pin:G._cachedPin||'',
     autosave:'true'
   });
-  try{ fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'}); }catch(e){}
+  try{
+    const _resp=await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
+    const _data=await _resp.json().catch(()=>({}));
+    // GAS confirmed the committed balance — betlock no longer needed to guard replay
+    if(_data.ok||typeof _data.balance==='number'){
+      try{ localStorage.removeItem('kfc_betlock_'+(G.username||'').toLowerCase()); }catch(e){}
+    }
+  }catch(e){}
 }
 
 // Uses autosave=true so GAS skips TX row and games++ increment.
@@ -7121,7 +7128,7 @@ function _redeemExtraShoe(){
     G.puOwned.clear(); G.puPending.clear();
     G.levCards=[]; G._levCardsPending=[];
     buildPuPanel(); buildLevPanel();
-    if(typeof PM!=='undefined'){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(),0); }
+    if(typeof PM!=='undefined' && !G.mpMode){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(),0); }
     setTimeout(()=>_earlyShoePreview(),800);
   }
   buildPuPanel();
@@ -7569,8 +7576,7 @@ function hit(){
       notif(lbl+' — +'+fmtKFC(ins));
       G.kruegerOn[G.cur]=false; G._insuranceToken=false;
     }
-    if(G.desertOn[G.cur]){G.desertOn[G.cur]=false;advOrEnd('desert_push');return;}
-    advOrEnd('bust');
+    advOrEnd('bust'); // desertOn preserved — settleHand checks G.desertOn[hi] for push
   } else if(v===21){
     // If stamped card is active, let player boost their bet before the hand ends
     const _sActive21 = G.cur===1 ? G.stampedOn2 : G.stampedOn;
@@ -7635,6 +7641,23 @@ function dbl(){
   // Jester replacement handled inside drawIntoHand — no need for manual check
   renderAll();
   if(hv(h)===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; notif('SAFETY NET — PUSH'); advOrEnd('safety'); return; }
+  if(isBust(h)){
+    sfx('bust');
+    _playBustAnimation(G.cur);
+    if(G.kruegerOn[G.cur]||G._insuranceToken){
+      const _kBet=(G.cur===1&&G._hand2Active)?(G.mainBet2||0):G.mainBet;
+      const hasKrueger=G.kruegerOn[G.cur]; const hasToken=G._insuranceToken;
+      const coverPct=(hasKrueger&&hasToken)?1:0.5;
+      const ins=Math.floor(_kBet*coverPct);
+      G.preDealBal+=ins; G.balance+=ins; updateUI();
+      const lbl=hasKrueger&&hasToken?'Full bust cover (Krueger+Token)':hasKrueger?'Krueger — bust insurance':'Insurance Token';
+      G._bonusPayouts.push({label:lbl+(G.cur===1?' (H2)':''),pl:ins,type:'gain'});
+      notif(lbl+' — +'+fmtKFC(ins));
+      G.kruegerOn[G.cur]=false; G._insuranceToken=false;
+    }
+    advOrEnd('bust'); // desertOn preserved — settleHand checks G.desertOn[hi] for push
+    return;
+  }
   advOrEnd();
 }
 
@@ -7927,6 +7950,7 @@ function settle(reason){
     G.insuranceBet=0;
   }
   let mainPL=0; let detail='';
+  let _desertFired=false; // true if desert protection applied on any hand this settlement
 
   // Helper to update an existing bonus payout entry by label prefix
   function updateBonusEntry(prefix, updates){
@@ -7945,6 +7969,7 @@ function settle(reason){
       : (_isHand2Seat ? G.mainBet2 : G.mainBet);
     const lm=getLevMult(hi);
     let w=0;
+    let _thisDesert=false; // true if desert fired as protection on this hand
     if(reason==='surrender'){
       w=-Math.floor(_betForHand/2); detail='Surrender — half bet returned';
     }
@@ -7958,7 +7983,7 @@ function settle(reason){
       else if(db){ w=_betForHand*lm; const levDesc=lm>1?(G.leverage.startsWith('c')?' ('+lm+'× free card)':' ('+lm+'× token)'):''; detail='Dealer Bust'+levDesc; }
       else if(pv>dv){ w=_betForHand*lm; const levDescW=lm>1?(G.leverage.startsWith('c')?' ('+lm+'× card)':' ('+lm+'× token)'):''; detail=`${pv} vs ${dv}`+levDescW; }
       else if(pv===dv){ w=0; detail='Push'; }
-      else{ if(G.desertOn[hi]){w=0;detail='Desert Card — Protected';}else{w=-_betForHand;detail=`${pv} vs ${dv}`;} }
+      else{ if(G.desertOn[hi]){w=0;detail='Desert Card — Protected';_desertFired=true;_thisDesert=true;}else{w=-_betForHand;detail=`${pv} vs ${dv}`;} }
     }
     else if(reason==='desert_push'){w=0;detail='Desert Card — Push';}
     else if(G.safetyTrigger && hi===G.safetyTriggerHand){
@@ -7966,10 +7991,12 @@ function settle(reason){
       w=0; detail='Safety Net — Push';
     }
     else if(pb)                    {
-      // If free leverage card: only lose original stake (leverage was free)
-      const freeLev=G.leverage&&G.leverage.startsWith('c');
-      w=-_betForHand; // leverage card: lose full stake on bust
-      detail='Bust'+(freeLev?' [Lev card — lose stake only]':'');
+      if(G.desertOn[hi]){w=0;detail='Desert Card — Protected (bust)';_desertFired=true;_thisDesert=true;}
+      else{
+        const freeLev=G.leverage&&G.leverage.startsWith('c');
+        w=-_betForHand;
+        detail='Bust'+(freeLev?' [Lev card — lose stake only]':'');
+      }
     }
     else if(reason==='player_bj')  {const _sOn=G.steelOn[hi]||false;const r=G.puOwned.has('novak')||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':''}`;}
     else if(reason==='dealer_bj'){
@@ -7993,18 +8020,17 @@ function settle(reason){
     }
     else if(pv===dv)               {w=0;detail='Push';}
     else{
-      // Desert card: protect against dealer win too
-      if(G.desertOn[hi]){w=0;detail='Desert Card — Protected';}
+      // Desert card: protect against dealer win
+      if(G.desertOn[hi]){w=0;detail='Desert Card — Protected';_desertFired=true;_thisDesert=true;}
       else{
-        // If free leverage card: only lose original stake
         const freeLev2=G.leverage&&G.leverage.startsWith('c');
         w=-_betForHand;
-        detail=`${pv} vs ${dv}`; // leverage card: lose full stake
+        detail=`${pv} vs ${dv}`;
       }
     }
     // Dealer Jester: dealer collects on wins AND pushes (not bust, not player BJ, not special protected pushes)
     const _safetyProtected = reason==='safety' && hi===(G.safetyTriggerHand||0);
-    const _djProtected=reason==='player_bj'||(pbj&&reason==='normal')||reason==='push_guard'||_safetyProtected||reason==='desert_push';
+    const _djProtected=reason==='player_bj'||(pbj&&reason==='normal')||reason==='push_guard'||_safetyProtected||_thisDesert;
     if(G.dealerJester&&!db&&w>=0&&!_djProtected){w=-_betForHand;detail+=' [Dealer Jester]';}
     // Free double-down cap: on loss, player only loses their original stake (pre-double)
     const _freeDoubleAppliesToHand=G._freeDoubleBet>0&&(G.splits===0||G._freeDoubleHand===hi);
@@ -8029,7 +8055,7 @@ function settle(reason){
     updateBonusEntry('Plague',{label:'Plague Jester — drawn (no win to take)',type:'info'});
   }
   // Resolve desert outcome
-  if(reason==='desert_push'){
+  if(_desertFired){
     updateBonusEntry('Desert',{label:'Desert Card — saved (push)',type:'gain'});
   } else if(G.desertOn[0]||G.desertOn[1]){
     updateBonusEntry('Desert',{label:'Desert Card — not triggered',type:'info'});
@@ -8723,13 +8749,13 @@ function closeResult(){
     const _sw=_shoeLog.filter(e=>e.pl>0).length, _sb=_shoeLog.filter(e=>e.bj).length;
     notif('⭐ +'+_shoeEarned+' points ('+_shoeHandCount+'h · '+_sw+'w · '+_sb+'bj)');
     _shoeLog = []; _shoeHandCount = 0;
-    if(typeof PM !== 'undefined') PM.onShoeEnd();
+    if(typeof PM !== 'undefined' && !G.mpMode) PM.onShoeEnd();
     G.deck=buildShoe();
     G.puOwned.clear();
     G.puPending.clear();
     G.levCards=[]; G._levCardsPending=[];
     buildPuPanel(); buildLevPanel();
-    if(typeof PM !== 'undefined') setTimeout(()=>PM.onShoeNew(), 0);
+    if(typeof PM !== 'undefined' && !G.mpMode) setTimeout(()=>PM.onShoeNew(), 0);
     const rem=_shoesRemaining();
     notif('New shoe — '+rem+' shoe'+(rem===1?'':'s')+' remaining today');
     setTimeout(()=>_earlyShoePreview(), 800); // pass players see hot/cold before first bet
@@ -8742,7 +8768,7 @@ function closeResult(){
     G.puPending.clear();
     G.levCards=[]; G._levCardsPending=[]; // Jester cards expire at end of shoe
     buildPuPanel();
-    if(typeof PM !== 'undefined'){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(), 0); }
+    if(typeof PM !== 'undefined' && !G.mpMode){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(), 0); }
     notif('New shoe — power-ups and jester cards reset');
     setTimeout(()=>_earlyShoePreview(), 800);
   }
@@ -10930,7 +10956,7 @@ const PM = (() => {
       const pushPerHand = Math.min(0.14, Math.max(0.06, 0.07 + (tens/tot) * 0.10));
       const needed = Math.max(0, (condition.params.count||2) - _pmShoePushes);
       if(needed <= 0) return 99;
-      const handsLeft = Math.min(condition.params.hands||8, Math.floor(tot/6));
+      const handsLeft = Math.min(condition.params.hands||5, Math.floor(tot/6));
       if(handsLeft < needed) return 4;
       let p = 0;
       for(let k=needed; k<=Math.min(handsLeft,25); k++) p += _binom(handsLeft, k, pushPerHand);
@@ -11171,6 +11197,8 @@ const PM = (() => {
     const raceSect = document.getElementById('pm-race-section');
     const seasonEl = document.getElementById('pm-season-list');
     const shoeEl   = document.getElementById('pm-shoe-list');
+    const shoeCol  = document.getElementById('pm-shoe-col');
+    if(shoeCol) shoeCol.style.display = G.mpMode ? 'none' : '';
     const portPane = document.getElementById('pm-pane-portfolio');
 
     _renderHotMarkets();
@@ -11185,7 +11213,7 @@ const PM = (() => {
         'dealer_no_bust_window': [0, 4], 'cold_dealer_window':   [0, 5],
         'quick_bj_window':       [1, 3], 'natural_bj':           [1, 8],
         'no_loss_window':        [2, 3], 'majority_wins_window': [2, 5], 'win_streak_window': [2, 8],
-        'push_streak':           [3, 8], 'comeback_window':      [3, 5],
+        'push_streak':           [3, 5], 'comeback_window':      [3, 5],
       };
       const sortedWindow = [...windowMkts].sort((a, b) => {
         const [ag, as] = _WO[a.condition && a.condition.type] || [9, 9];
@@ -11516,7 +11544,7 @@ const PM = (() => {
       return `<div class="pm-tracker">🃏 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; BJs this shoe: <b>${_pmShoeBJCount}</b></div>`;
     }
     if(c.type === 'push_streak'){
-      const total = c.params.hands || 8;
+      const total = c.params.hands || 5;
       const need  = c.params.count || 2;
       const got   = mkt._pushCount || 0;
       return `<div class="pm-tracker">🤝 Window: ${win(c.params.startHand, total)} hands &nbsp;·&nbsp; Pushes: <b>${got}</b>/<b>${need}</b></div>`;
@@ -11667,6 +11695,9 @@ const PM = (() => {
         return bm && bm.type === 'shoe' && _isWindowShoeType(bm);
       });
       if(openWindowBets.length >= 2){ notif('Max 2 open next-N-hands positions per shoe'); return; }
+      // End-of-shoe lockout: block new bets when fewer than 15 hands remain
+      const _shoeHandsLeft = Math.floor((G.deck ? G.deck.filter(x=>!x.cutCard).length : 0) / 6);
+      if(_shoeHandsLeft < 15){ notif('Shoe too close to end — next-N-hands bets locked'); return; }
     }
 
     // Lock the BASE payout at bet time — stake ×10 bonus applied dynamically at settlement
@@ -11821,7 +11852,7 @@ const PM = (() => {
       _markets.push(_yn(r.desc, {type:'dealer_bust_range', params:{min:r.min, max:r.max}}));
     });
     _markets.push(_yn('Natural Blackjack in the next 8 hands?',         {type:'natural_bj',          params:{hands:8,  startHand:0}}));
-    _markets.push(_yn('2+ ties (push) in the next 8 hands?',            {type:'push_streak',         params:{count:2,  hands:8,  startHand:0}}));
+    _markets.push(_yn('2+ ties (push) in the next 5 hands?',            {type:'push_streak',         params:{count:2,  hands:5,  startHand:0}}));
     _markets.push(_yn('Player wins 3 in a row in the next 8 hands?',    {type:'win_streak_window',   params:{streak:3, hands:8,  startHand:0}}));
     _markets.push(_yn('Player wins 5 hands in a row this shoe?',        {type:'player_hot_streak',   params:{streak:5}}));
     _markets.push(_yn('Two consecutive blackjacks this shoe?',          {type:'consec_bj',           params:{count:2}}));
@@ -11942,7 +11973,7 @@ const PM = (() => {
         if(m._pushCount >= (c.params.count||2)){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
         const handsInWindow = _pmShoeHands - (c.params.startHand||0);
         const needed = (c.params.count||2) - (m._pushCount||0);
-        if(handsInWindow >= (c.params.hands||8) || handsLeft < needed){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
+        if(handsInWindow >= (c.params.hands||5) || handsLeft < needed){ settle(m.id,'NO'); _scheduleWindowRespawn(); }
       }
       if(c.type === 'player_hot_streak'){
         if(_pmShoeConsec >= (c.params.streak||5)){ settle(m.id,'YES'); return; }
@@ -12049,8 +12080,9 @@ const PM = (() => {
       changed = true;
     }
     if(!hasPushStr){
-      const cond = {type:'push_streak', params:{count:2, hands:winHands, startHand:_pmShoeHands}};
-      const m = _makeMarket('shoe', '2+ ties (push) in the next '+winHands+' hands?', cond, _deckProb(cond)/100);
+      const _psHands = Math.min(5, handsLeft);
+      const cond = {type:'push_streak', params:{count:2, hands:_psHands, startHand:_pmShoeHands}};
+      const m = _makeMarket('shoe', '2+ ties (push) in the next '+_psHands+' hands?', cond, _deckProb(cond)/100);
       _markets.push(m);
       changed = true;
     }
@@ -12124,7 +12156,18 @@ const PM = (() => {
           raceSettled = true;
         }
       });
-      if(raceSettled){ _saveMarkets(); render(); }
+      if(raceSettled){
+        _saveMarkets(); render();
+        // Immediately spawn next-tier race and milestone markets so the player can
+        // bet on the next milestone right away without waiting for a leaderboard poll.
+        if(_lastPlayers && _lastPlayers.length){
+          const _me = _lastPlayers.find(p => (p.username||'').toLowerCase() === myUserLower);
+          if(_me) _me.balance = G.balance;
+          _createRaceMarkets(_lastPlayers);
+          _createPlayerMilestoneMarkets(_lastPlayers);
+          render();
+        }
+      }
     }
   }
 
@@ -13189,7 +13232,7 @@ const PM = (() => {
         });
         _backfilled = true;
       }
-      if(!_existTypes.has('push_streak'))            { _markets.push(_bf('2+ ties (push) in the next 8 hands?',{type:'push_streak',params:{count:2,hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
+      if(!_existTypes.has('push_streak'))            { _markets.push(_bf('2+ ties (push) in the next 5 hands?',{type:'push_streak',params:{count:2,hands:5,startHand:_pmShoeHands}})); _backfilled=true; }
       if(!_existTypes.has('player_hot_streak'))      { _markets.push(_bf('Player wins 5 hands in a row this shoe?',{type:'player_hot_streak',params:{streak:5}})); _backfilled=true; }
       if(!_existTypes.has('consec_bj'))              { _markets.push(_bf('Two consecutive blackjacks this shoe?',{type:'consec_bj',params:{count:2}})); _backfilled=true; }
       if(!_existTypes.has('natural_bj'))             { _markets.push(_bf('Natural Blackjack in the next 8 hands?',{type:'natural_bj',params:{hands:8,startHand:_pmShoeHands}})); _backfilled=true; }
@@ -14281,7 +14324,7 @@ const MP2 = {
           <div class="pm-section-title">Milestone Markets</div>
           <div id="pm-season-list"><div class="pm-empty">Loading…</div></div>
         </div>
-        <div>
+        <div id="pm-shoe-col">
           <div class="pm-section-title">Shoe Markets</div>
           <div id="pm-shoe-list"><div class="pm-empty">Loading…</div></div>
         </div>

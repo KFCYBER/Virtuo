@@ -3397,12 +3397,12 @@ body.mp-bet-locked .all-sb-btn {
         <div class="help-card">
           <div class="help-card-title">Shoe Markets — Bet Any Time</div>
           <p>Short-window bets that reset each shoe. Examples: "Blackjack in the next 3 hands?", "Dealer busts 2+ times in the next 5 hands?". Each market shows a live tracker so you can follow progress. Odds are fixed at the moment you bet — what you see is what you get.</p>
-          <p style="margin-top:6px">Max open shoe market bets per shoe: <strong>4 standard / 8 Club Pass</strong> (across all shoe market types combined).</p>
+          <p style="margin-top:6px"><strong>Standard:</strong> 4 total per shoe, max 3 open at once, max 2 open next-N-hands at a time. <strong>Club Pass:</strong> 6 total per shoe, max 5 open at once, max 4 open next-N-hands at a time.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Whole-Shoe Markets</div>
           <p>Bigger bets that run the length of a shoe: "Player wins 5 in a row this shoe?", "Dealer busts 15–17 times?". These lock once the shoe starts — bet before the first hand.</p>
-          <p style="margin-top:6px">Whole-shoe sub-cap: <strong>2 standard / 4 Club Pass</strong> (counts toward your overall shoe market limit).</p>
+          <p style="margin-top:6px"><strong>Standard:</strong> max 2 whole-shoe bets open at a time. <strong>Club Pass:</strong> no whole-shoe sub-cap (limited only by your overall 5 open / 6 total limit).</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Season Markets</div>
@@ -3429,7 +3429,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">21 Club Pass Bonus</div>
-          <p>Pass holders earn 1.5× on all points. They also get 15 shoes per day (vs 5 for standard), 2 power-up slots per shoe, access to a free daily power-up, and higher shoe market bet caps (8 total / 4 whole-shoe vs 4 total / 2 whole-shoe for standard).</p>
+          <p>Pass holders earn 1.5× on all points. They also get 15 shoes per day (vs 5 for standard), 2 power-up slots per shoe, access to a free daily power-up, and higher PM shoe market caps (6 total / 5 open / 4 window vs 4 total / 3 open / 2 window for standard).</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">What to Spend On</div>
@@ -4807,9 +4807,19 @@ function buildLoginStakeList(){
       bd.style.color='';
     }
   }
+  const _lastStakeKey = (()=>{
+    // GAS-returned value (cross-device authoritative) takes priority over localStorage
+    const fromGas = (_pendingLogin && _pendingLogin.lastStake) || '';
+    if(fromGas && STAKE_ORDER.includes(fromGas)) return fromGas;
+    try{ const ls = localStorage.getItem('kfc_last_stake_'+(G.username||'').toLowerCase()); if(ls && STAKE_ORDER.includes(ls)) return ls; }catch(e){}
+    return null;
+  })();
+  const _lastStakeIdx = _lastStakeKey ? STAKE_ORDER.indexOf(_lastStakeKey) : -1;
   Object.entries(STAKES).forEach(([key,s])=>{
     // When balance is 0, all stakes selectable (player will enter buy-in from external top-up)
     const canAfford=bal<=0||bal>=s.min;
+    const thisIdx=STAKE_ORDER.indexOf(key);
+    const belowLastPlayed=_lastStakeIdx>=0 && thisIdx<_lastStakeIdx;
     const btn=document.createElement('button');
     btn.style.cssText='width:100%;padding:11px 14px;background:var(--bg2);border:1px solid var(--line2);font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1px;text-align:left;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius);transition:all .15s;cursor:pointer;color:var(--white);opacity:1';
     btn.className='login-stake-btn';
@@ -4826,7 +4836,17 @@ function buildLoginStakeList(){
       btn.style.filter='grayscale(0.4)';
       btn.onmouseover=null; btn.onmouseout=null;
       btn.onclick=null;
-      // Add lock icon
+      btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
+    } else if(belowLastPlayed){
+      btn.style.opacity='0.35';
+      btn.style.cursor='not-allowed';
+      btn.style.color='var(--muted)';
+      btn.style.background='var(--bg1)';
+      btn.style.borderColor='rgba(255,255,255,0.05)';
+      btn.style.filter='grayscale(0.4)';
+      btn.onmouseover=null; btn.onmouseout=null;
+      btn.onclick=null;
+      btn.title='Last played at '+STAKES[_lastStakeKey].label+' — use the stake rules in-game to step back down';
       btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
     }
     c.appendChild(btn);
@@ -5497,6 +5517,7 @@ function saveSession(){
       ts:Date.now()
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
+    if(G.stake) try{ localStorage.setItem('kfc_last_stake_'+(G.username||G.player||'').toLowerCase(), G.stake); }catch(e){}
   }catch(e){}
 }
 
@@ -6124,7 +6145,7 @@ async function doLogin(){
         // _syncCommitBalance() writes the committed balance to GAS immediately at deal,
         // so wagered chips are already reflected there before any reload.
         try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
-        _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0};
+        _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||''};
         // Clear any session belonging to a different player on this device
         try{
           const _oldSnap=localStorage.getItem(SESSION_KEY);
@@ -6157,7 +6178,8 @@ async function doLogin(){
   G.username=username;
   G._cachedPin=pin; // cache for re-auth
   const localBal=parseFloat(localStorage.getItem('kfc_bal_'+username)||'0');
-  _pendingLogin={name:username,balance:localBal}; // G.player set only in openApp
+  const _localLastStake=(()=>{try{return localStorage.getItem('kfc_last_stake_'+username.toLowerCase())||'';}catch(e){return '';}})();
+  _pendingLogin={name:username,balance:localBal,lastStake:_localLastStake}; // G.player set only in openApp
   document.getElementById('login-step1').style.display='none';
   MP2._showModeSelect();
 }
@@ -8953,6 +8975,7 @@ function selectStake(key){
       buyIn:G.sessionStart||G.balance,
       date:new Date().toISOString(),
       stake:G.s?G.s.label:G.stake,
+      stakeKey:G.stake,
       pin:G._cachedPin||''
     };
     attemptSync(_stakePayload).catch(()=>{ storeSyncQueue(_stakePayload); });
@@ -9049,6 +9072,7 @@ async function attemptSync(payload){
     buyIn:    String(payload.buyIn),
     date:     payload.date,
     stake:    payload.stake,
+    stakeKey: payload.stakeKey||'',
     pin:      payload.pin||''
   });
   let r;
@@ -9139,7 +9163,7 @@ async function confirmCashout(){
     sessionPL: sessionPL,
     buyIn:     G.sessionStart,
     date: new Date().toISOString(),
-    stake: G.s.label, pin: G._cachedPin||''
+    stake: G.s.label, stakeKey: G.stake, pin: G._cachedPin||''
   };
   console.log('[KFC] Sync payload username:', payload.username, '| player:', payload.player);
 
@@ -11675,22 +11699,42 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === _betMktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market closed'); closeModal('pm-bet-modal'); return; }
 
-    // Shoe bet cap: 4 total standard / 8 total Club pass; whole-shoe sub-cap: 2 standard / 4 Club pass
-    const _shoeBetMax = G._clubPass ? 4 : 2;
-    const _wholeShoeBetMax = G._clubPass ? 4 : 2;
+    // Shoe bet caps
+    // Standard:   4 total per shoe, max 3 open at once, max 2 open whole-shoe, max 2 open window
+    // Club Pass:  6 total per shoe, max 5 open at once, max 4 open window, no whole-shoe sub-cap
     if(mkt.type === 'shoe'){
-      const openShoeBets = _loadBets().filter(b => {
+      const _totalCap  = G._clubPass ? 6 : 4;
+      const _openCap   = G._clubPass ? 5 : 3;
+      const _windowCap = G._clubPass ? 4 : 2;
+      const _wholeCap  = G._clubPass ? Infinity : 2;
+      const allBets    = _loadBets();
+      // Total placed this shoe (open + settled, as long as the market still exists in _markets)
+      const totalShoeCount = allBets.filter(b => {
+        const bm = _markets.find(m => m.id === b.mktId);
+        return bm && bm.type === 'shoe';
+      }).length;
+      if(totalShoeCount >= _totalCap){ notif('Max '+_totalCap+' shoe market bets per shoe'); return; }
+      // Open-at-once cap
+      const openShoeBets = allBets.filter(b => {
         if(b.payout !== null && b.payout !== undefined) return false;
         const bm = _markets.find(m => m.id === b.mktId);
         return bm && bm.type === 'shoe';
       });
-      if(openShoeBets.length >= _shoeBetMax){ notif('Max '+_shoeBetMax+' shoe market bets per shoe'); return; }
-      if(!_isWindowShoeType(mkt)){
-        const openWholeShoeBets = openShoeBets.filter(b => {
+      if(openShoeBets.length >= _openCap){ notif('Max '+_openCap+' open shoe bets at a time'); return; }
+      // Per-type sub-caps
+      const isWindow = _isWindowShoeType(mkt);
+      if(isWindow){
+        const openWindowCount = openShoeBets.filter(b => {
+          const bm = _markets.find(m => m.id === b.mktId);
+          return bm && _isWindowShoeType(bm);
+        }).length;
+        if(openWindowCount >= _windowCap){ notif('Max '+_windowCap+' next-N-hands bets open at a time'); return; }
+      } else if(_wholeCap !== Infinity){
+        const openWholeCount = openShoeBets.filter(b => {
           const bm = _markets.find(m => m.id === b.mktId);
           return bm && !_isWindowShoeType(bm);
-        });
-        if(openWholeShoeBets.length >= _wholeShoeBetMax){ notif('Max '+_wholeShoeBetMax+' whole-shoe bets per shoe'); return; }
+        }).length;
+        if(openWholeCount >= _wholeCap){ notif('Max '+_wholeCap+' whole-shoe bets open at a time'); return; }
       }
     }
     // End-of-shoe lockout for window markets: block when fewer than 15 hands remain
@@ -11817,7 +11861,8 @@ const PM = (() => {
       {
         const amount = nextAmount;
         const stableId = PM_PFX + 'ms_' + pLow + '_' + amount + '_' + thisWeek;
-        if(!_markets.some(m => m.id === stableId)){
+        if(!_markets.some(m => m.id === stableId && m.status === 'open')){
+          _markets = _markets.filter(m => !(m.id === stableId && m.status === 'settled'));
           const gap = Math.max(0, amount - balance);
           const reachable = amount * 0.40 * _weekTimeFactor();
           const r = reachable / (reachable + gap);
@@ -12826,12 +12871,11 @@ const PM = (() => {
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
 
-    const _hp1    = mkt.housePools||{};
-    const playerOut   = Math.max(0, (mkt.pools[outcome]||0) - (_hp1[outcome]||0));
-    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(_hp1[k]||0)), 0);
-    const payout = playerOut > 0 ? Math.round((bet.amount / playerOut) * playerTotal) : bet.amount;
-    const pl     = payout - bet.amount;
     const curOdds = _pct(mkt, outcome);
+    // Cash out at live implied odds × locked payout — stake-agnostic, works across all stake tiers
+    const _lockedPay = bet.lockedPayout || bet.amount;
+    const payout = Math.max(0, Math.round(_lockedPay * (curOdds / 100)));
+    const pl     = payout - bet.amount;
 
     document.getElementById('pm-co-type').textContent = mkt.type === 'race' ? 'RACE MARKET' : 'SEASON MARKET';
     document.getElementById('pm-co-name').textContent = mkt.desc;
@@ -12865,35 +12909,15 @@ const PM = (() => {
     const mkt = _markets.find(m => m.id === mktId);
     if(!mkt || mkt.status !== 'open'){ notif('Market already settled'); return; }
     if(mkt.type === 'shoe'){ notif('Cannot cash out shoe markets early'); return; }
-    // Use outcome-keyed pools directly — works for both YES/NO and race (player-name keyed) markets
-    const _hp2    = mkt.housePools||{};
-    const playerOut   = Math.max(0, (mkt.pools[outcome] || 0) - (_hp2[outcome] || 0));
-    const playerTotal = Object.keys(mkt.pools).reduce((s,k) => s + Math.max(0,(mkt.pools[k]||0)-(_hp2[k]||0)), 0);
+    // Live implied-odds cash out: lockedPayout × currentOdds% — independent of pool composition
     const curOdds = _pct(mkt, outcome);
-    if(playerOut <= 0){
-      bet.payout = bet.amount;
-      bet.cashoutEarly = true;
-      bet.cashoutOdds  = curOdds;
-      mkt.pools[outcome] = Math.max((_hp2[outcome]||0), mkt.pools[outcome] - bet.amount);
-      G.balance += bet.amount;
-      updateUI();
-      _saveBets(bets);
-      _saveMarkets();
-      _syncBalanceAfterPM();
-      if(G.url && G.username){
-        const _cp = new URLSearchParams({ action:'pmCashOut', mktId, outcome, ts:String(ts), payout:String(bet.amount), username:G.username });
-        fetch(G.url+'?'+_cp.toString(), {method:'GET', cache:'no-store'}).catch(()=>{});
-      }
-      notif('Cashed out at cost — no opposing bets yet');
-      _renderPortfolio();
-      render();
-      return;
-    }
-    const payout = Math.round((bet.amount / playerOut) * playerTotal);
+    const _lockedPay2 = bet.lockedPayout || bet.amount;
+    const payout = Math.max(0, Math.round(_lockedPay2 * (curOdds / 100)));
     bet.payout       = payout;
     bet.cashoutEarly = true;
     bet.cashoutOdds  = curOdds;
     // Remove stake from pool (floor at house pool to keep liquidity)
+    const _hp2 = mkt.housePools||{};
     mkt.pools[outcome] = Math.max((_hp2[outcome]||0), mkt.pools[outcome] - bet.amount);
     G.balance += payout;
     updateUI();
@@ -14250,8 +14274,8 @@ const MP2 = {
   <div class="pt-row"><span>🎁</span><span class="pt-val">1 free power-up/day</span></div>
   <div class="pt-row"><span>🌡️</span><span class="pt-val">Hot/cold shoe preview</span></div>
   <div class="pt-row"><span>🎨</span><span class="pt-val">Table colour toggle</span><span class="pt-sub">5 colours</span></div>
-  <div class="pt-row"><span>📊</span><span class="pt-val">8 shoe market bets/shoe</span><span class="pt-sub">standard: 4</span></div>
-  <div class="pt-row"><span>🔒</span><span class="pt-val">4 whole-shoe bets/shoe</span><span class="pt-sub">standard: 2</span></div>
+  <div class="pt-row"><span>📊</span><span class="pt-val">6 shoe bets/shoe (5 open)</span><span class="pt-sub">standard: 4 (3 open)</span></div>
+  <div class="pt-row"><span>🔁</span><span class="pt-val">4 window bets open</span><span class="pt-sub">standard: 2</span></div>
 </div>
 <!-- LOYALTY POINTS TOOLTIP -->
 <div id="pts-tooltip">

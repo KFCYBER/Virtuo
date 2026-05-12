@@ -7180,6 +7180,24 @@ function showBJ(){
   setTimeout(()=>el.classList.remove('show'), 1900);
   _launchConfetti(); // gold confetti burst on blackjack
 }
+// ── Deal watchdog — recovers the game if an exception leaves buttons permanently disabled ──
+let _dealWatchdogTimer = null;
+function _armDealWatchdog(){
+  if(_dealWatchdogTimer) clearTimeout(_dealWatchdogTimer);
+  _dealWatchdogTimer = setTimeout(()=>{
+    _dealWatchdogTimer = null;
+    if(G.phase !== 'play') return;
+    const hitBtn = document.getElementById('btn-hit');
+    if(!hitBtn || !hitBtn.disabled) return; // buttons already enabled — all fine
+    console.warn('KFC watchdog: deal completed but buttons still disabled — recovering');
+    try{ saveSession(); }catch(e){}
+    try{ setActions(true); msg('YOUR TURN'); notif('Ready'); }catch(e){}
+  }, 5000);
+}
+function _cancelDealWatchdog(){
+  if(_dealWatchdogTimer){ clearTimeout(_dealWatchdogTimer); _dealWatchdogTimer = null; }
+}
+
 function deal(){
   // Init audio on first deal if not already ready, but don't re-trigger welcome sound
   if(!G._audioReady){ initAudio(); if(!G._welcomePlayed){ G._welcomePlayed=true; setTimeout(()=>startMusic(),300); } }
@@ -7280,6 +7298,7 @@ function deal(){
   // Save session immediately — bet is committed, reload must not refund it
   saveSession();
   _syncCommitBalance(); // push deducted balance to GAS now — prevents exploit via fresh login on another device
+  _armDealWatchdog(); // safety net: if any exception prevents setActions(true), recover after 5s
 
   // Helper: fire bonuses for the initial two drawn cards (p1, p2 style),
   // then keep drawing replacements until the hand has 2 non-jester value cards.
@@ -7809,6 +7828,7 @@ function advOrEnd(reason){
 
 // ── DEALER ──────────────────────────────────────────────
 function dealerPlay(){
+  _cancelDealWatchdog();
   G.phase='dealer';
   setActions(false);
   revealHole(); // always reveal hole card when dealer's turn starts
@@ -7915,6 +7935,7 @@ function revealHole(){
 
 // ── SETTLE ──────────────────────────────────────────────
 function settle(reason){
+  _cancelDealWatchdog();
   // No bet in play — spurious call, nothing to settle or log
   const _totalBetInPlay = G.mainBet || (G._hand2Active ? (G.mainBet2||0) : 0) || (G.splitBets&&G.splitBets.reduce((a,b)=>a+b,0)||0);
   if(!_totalBetInPlay) return;
@@ -8547,6 +8568,7 @@ function renderScores(){
 }
 
 function setActions(playing){
+  if(playing) _cancelDealWatchdog(); // player can act — watchdog no longer needed
   // Dismiss hit/dbl confirm modals if open when actions change
   closeModal('hit-confirm-modal');
   closeModal('dbl-confirm-modal');

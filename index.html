@@ -2991,7 +2991,7 @@ body.mp-bet-locked .all-sb-btn {
       <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover ½ bet</span></div>
       <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe becomes a push</span></div>
       <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">+2 to all Crazy 7s multipliers</span></div>
-      <div class="info-row"><span class="info-label">BJ Guard (3:1)</span><span class="info-val">Dealer blackjack → push</span></div>
+      <div class="info-row"><span class="info-label">BJ Guard</span><span class="info-val">Dealer blackjack → lose half bet</span></div>
       <div class="info-row"><span class="info-label">BJ Novak (3:1)</span><span class="info-val">Your blackjack pays 2:1 not 3:2</span></div>
     </div>
 
@@ -3614,7 +3614,7 @@ const POWERUPS = [
   { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10',   minStake:'mid',       chf:2.50, ratio:5 },
   { id:'net',    label:'Safety Net',      sub:'Any 22 this shoe → push',  minStake:'mid',       chf:2.00, ratio:4 },
   { id:'seeker', label:'Seven-Seeker',    sub:'+2× on Crazy 7s',          minStake:'high',      chf:2.00, ratio:4 },
-  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → push',         minStake:'legendary', chf:1.50, ratio:5 },
+  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → lose half bet', minStake:'legendary', chf:1.50, ratio:5 },
   { id:'novak',  label:'BJ Novak',        sub:'Blackjack pays 2:1',        minStake:'legendary', chf:1.50, ratio:5 },
 ];
 
@@ -5160,7 +5160,7 @@ function _afterInsurance(){
   // Now peek dealer hole card
   if(isBJ(G.dealer)){
     revealHole(); renderAll();
-    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');setTimeout(()=>settle('push_guard'),500);return;}
+    if(G.puOwned.has('guard')){notif('BJ GUARD — 50% BACK', 'win');setTimeout(()=>settle('push_guard'),500);return;}
     if(isBJ(G.hands[0])){msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;}
     sfx('dealer_bj'); msg('DEALER BLACKJACK','lose');setTimeout(()=>settle('dealer_bj'),500);return;
   }
@@ -7385,7 +7385,7 @@ function deal(){
     if(isBJ(G.hands[0])&&isBJ(G.dealer)){
       // Both BJ — no insurance needed, immediate push (both hands settle together)
       revealHole();
-      if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
+      if(G.puOwned.has('guard')){notif('BJ GUARD — 50% BACK', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
       msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;
     }
     // Hand 0 BJ — if second hand is live, advance to it before settling
@@ -7423,7 +7423,7 @@ function deal(){
   // No Ace showing — safe to check dealer BJ immediately
   if(isBJ(G.dealer)){
     revealHole();
-    if(G.puOwned.has('guard')){notif('BJ GUARD — PUSH', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
+    if(G.puOwned.has('guard')){notif('BJ GUARD — 50% BACK', 'win');renderAll();setTimeout(()=>settle('push_guard'),500);return;}
     if(isBJ(G.hands[0])){msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;}
     sfx('dealer_bj'); msg('DEALER BLACKJACK','lose');renderAll();setTimeout(()=>settle('dealer_bj'),500);return;
   }
@@ -8015,7 +8015,7 @@ function settle(reason){
     if(reason==='surrender'){
       w=-Math.floor(_betForHand/2); detail='Surrender — half bet returned';
     }
-    else if(reason==='push_guard')      {w=0;detail='BJ Guard — Push';}
+    else if(reason==='push_guard')      {w=-Math.floor(_betForHand/2);detail='BJ Guard — 50% back';}
     else if(reason==='push_player_bj'){w=0;detail='Both BJ — Push';}
     else if(reason==='safety'){
       // Only push the hand that triggered the safety net; other hands settle on their own merit
@@ -8207,10 +8207,12 @@ function settle(reason){
   const _sessionRunningPL = G.log.reduce((a,e)=>a+e.pl, 0);
   updateSessionChart(_sessionRunningPL);
 
-  // ── Streak tracker ──
-  if(totalPLForDisplay > 0)  _streak = _streak > 0 ? _streak + 1 : 1;
-  else if(totalPLForDisplay < 0) _streak = _streak < 0 ? _streak - 1 : -1;
-  else _streak = 0;
+  // ── Streak tracker — based on main hand result, not total P&L ──
+  const _mainHandWon  = _handResults.some(hr => hr.w > 0);
+  const _mainHandLost = !_mainHandWon && mainPL < 0;
+  if(_mainHandWon)       _streak = _streak > 0 ? _streak + 1 : 1;
+  else if(_mainHandLost) _streak = _streak < 0 ? _streak - 1 : -1;
+  else                   _streak = 0;
   _updateStreakBadge();
 
   // ── Streak bonus points ──
@@ -8264,8 +8266,8 @@ function settle(reason){
   if(typeof PM !== 'undefined'){
     const _dbForPM    = isBust(G.dealer);
     const _anyBJForPM = _handResults.some(hr => isBJ(G.hands[hr.hi])); // BJ on any hand
-    const _wonForPM   = mainPL > 0;                                     // net blackjack P&L
-    const _pushForPM  = _handResults.some(hr => hr.w === 0);            // any hand pushed
+    const _wonForPM   = _handResults.some(hr => hr.w > 0);              // any main hand won
+    const _pushForPM  = !_handResults.some(hr => hr.w > 0) && !_handResults.some(hr => hr.w < 0); // all hands neutral
     const _extraHands = Math.max(0, _handResults.length - 1);           // hands beyond first
     setTimeout(()=>PM.onHandEnd(_dbForPM, _anyBJForPM, _wonForPM, _pushForPM, _extraHands), 0);
   }
@@ -8802,16 +8804,21 @@ function closeResult(){
     notif('New shoe — '+rem+' shoe'+(rem===1?'':'s')+' remaining today');
     setTimeout(()=>_earlyShoePreview(), 800); // pass players see hot/cold before first bet
   } else if(G.deck.length<40){
+    _incrementShoesPlayed(G.username||G.player);
     _showShoeSummary();
     const _shoeEarned2 = _calcShoePoints();
     _addPoints(_shoeEarned2);
     _shoeLog = []; _shoeHandCount = 0;
     G.puOwned.clear();
     G.puPending.clear();
-    G.levCards=[]; G._levCardsPending=[]; // Jester cards expire at end of shoe
-    buildPuPanel();
-    if(typeof PM !== 'undefined' && !G.mpMode){ PM.onShoeEnd(); setTimeout(()=>PM.onShoeNew(), 0); }
-    notif('New shoe — power-ups and jester cards reset');
+    G.levCards=[]; G._levCardsPending=[];
+    buildPuPanel(); buildLevPanel();
+    if(typeof PM !== 'undefined' && !G.mpMode) PM.onShoeEnd();
+    G.deck = buildShoe(); // rebuild to 216 before PM.onShoeNew so card count is correct when bets open
+    G.cutCardTriggered = false;
+    if(typeof PM !== 'undefined' && !G.mpMode) setTimeout(()=>PM.onShoeNew(), 0);
+    const rem2 = _shoesRemaining();
+    notif('New shoe — '+rem2+' shoe'+(rem2===1?'':'s')+' remaining today');
     setTimeout(()=>_earlyShoePreview(), 800);
   }
   // Balance checks after hand
@@ -12009,7 +12016,8 @@ const PM = (() => {
     _pmShoeHands += 1 + (extraHands||0); // each played hand counts separately
     if(dealerBusted) _pmShoeBusts++;
     if(playerPush)   _pmShoePushes++;
-    if(playerWon)    _pmShoeConsec++; else _pmShoeConsec=0;
+    if(playerWon)         _pmShoeConsec++;
+    else if(!playerPush)  _pmShoeConsec=0; // push is neutral — streak preserved
     if(_pmShoeConsec > _pmShoeMaxConsec) _pmShoeMaxConsec = _pmShoeConsec;
     const prevLastBJ = _pmShoeLastBJ;
     if(playerBJ) { _pmShoeBJCount++; _pmShoeLastBJ=true; } else { _pmShoeLastBJ=false; }
@@ -12049,7 +12057,8 @@ const PM = (() => {
       }
       if(c.type === 'win_streak_window'){
         if(!m._winStreak) m._winStreak = 0;
-        if(playerWon) m._winStreak++; else m._winStreak = 0;
+        if(playerWon)        m._winStreak++;
+        else if(!playerPush) m._winStreak = 0; // push neutral — streak preserved
         if(m._winStreak >= (c.params.streak||3)){ settle(m.id,'YES'); _scheduleWindowRespawn(); return; }
         const handsInWindow = _pmShoeHands - (c.params.startHand||0);
         const needed = (c.params.streak||3) - m._winStreak;

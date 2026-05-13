@@ -9141,18 +9141,18 @@ function buildStakeList(){
     const thisIdx=STAKE_ORDER.indexOf(key);
     const isDowngrade=thisIdx<curIdx;
     const tooManySteps=isDowngrade&&(curIdx-thisIdx>1);
-    const _loginBal=G._walletBalAtLogin||G.balance;
-    const _stakeFloor=Math.max(0,(G.sessionStart||G.balance)-_loginBal*STAKE_DOWN_LOSS_THRESHOLD);
-    const belowHalfTotal=G.balance<=_stakeFloor;
-    const downgradeBlocked=isDowngrade&&(!belowHalfTotal||tooManySteps);
+    // Step-down allowed whenever balance < 10× current stake minimum (running low)
+    const curStakeMin = (STAKES[G.stake||'low']||{}).min || 1;
+    const canStepDown = isDowngrade && !tooManySteps && G.balance < curStakeMin * 10;
+    const downgradeBlocked = isDowngrade && (tooManySteps || !canStepDown);
     if(canAffordSt && !downgradeBlocked){
       el.onclick=()=>{selectStake(key);};
     } else if(tooManySteps){
       el.style.opacity='0.35'; el.style.cursor='not-allowed';
       el.title='Can only drop one stake level at a time';
-    } else if(isDowngrade && !belowHalfTotal){
+    } else if(isDowngrade && !canStepDown){
       el.style.opacity='0.35'; el.style.cursor='not-allowed';
-      el.title='Must lose 50% of total balance from this stake (need below '+fmtKFC(Math.ceil(_stakeFloor))+') to step down';
+      el.title='Step down available below '+fmtKFC(curStakeMin*10);
     } else {
       el.style.opacity='0.4'; el.style.cursor='not-allowed';
       el.title='Need '+fmt(s.min)+' KFC';
@@ -9168,16 +9168,14 @@ function selectStake(key){
   const newIdx = STAKE_ORDER.indexOf(key);
 
   if(newIdx < curIdx){
-    // Only one step down at a time
     if(curIdx - newIdx > 1){
       notif('Can only drop one stake level at a time');
       return;
     }
-    // Must have lost 50% of total wallet balance from this stake's entry point
-    const _loginBal = G._walletBalAtLogin || G.balance;
-    const _stakeFloor = Math.max(0, (G.sessionStart||G.balance) - _loginBal * STAKE_DOWN_LOSS_THRESHOLD);
-    if(G.balance > _stakeFloor){
-      notif('Must lose 50% of total balance from this stake — need below '+fmtKFC(Math.ceil(_stakeFloor)));
+    // Allow step-down when running low: balance below 10× current stake minimum
+    const _curMin = (G.s||{}).min || 1;
+    if(G.balance >= _curMin * 10){
+      notif('Step down available below '+fmtKFC(_curMin*10)+' — you still have plenty at this stake');
       return;
     }
   }

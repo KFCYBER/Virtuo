@@ -2543,6 +2543,7 @@ body.mp-bet-locked .all-sb-btn {
       <a href="https://kfcyber.github.io/KFC-Standings/" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none" title="KFC Standings">STANDINGS</a>
       <a href="store.html" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none;border-color:rgba(201,168,76,0.35);color:var(--gold)" title="KFC Store">STORE</a>
       <button class="btn-ghost" id="btn-creator-mode" onclick="_toggleCreatorMode()" style="font-size:10px;padding:6px 10px;letter-spacing:1px;font-weight:700;display:none">🧪 TEST</button>
+      <button class="btn-ghost" id="btn-gift" onclick="_openGiftPanel()" style="font-size:10px;padding:6px 10px;letter-spacing:1px;font-weight:700;display:none;border-color:rgba(201,168,76,0.45);color:var(--gold)">🎁 GIFT</button>
     </div>
     <div class="tb-center">
       <div class="tb-player" id="tb-name">—</div>
@@ -3134,6 +3135,35 @@ body.mp-bet-locked .all-sb-btn {
     <div style="font-size:11px;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:20px">Select Stake</div>
     <div class="stake-list" id="stake-list"></div>
     <div style="margin-top:16px"><button class="btn-ghost" style="width:100%" onclick="closeModal('stake-modal')">Back</button></div>
+  </div>
+</div>
+
+<!-- CREATOR GIFT -->
+<div class="overlay" id="gift-modal">
+  <div class="modal" style="min-width:340px;max-width:420px">
+    <div style="font-size:11px;letter-spacing:4px;color:var(--muted);text-transform:uppercase;margin-bottom:20px">🎁 Send Gift</div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Recipient</div>
+      <select id="gift-player-select" style="width:100%;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;font-family:var(--mono);font-size:13px">
+        <option value="">— Select player —</option>
+      </select>
+    </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Amount (KFC chips)</div>
+      <input id="gift-amount-input" type="number" min="1" placeholder="e.g. 500"
+        style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;font-family:var(--mono);font-size:18px;font-weight:600;text-align:center"/>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        <button class="btn-ghost" style="flex:1;font-size:11px;padding:5px 0" onclick="document.getElementById('gift-amount-input').value=100">100</button>
+        <button class="btn-ghost" style="flex:1;font-size:11px;padding:5px 0" onclick="document.getElementById('gift-amount-input').value=250">250</button>
+        <button class="btn-ghost" style="flex:1;font-size:11px;padding:5px 0" onclick="document.getElementById('gift-amount-input').value=500">500</button>
+        <button class="btn-ghost" style="flex:1;font-size:11px;padding:5px 0" onclick="document.getElementById('gift-amount-input').value=1000">1000</button>
+      </div>
+    </div>
+    <div id="gift-status" style="font-size:11px;color:var(--muted);min-height:16px;text-align:center;margin-bottom:10px"></div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-ghost" style="flex:1" onclick="closeModal('gift-modal')">Cancel</button>
+      <button id="btn-gift-send" class="btn-ghost" style="flex:2;border-color:rgba(201,168,76,0.55);color:var(--gold);font-weight:700" onclick="_sendGift()">Send Gift</button>
+    </div>
   </div>
 </div>
 
@@ -6176,6 +6206,8 @@ function openApp(displayName, balance){
   // Show creator mode toggle only for the master account
   const _cmBtn = document.getElementById('btn-creator-mode');
   if(_cmBtn){ _cmBtn.style.display = (G.username||'').toLowerCase()==='creator' ? '' : 'none'; _updateCreatorBtn(); }
+  const _giftBtn = document.getElementById('btn-gift');
+  if(_giftBtn){ _giftBtn.style.display = (G.username||'').toLowerCase()==='creator' ? '' : 'none'; }
   // Restore this player's sidebar collapsed state; always collapse on mobile
   const _sbColKey='kfc_sb_col_'+(G.username||'').toLowerCase();
   const _sb=document.getElementById('sidebar');const _mn=document.getElementById('main');const _bt=document.getElementById('sidebar-toggle');const _ta=document.getElementById('table-area');
@@ -10058,6 +10090,7 @@ function _clearIdleFloat(){
 
 // ── LEADERBOARD ───────────────────────────────────────────────────────────────
 let _lbLastFetch = 0;
+let _lbPlayersSorted = [];
 const LB_CACHE_MS = 60000; // re-fetch at most once per minute
 
 async function _fetchLeaderboard(force){
@@ -10115,6 +10148,7 @@ function _renderLeaderboard(players, errMsg){
   _toRemove.forEach(k => _byKey.delete(k));
   // Sort by balance descending, hide creator
   const sorted = [..._byKey.values()].filter(p=>(p.username||p.name||'').toLowerCase()!=='creator').sort((a,b)=>b.balance-a.balance);
+  _lbPlayersSorted = sorted;
   const me = (G.username||G.player||'').toLowerCase();
   const rankSymbol = (i) => i===0?'🥇':i===1?'🥈':i===2?'🥉':(i+1)+'.';
   const rankClass  = (i) => i===0?'gold':i===1?'silver':i===2?'bronze':'';
@@ -10136,6 +10170,58 @@ function _renderLeaderboard(players, errMsg){
 function _initLeaderboard(){
   _renderLeaderboard(null,'Fetching…');
   _fetchLeaderboard(true);
+}
+
+// ── CREATOR GIFT ─────────────────────────────────────────────────────────────
+function _openGiftPanel(){
+  const sel = document.getElementById('gift-player-select');
+  if(sel){
+    sel.innerHTML = '<option value="">— Select player —</option>';
+    _lbPlayersSorted.forEach(p => {
+      const name = p.username || p.name || '';
+      if(!name) return;
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = name + '  (' + fmtKFC(p.balance) + ')';
+      sel.appendChild(opt);
+    });
+  }
+  const inp = document.getElementById('gift-amount-input');
+  if(inp) inp.value = '';
+  const st = document.getElementById('gift-status');
+  if(st) st.textContent = '';
+  const sendBtn = document.getElementById('btn-gift-send');
+  if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = 'Send Gift'; }
+  openModal('gift-modal');
+}
+
+function _sendGift(){
+  const sel = document.getElementById('gift-player-select');
+  const inp = document.getElementById('gift-amount-input');
+  const st  = document.getElementById('gift-status');
+  const sendBtn = document.getElementById('btn-gift-send');
+  const recipient = sel ? sel.value.trim() : '';
+  const amount    = parseInt(inp ? inp.value : 0, 10);
+  if(!recipient){ if(st) st.textContent = 'Please select a player.'; return; }
+  if(!amount || amount < 1){ if(st) st.textContent = 'Enter a valid amount.'; return; }
+  if(st) st.textContent = 'Sending…';
+  if(sendBtn){ sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
+  fetch(G.url + '?action=gift&from=creator&to=' + encodeURIComponent(recipient) + '&amount=' + amount)
+    .then(r => r.json())
+    .then(d => {
+      if(d.ok){
+        if(st) st.textContent = '✓ Gift of ' + fmtKFC(amount) + ' sent to ' + recipient;
+        if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = 'Send Gift'; }
+        setTimeout(() => closeModal('gift-modal'), 1800);
+      } else {
+        if(st) st.textContent = 'Error: ' + (d.error || 'Unknown error');
+        if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = 'Send Gift'; }
+      }
+    })
+    .catch(() => {
+      if(st) st.textContent = 'Network error — try again.';
+      if(sendBtn){ sendBtn.disabled = false; sendBtn.textContent = 'Send Gift'; }
+    });
 }
 
 // ── DEALER TAX PREVIEW ────────────────────────────────────────────────────────

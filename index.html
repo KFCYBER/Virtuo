@@ -4780,7 +4780,16 @@ function buildLoginStakeList(){
     btn.innerHTML='<span>'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min '+fmt(s.min)+'</span>';
     btn.onmouseover=()=>{btn.style.borderColor='rgba(201,168,76,0.5)';btn.style.background='rgba(201,168,76,0.06)';};
     btn.onmouseout=()=>{btn.style.borderColor='var(--line2)';btn.style.background='var(--bg2)';};
-    btn.onclick=()=>{_selectedStakeKey=key;goLoginStep(3);};
+    btn.onclick=()=>{
+      _selectedStakeKey=key;
+      if(bal<=0){
+        // Broke player — skip buy-in, enter with 0 balance so the top-up option is reachable in-game
+        _pendingLogin.totalBalance=0;
+        finaliseLogin(key);
+      } else {
+        goLoginStep(3);
+      }
+    };
     if(!canAfford){
       btn.style.opacity='0.35';
       btn.style.cursor='not-allowed';

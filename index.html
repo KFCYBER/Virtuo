@@ -5614,7 +5614,7 @@ async function _expireStaleSession(snap){
       player:    snap.player||'',
       balance:   String(snap.balance),
       sessionPL: String(snap.balance-(snap.sessionStart||snap.balance)),
-      buyIn:     String(snap.sessionStart||snap.balance),
+      buyIn:     String(_snapWalletBuyIn(snap)),
       date:      new Date().toISOString(),
       stake:     'AUTO-EXPIRE', // distinguishable from normal cashouts in the log
       pin:       snap.cachedPin||''
@@ -5630,7 +5630,7 @@ async function _expireStaleSession(snap){
         username: snap.username, player: snap.player||'',
         balance:  snap.balance,
         sessionPL: snap.balance-(snap.sessionStart||snap.balance),
-        buyIn:    snap.sessionStart||snap.balance,
+        buyIn:    _snapWalletBuyIn(snap),
         date:     new Date().toISOString(),
         stake:    'AUTO-EXPIRE',
         pin:      snap.cachedPin||''
@@ -5661,6 +5661,11 @@ function _updateCreatorBtn(){
 }
 
 function _inventoryJson(){ try{ return JSON.stringify(G._inventory||{leverage:0,insurance:0,power_ups:[]}); }catch(e){ return '{}'; } }
+
+// Wallet-only buy-in: excludes gifted KFC chips so TX rows don't over-deduct the wallet.
+// G._originalSessionStart is set before kfcCredit is added in finaliseLogin().
+function _walletBuyIn(){ return (G._originalSessionStart||G.sessionStart||G.balance) + (G._topUpTotal||0); }
+function _snapWalletBuyIn(s){ return (s.originalSessionStart||s.sessionStart||s.balance) + (s.topUpTotal||0); }
 
 // Immediately writes current inventory to GAS after an item is consumed.
 // Uses autosave=true so it doesn't create a TX row or touch the wallet balance.
@@ -5966,7 +5971,7 @@ function _logSessionToSheet(stakeLabel){
     player:    G.player || G.username,
     balance:   String(G.balance),
     sessionPL: String(G.balance - (G.sessionStart || G.balance)),
-    buyIn:     String(G.sessionStart || G.balance),
+    buyIn:     String(_walletBuyIn()),
     date:      new Date().toISOString(),
     stake:     stakeLabel || 'RELOAD-EXIT',
     pin:       G._cachedPin
@@ -5997,7 +6002,7 @@ window.addEventListener('pagehide', ()=>{
         action:'updatebalance', username:G.username,
         player:G.player||G.username, balance:String(G.balance),
         sessionPL:String(G.balance - G.sessionStart),
-        buyIn:String(G.sessionStart),
+        buyIn:String(_walletBuyIn()),
         date:new Date().toISOString(), stake:'PM-ONLY', pin:G._cachedPin
       });
       fetch(G.url+'?'+_p.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}).catch(()=>{});
@@ -6348,7 +6353,7 @@ function openApp(displayName, balance){
     // Fires a full TX row (not autosave) so the wallet formula updates.
     if(G.url && G.username && G._cachedPin && G._sessionActive && !G.cashedOut){
       const _bp={username:G.username,player:G.player||G.username,balance:0,
-        sessionPL:-(G.sessionStart||0),buyIn:G.sessionStart||0,
+        sessionPL:-(G.sessionStart||0),buyIn:_walletBuyIn(),
         date:new Date().toISOString(),stake:G.s?G.s.label:(G.stake||''),
         stakeKey:G.stake||'',pin:G._cachedPin||'',inventory:_inventoryJson()};
       storeSyncQueue(_bp);
@@ -9188,13 +9193,15 @@ function selectStake(key){
       username:G.username, player:G.username,
       balance:G.balance,
       sessionPL:G.balance-(G.sessionStart||G.balance),
-      buyIn:G.sessionStart||G.balance,
+      buyIn:_walletBuyIn(),
       date:new Date().toISOString(),
       stake:G.s?G.s.label:G.stake,
       stakeKey:G.stake,
       pin:G._cachedPin||''
     };
     attemptSync(_stakePayload).catch(()=>{ storeSyncQueue(_stakePayload); });
+    // After this TX, gift chips are absorbed — reset originalSessionStart to current balance
+    G._originalSessionStart = G.balance; G._topUpTotal = 0;
   }
   G.sessionStart=G.balance; // new mini-session starts at current balance
   resetSessionChart();
@@ -9380,11 +9387,12 @@ async function confirmCashout(){
   //   endBal = begBal(sheet) - buyIn + cashIn
   // So we send:
   //   balance  = G.balance  (chips returned = ending session balance = cashIn)
-  //   buyIn    = G.sessionStart  (chips taken out of wallet to play)
-  //   sessionPL = net P/L this session
+  //   buyIn    = wallet-only buy-in (excludes gifted KFC so wallet formula stays correct)
+  //   sessionPL = net P/L this session (includes gifts, for display)
   const sessionPL = G.balance - G.sessionStart;
+  const walletBuyIn = _walletBuyIn();
   // Calculate what the new wallet total will be (for local _totalBalance tracking)
-  const newTotalBalance = (G._totalBalance||G.sessionStart) - G.sessionStart + G.balance;
+  const newTotalBalance = (G._totalBalance||walletBuyIn) - walletBuyIn + G.balance;
 
   // Safety check — username must be set for sync to work
   if(!G.username){
@@ -9395,7 +9403,7 @@ async function confirmCashout(){
     username: G.username, player: G.player||'',
     balance:   G.balance,
     sessionPL: sessionPL,
-    buyIn:     G.sessionStart,
+    buyIn:     walletBuyIn,
     date: new Date().toISOString(),
     stake: G.s.label, stakeKey: G.stake, pin: G._cachedPin||''
   };
@@ -10267,7 +10275,8 @@ async function _onSessionIdle(){
   // Sync balance to GAS before logging out
   await _expireStaleSession({
     username:G.username, player:G.player, balance:G.balance,
-    sessionStart:G.sessionStart, sessionActive:G._sessionActive,
+    sessionStart:G.sessionStart, originalSessionStart:G._originalSessionStart,
+    topUpTotal:G._topUpTotal||0, sessionActive:G._sessionActive,
     cachedPin:G._cachedPin, clubPass:G._clubPass,
     shoeHandCount:_shoeHandCount||0, shoeLog:(_shoeLog||[]).map(e=>({pl:e.pl,bj:!!e.bj})),
     ts:Date.now()

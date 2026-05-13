@@ -5495,6 +5495,7 @@ function saveSession(){
       originalSessionStart: G._originalSessionStart,
       topUpTotal: G._topUpTotal||0,
       sessionStartTs: G._sessionStartTs||0,
+      handCommitted: G._handCommitted||false,
       ts:Date.now()
     };
     localStorage.setItem(SESSION_KEY, JSON.stringify(snap));
@@ -5511,7 +5512,7 @@ function restoreSession(lastUser){
     if(snap.cashedOut) { localStorage.removeItem(SESSION_KEY); return false; }
     // Restore if: session was active (hands played), OR balance > 0 and not cashed out (topped up, not yet dealt)
     const _hasBalance = (snap.balance||0) > 0;
-    if(!snap.sessionActive && !_hasBalance) { localStorage.removeItem(SESSION_KEY); return false; }
+    if(!snap.sessionActive && !_hasBalance && !snap.handCommitted) { localStorage.removeItem(SESSION_KEY); return false; }
 
     // If we know who last logged in on this browser, only restore their session
     if(lastUser && (snap.username||snap.player||'').toLowerCase() !== lastUser){
@@ -5532,7 +5533,7 @@ function restoreSession(lastUser){
     G.playerId=snap.playerId||'';
     G._cachedPin=snap.cachedPin||'';
     G._clubPass=snap.clubPass||false;
-    G.balance=snap.balance; G.sessionStart=snap.sessionStart||snap.balance; G._totalBalance=snap.totalBalance||snap.balance; G._sessionActive=snap.sessionActive||false;
+    G.balance=snap.balance; G.sessionStart=snap.sessionStart||snap.balance; G._totalBalance=snap.totalBalance||snap.balance; G._sessionActive=snap.sessionActive||snap.handCommitted||false;
     G.stake=snap.stake||'low'; G.s=STAKES[G.stake]||STAKES.low;
     G.lastMainBet=snap.lastMainBet||0; G.lastSideBets=snap.lastSideBets||{};
     G.mainBet=snap.mainBet||0;
@@ -6087,7 +6088,7 @@ window.onload=()=>{
     if(_autoSnap && _autoSnap.player && _autoSnap.cachedPin && !_autoSnap.cashedOut){
       const _age=Date.now()-(_autoSnap.ts||0);
       const _fresh=_age < 10*60*1000;
-      const _hasActivity=_autoSnap.sessionActive||(_autoSnap.balance||0)>0;
+      const _hasActivity=_autoSnap.sessionActive||(_autoSnap.balance||0)>0||_autoSnap.handCommitted===true;
       if(_fresh && _hasActivity && restoreSession(null)){
         // Fresh session — restore directly without login screen
         // inventory already restored inside restoreSession()
@@ -6351,7 +6352,7 @@ function openApp(displayName, balance){
     G.balance=0;
     // Pre-sync immediately so a reload cannot restore lost chips.
     // Fires a full TX row (not autosave) so the wallet formula updates.
-    if(G.url && G.username && G._cachedPin && G._sessionActive && !G.cashedOut){
+    if(G.url && G.username && G._cachedPin && !G.cashedOut){
       const _bp={username:G.username,player:G.player||G.username,balance:0,
         sessionPL:-(G.sessionStart||0),buyIn:_walletBuyIn(),
         date:new Date().toISOString(),stake:G.s?G.s.label:(G.stake||''),

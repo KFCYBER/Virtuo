@@ -3860,7 +3860,8 @@ const G = {
   _insuranceToken:false, // loyalty: covers half bet on bust (stacks with Krueger for full)
   _inventory:{ leverage:0, insurance:0, power_ups:[] }, // store-purchased items pending use
   _allSBNextHand:false,  // loyalty: auto-place sMin on all 4 side bets next deal
-  _freeSBNames:[],       // SBs placed free by the all-SB token this hand
+  _freeSBNames:[],       // SBs placed free by the all-SB token this hand (H1)
+  _freeSBNames2:[],      // SBs placed free by the all-SB token this hand (H2)
   _bonusPayouts:[], // [{label, pl}] — instant bonus card payouts to show in result
   cutCardTriggered:false, // set when cut card is drawn mid-shoe
 };
@@ -5120,8 +5121,9 @@ function evaluateEarlySideBets(){
   earlyBets.forEach(name=>{
     const amt=G.sideBets[name]||0;
     if(amt<=0) return;
-    const res=calcSide(name,amt,false,false);
-    // res.pl = +profit on win, -amt on loss
+    const isFree=(G._freeSBNames||[]).includes(name);
+    const res=calcSide(name,amt,false,isFree);
+    // res.pl = +profit on win, -amt on loss (0 on loss if free)
     earlyNetPL+=res.pl;
     if(res.pl>0) wins.push({name,label:res.label,pl:res.pl});
     // Clear so settle() skips it
@@ -5143,7 +5145,8 @@ function evaluateEarlySideBets(){
       const _saved=G.hands[0];
       const _savedDealer=G.dealer.slice();
       G.hands[0]=G.hands[1];
-      const res=calcSide(name,amt,false,false);
+      const isFree2=(G._freeSBNames2||[]).includes(name);
+      const res=calcSide(name,amt,false,isFree2);
       G.hands[0]=_saved;
       G.dealer=_savedDealer;
       h2EarlyPL+=res.pl;
@@ -7488,6 +7491,7 @@ function deal(){
   }
   // All Side Bets token: auto-place sMin on targeted hand(s) (FREE — points already spent)
   G._freeSBNames = [];
+  G._freeSBNames2 = [];
   if(G._allSBNextHand){
     const target = G._allSBNextHand; // 'h1', 'h2', or 'both'
     const applyH1 = target==='h1'||target==='both'||target===true;
@@ -7499,15 +7503,16 @@ function deal(){
     }
     if(applyH2){
       if(!G.sideBets2) G.sideBets2={};
-      SB_NAMES.forEach(n=>{ if((G.sideBets2[n]||0)===0) G.sideBets2[n]=G.s.sMin; });
+      SB_NAMES.forEach(n=>{ if((G.sideBets2[n]||0)===0){ G.sideBets2[n]=G.s.sMin; G._freeSBNames2.push(n); } });
     }
     G._allSBNextHand=false;
     updateSBCircles();
     notif('⭐ Side bets covered ('+fmtKFC(G.s.sMin)+' each — free)');
   }
   const _freeSBTotal = G._freeSBNames.reduce((a,n)=>a+(G.sideBets[n]||0),0);
+  const _freeSBTotal2 = G._freeSBNames2.reduce((a,n)=>a+(G.sideBets2&&G.sideBets2[n]||0),0);
   const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'&&!G._levFree?G.s.min*3:0)
-    +((G._hand2Active&&(G.mainBet2||0)>=G.s.min)?(G.mainBet2+Object.values(G.sideBets2||{}).reduce((a,b)=>a+b,0)):0);
+    +((G._hand2Active&&(G.mainBet2||0)>=G.s.min)?(G.mainBet2+Object.values(G.sideBets2||{}).reduce((a,b)=>a+b,0)-_freeSBTotal2):0);
   if(G.balance<totalDeducted){notif('Not enough balance');return;}
   let puCost=0;
   G.puPending.forEach(id=>{const pu=POWERUPS.find(p=>p.id===id);if(pu)puCost+=G.s.min*(pu.ratio||5);});
@@ -7755,7 +7760,7 @@ function onBonusCard(bc, cardIndex, handIdx){
       bonusToast(bc,'Krueger active — bust insurance: half wager'+(isHand2?' · Hand 2':''));
       break;
     case 'ice':{
-      const ip=G.s.min*2;
+      const ip=G.s.min;
       G.balance+=ip; G.preDealBal+=ip; updateUI();
       G._bonusPayouts.push({label:'Ice Card'+(isHand2?' (H2)':'')+' — instant payout',pl:ip,type:'gain'});
       bonusToast(bc,'Ice Card pays out — +'+fmtKFC(ip)+(isHand2?' · Hand 2':''));
@@ -8350,7 +8355,7 @@ function settle(reason){
   // Hand 2 Dealer Bust side bet
   if(G._hand2Active&&G.hands.length>1&&G.sideBets2&&G.sideBets2['Dealer Bust']>0){
     const h2dbOrig=G.sideBets2['Dealer Bust'];
-    const h2dbRes=calcSide('Dealer Bust',h2dbOrig,db,false);
+    const h2dbRes=calcSide('Dealer Bust',h2dbOrig,db,(G._freeSBNames2||[]).includes('Dealer Bust'));
     sidePL+=h2dbRes.pl;
     if(h2dbRes.label&&h2dbRes.pl>0) sbAnnouncements.push({name:'Dealer Bust H2',label:'[H2] '+h2dbRes.label,pl:h2dbRes.pl,amount:h2dbOrig});
     G.sideBets2['Dealer Bust']=0;
@@ -8360,7 +8365,7 @@ function settle(reason){
     const orig=G.lastSideBets&&G.lastSideBets[n]||0;
     const goldExtra=n==='Dealer Bust'?(G._goldCardBet||0):0;
     if(orig>0){
-      const res=calcSide(n,orig,db,false);
+      const res=calcSide(n,orig,db,(G._freeSBNames||[]).includes(n));
       sidePL+=res.pl;
       if(res.label&&res.pl>0) sbAnnouncements.push({name:n,label:res.label,pl:res.pl,amount:orig});
     }
@@ -8969,7 +8974,7 @@ function closeResult(){
   G.hands=[[]]; G.cur=0; G.splits=0; G.splitBets=[]; G.dealer=[];
   G.arrowCounts=[0,0]; G.kruegerOn=[false,false]; G.desertOn=[false,false]; G.steelOn=[false,false]; G.goldOn=false;
   G.stampedOn=false; G._pendingBJ=false; G._pendingStand=false; G.stampedInitialBet=0; G.stampedCardsViewed=0; G.stampedOn2=false; G.stampedInitialBet2=0; G.stampedCardsViewed2=0; G.plagueOn=false;
-  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeDoubleHand=-1; G._freeSBNames=[];
+  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeDoubleHand=-1; G._freeSBNames=[]; G._freeSBNames2=[];
   G._handStartBal=0;
   G.mainBet=0;
   SB_NAMES.forEach(n=>G.sideBets[n]=0);

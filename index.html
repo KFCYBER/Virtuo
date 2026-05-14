@@ -4769,15 +4769,21 @@ function buildLoginStakeList(){
     return null;
   })();
   const _lastStakeIdx = _lastStakeKey ? STAKE_ORDER.indexOf(_lastStakeKey) : -1;
+  const _lastPlayedMin = _lastStakeKey ? ((STAKES[_lastStakeKey]||{}).min || 1) : 1;
   Object.entries(STAKES).forEach(([key,s])=>{
     // When balance is 0, all stakes selectable (player will enter buy-in from external top-up)
     const canAfford=bal<=0||bal>=s.min;
     const thisIdx=STAKE_ORDER.indexOf(key);
     const belowLastPlayed=_lastStakeIdx>=0 && thisIdx<_lastStakeIdx;
+    const tooManySteps=belowLastPlayed&&(_lastStakeIdx-thisIdx>1);
+    // Mirror in-game rule: one step down allowed when balance < 10× last-played stake minimum
+    const stakeDownAvailable=belowLastPlayed&&!tooManySteps&&bal<_lastPlayedMin*10;
+    const downgradeBlocked=belowLastPlayed&&(tooManySteps||!stakeDownAvailable);
     const btn=document.createElement('button');
     btn.style.cssText='width:100%;padding:11px 14px;background:var(--bg2);border:1px solid var(--line2);font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1px;text-align:left;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius);transition:all .15s;cursor:pointer;color:var(--white);opacity:1';
     btn.className='login-stake-btn';
-    btn.innerHTML='<span>'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min '+fmt(s.min)+'</span>';
+    const _downTag=stakeDownAvailable?'<span style="font-family:var(--mono);font-size:9px;color:var(--gold-lo);margin-left:6px;letter-spacing:1px">↓ STEP DOWN</span>':'';
+    btn.innerHTML='<span>'+s.label+' Stakes'+_downTag+'</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min '+fmt(s.min)+'</span>';
     btn.onmouseover=()=>{btn.style.borderColor='rgba(201,168,76,0.5)';btn.style.background='rgba(201,168,76,0.06)';};
     btn.onmouseout=()=>{btn.style.borderColor='var(--line2)';btn.style.background='var(--bg2)';};
     btn.onclick=()=>{
@@ -4800,7 +4806,7 @@ function buildLoginStakeList(){
       btn.onmouseover=null; btn.onmouseout=null;
       btn.onclick=null;
       btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
-    } else if(belowLastPlayed){
+    } else if(tooManySteps){
       btn.style.opacity='0.35';
       btn.style.cursor='not-allowed';
       btn.style.color='var(--muted)';
@@ -4809,7 +4815,18 @@ function buildLoginStakeList(){
       btn.style.filter='grayscale(0.4)';
       btn.onmouseover=null; btn.onmouseout=null;
       btn.onclick=null;
-      btn.title='Last played at '+STAKES[_lastStakeKey].label+' — use the stake rules in-game to step back down';
+      btn.title='Can only drop one stake level at a time';
+      btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
+    } else if(belowLastPlayed&&!stakeDownAvailable){
+      btn.style.opacity='0.35';
+      btn.style.cursor='not-allowed';
+      btn.style.color='var(--muted)';
+      btn.style.background='var(--bg1)';
+      btn.style.borderColor='rgba(255,255,255,0.05)';
+      btn.style.filter='grayscale(0.4)';
+      btn.onmouseover=null; btn.onmouseout=null;
+      btn.onclick=null;
+      btn.title='Step down available below '+fmtKFC(_lastPlayedMin*10);
       btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
     }
     c.appendChild(btn);

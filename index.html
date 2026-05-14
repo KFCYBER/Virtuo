@@ -5701,9 +5701,12 @@ function _syncInventoryNow(){
 // Silent mid-session balance checkpoint to GAS — fires every 5 completed hands.
 // Fires immediately on bet commit (deal/double/split) — closes the mid-hand reload exploit
 // where a player clears localStorage and logs in to get back the stale GAS balance.
+let _syncCommitInFlight = false;
 async function _syncCommitBalance(){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
+  if(_syncCommitInFlight) return; // already writing committed balance — skip duplicate
+  _syncCommitInFlight = true;
   const params = new URLSearchParams({
     action:'updatebalance', username:G.username, player:G.player||G.username,
     balance:String(G.balance),
@@ -5722,15 +5725,18 @@ async function _syncCommitBalance(){
     if(_data.ok||typeof _data.balance==='number'){
       try{ localStorage.removeItem('kfc_betlock_'+(G.username||'').toLowerCase()); }catch(e){}
     }
-  }catch(e){}
+  }catch(e){}finally{ _syncCommitInFlight = false; }
 }
 
 // Uses autosave=true so GAS skips TX row and games++ increment.
 let _autoSaveHandCount = 0;
 let _handLogOffset = 0;
+let _autoSaveInFlight = false;
 async function _autoSaveToSheet(){
   if(_isCreator()) return;
   if(!G.url||!G._sessionActive||!G.username||!G._cachedPin) return;
+  if(_autoSaveInFlight) return; // previous save still in flight — skip, next hand will cover it
+  _autoSaveInFlight = true;
   _autoSaveHandCount++;
   const params=new URLSearchParams({
     action:'updatebalance', username:G.username, player:G.player||G.username,
@@ -5745,9 +5751,10 @@ async function _autoSaveToSheet(){
   });
   try{
     await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
-    // Refresh leaderboard so onLeaderboardUpdate sees the new balance and can settle race markets
-    if(typeof _fetchLeaderboard === 'function') _fetchLeaderboard(true);
-  }catch(e){}
+    // Refresh leaderboard using cache — at most once per minute, so PM stays current
+    // without hammering GAS with a forced fetch after every hand
+    if(typeof _fetchLeaderboard === 'function') _fetchLeaderboard(false);
+  }catch(e){}finally{ _autoSaveInFlight = false; }
 }
 
 // Flush accumulated hand log entries to GAS Hand_Log sheet.
@@ -9319,7 +9326,7 @@ async function attemptSync(payload){
   let r;
   try{
     const _ctrl = new AbortController();
-    const _syncTimer = setTimeout(() => _ctrl.abort(), 30000);
+    const _syncTimer = setTimeout(() => _ctrl.abort(), 8000);
     r = await fetch(G.url+'?'+params.toString(), {
       method: 'GET',
       redirect: 'follow',

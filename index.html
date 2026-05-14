@@ -5958,7 +5958,7 @@ function _sendTgBeacon(){
   const stats = [`👤 ${name}`,`💰 P&L: *${sign}KFC${abspl}* (${sign}${abspct}%)`,`🏦 Buy-in: KFC${buyFmt} → Out: KFC${balFmt}`,`🎯 Hands: ${hands}`,`⏱ Duration: ${durStr}`,`📊 Stake: ${stake}`].join('\n');
   const message = `${header} _(left/reloaded)_\n_${quip}_\n\n${stats}`;
   const params = new URLSearchParams({action:'telegramNotify', message, pin: G._cachedPin||''});
-  try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
+  try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
 
 // Log session to GAS sheet on unload — keepalive ensures delivery even as page closes
@@ -5977,7 +5977,7 @@ function _logSessionToSheet(stakeLabel){
     stake:     stakeLabel || 'RELOAD-EXIT',
     pin:       G._cachedPin
   });
-  try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, cache:'no-store'}); }catch(e){}
+  try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
 
 let _unloadFired = false; // guard against beforeunload + pagehide both firing
@@ -12201,7 +12201,12 @@ const PM = (() => {
         if(!m.condition || m.condition.type !== 'bankroll_milestone') return true;
         const mp = m.condition.params;
         if((mp.player||'').toLowerCase() !== pLow) return true;
-        if(m.status === 'open') return mp.amount === nextAmount;
+        if(m.status === 'open'){
+          if(mp.amount === nextAmount) return true;
+          // Player already crossed this milestone — settle YES so bets pay out instead of refunding
+          if(balance >= mp.amount) settle(m.id, 'YES');
+          return false;
+        }
         if(m.status === 'settled' && m.result === 'NO'){
           const mPeriod = mp.week || mp.month || (mp.date||'').slice(0,10);
           return mPeriod >= _curWeekStr; // keep only current-week NO (still settling); prune old ones

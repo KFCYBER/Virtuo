@@ -69,18 +69,18 @@
       position: sticky; top: 0; z-index: 200;
       backdrop-filter: blur(24px);
       box-shadow: 0 1px 60px rgba(0,0,0,0.7), 0 0 100px rgba(122,18,40,0.06);
+      animation: header-glow-pulse 5s ease-in-out infinite;
     }
 
     @keyframes logo-float {
-      0%   { transform: translateY(0) rotate(0deg);   filter: drop-shadow(0 0 6px rgba(201,168,76,0.35)); }
-      50%  { transform: translateY(-5px) rotate(180deg); filter: drop-shadow(0 0 18px rgba(201,168,76,0.65)); }
-      100% { transform: translateY(0) rotate(360deg); filter: drop-shadow(0 0 6px rgba(201,168,76,0.35)); }
+      0%   { transform: translateY(0) rotate(0deg); }
+      50%  { transform: translateY(-5px) rotate(180deg); }
+      100% { transform: translateY(0) rotate(360deg); }
     }
     .logo-wrap {
       width: 52px; height: 52px; flex-shrink: 0;
       border-radius: 50%; overflow: hidden;
       animation: logo-float 5s ease-in-out infinite;
-      box-shadow: 0 0 0 1px rgba(201,168,76,0.2), 0 0 20px rgba(201,168,76,0.12);
     }
     .header-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
 
@@ -394,6 +394,35 @@
 
     @keyframes fadeIn { to { opacity: 1; } }
 
+    /* ── SCROLL REVEAL ── */
+    .reveal-target {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 0.65s ease, transform 0.65s ease;
+    }
+    .reveal-target.revealed { opacity: 1; transform: none; }
+
+    /* ── BUST BADGE ── */
+    .bust-badge {
+      display: inline-block; font-size: 9px; font-weight: 800; letter-spacing: 2px;
+      padding: 3px 9px; border-radius: 3px;
+      background: rgba(224,64,64,0.1); color: var(--red);
+      border: 1px solid rgba(224,64,64,0.3); text-transform: uppercase;
+    }
+
+    /* ── BALANCE BAR ── */
+    .balance-bar-track { height: 2px; border-radius: 1px; background: var(--border); margin-top: 5px; overflow: hidden; }
+    .balance-bar-fill  { height: 100%; border-radius: 1px; transition: width 0.8s ease; }
+
+    /* ── HERO CARD 3D ── */
+    .hero { perspective: 1400px; }
+    .hero-card { transform-style: preserve-3d; will-change: transform; }
+
+    /* ── HEADER PULSE ── */
+    @keyframes header-glow-pulse {
+      0%, 100% { box-shadow: 0 1px 60px rgba(0,0,0,0.7), 0 0 80px rgba(122,18,40,0.06); border-bottom-color: rgba(122,18,40,0.45); }
+      50%       { box-shadow: 0 1px 60px rgba(0,0,0,0.7), 0 0 120px rgba(122,18,40,0.22); border-bottom-color: rgba(122,18,40,0.8); }
+    }
+
     footer {
       text-align: center; padding: 28px;
       border-top: 1px solid var(--border);
@@ -474,9 +503,9 @@
     <div class="hero-sub" id="hero-progress">—</div>
   </div>
   <div class="hero-card">
-    <div class="hero-label">Last Refresh</div>
+    <div class="hero-label">Total KFC in Play</div>
     <div class="hero-value" style="font-size:17px" id="hero-refresh">—</div>
-    <div class="hero-sub" id="hero-next">Auto-refresh every 60s</div>
+    <div class="hero-sub" id="hero-next">—</div>
   </div>
 </div>
 
@@ -654,7 +683,6 @@ function initStars() {
     phase: Math.random() * Math.PI * 2,
   }));
 
-  /* Rare gold tinted stars for the Dark Fall theme */
   const goldStars = Array.from({ length: 12 }, () => ({
     x: Math.random(), y: Math.random() * 0.5,
     r: Math.random() * 1.4 + 0.5,
@@ -664,17 +692,79 @@ function initStars() {
     gold: true,
   }));
 
+  /* Falling embers — Dark Fall atmosphere */
+  const embers = Array.from({ length: 28 }, () => ({
+    x: Math.random(),
+    y: Math.random(),
+    r: Math.random() * 1.6 + 0.4,
+    vy: Math.random() * 0.00012 + 0.00004,
+    vx: (Math.random() - 0.5) * 0.00006,
+    o: Math.random() * 0.35 + 0.08,
+    phase: Math.random() * Math.PI * 2,
+  }));
+
+  /* Shooting stars */
+  const shooters = [];
+  let lastShot = 0;
+
+  function maybeSpawn(t) {
+    if (t - lastShot > 4000 + Math.random() * 6000) {
+      lastShot = t;
+      shooters.push({
+        x: Math.random() * canvas.width * 0.7,
+        y: Math.random() * canvas.height * 0.4,
+        vx: 5 + Math.random() * 5,
+        vy: 2 + Math.random() * 3,
+        len: 60 + Math.random() * 80,
+        life: 1,
+      });
+    }
+  }
+
   function draw(t) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    /* Stars */
     [...stars, ...goldStars].forEach(s => {
       const opacity = s.o * (0.55 + 0.45 * Math.sin(t * s.speed * 1000 + s.phase));
       ctx.beginPath();
       ctx.arc(s.x * canvas.width, s.y * canvas.height, s.r, 0, Math.PI * 2);
-      ctx.fillStyle = s.gold
-        ? `rgba(201,168,76,${opacity})`
-        : `rgba(220,225,255,${opacity})`;
+      ctx.fillStyle = s.gold ? `rgba(201,168,76,${opacity})` : `rgba(220,225,255,${opacity})`;
       ctx.fill();
     });
+
+    /* Embers */
+    embers.forEach(e => {
+      e.y += e.vy;
+      e.x += e.vx + Math.sin(t * 0.001 + e.phase) * 0.00008;
+      if (e.y > 1) { e.y = -0.02; e.x = Math.random(); }
+      if (e.x < 0 || e.x > 1) e.vx *= -1;
+      const flicker = e.o * (0.5 + 0.5 * Math.sin(t * 0.003 + e.phase));
+      ctx.beginPath();
+      ctx.arc(e.x * canvas.width, e.y * canvas.height, e.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(220,100,30,${flicker})`;
+      ctx.fill();
+    });
+
+    /* Shooting stars */
+    maybeSpawn(t);
+    for (let i = shooters.length - 1; i >= 0; i--) {
+      const s = shooters[i];
+      s.life -= 0.018;
+      s.x += s.vx;
+      s.y += s.vy;
+      if (s.life <= 0) { shooters.splice(i, 1); continue; }
+      const grad = ctx.createLinearGradient(s.x, s.y, s.x - s.vx * s.len / s.vx, s.y - s.vy * s.len / s.vx);
+      grad.addColorStop(0, `rgba(255,255,255,${s.life * 0.9})`);
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.beginPath();
+      ctx.moveTo(s.x, s.y);
+      ctx.lineTo(s.x - s.len * (s.vx / Math.hypot(s.vx, s.vy)), s.y - s.len * (s.vy / Math.hypot(s.vx, s.vy)));
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    }
+
     requestAnimationFrame(draw);
   }
   requestAnimationFrame(draw);
@@ -708,9 +798,9 @@ function parseRecords(rows) {
     const rawBal = (row[3] ?? '').trim();
     if (!name || status !== 'Active') continue;
     if (name.toLowerCase() === 'creator') continue;
-    if (!rawBal || rawBal === '0' || rawBal === '-' || rawBal.startsWith('#')) continue;
+    if (!rawBal || rawBal === '-' || rawBal.startsWith('#')) continue;
     const balance = parseFloat(rawBal.replace(/,/g, ''));
-    if (!isFinite(balance) || balance <= 0) continue;
+    if (!isFinite(balance) || balance < 0) continue;
     players.push({
       name, balance,
       taxRate: (row[6] ?? '').trim(),
@@ -841,6 +931,21 @@ function toggleRegime() {
 }
 
 /* ══════════════════════════════════════════
+   ANIMATED COUNTER
+══════════════════════════════════════════ */
+function animateCount(el, target, duration, formatter) {
+  if (!el) return;
+  const start = performance.now();
+  function step(now) {
+    const p    = Math.min(1, (now - start) / duration);
+    const ease = 1 - Math.pow(1 - p, 3);
+    el.textContent = formatter(Math.round(ease * target));
+    if (p < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+/* ══════════════════════════════════════════
    HERO STATS
 ══════════════════════════════════════════ */
 function renderHero(players) {
@@ -849,16 +954,17 @@ function renderHero(players) {
   const pct         = leader ? Math.min(100, (leader.balance / SEASON.TARGET) * 100) : 0;
   const msLeft      = SEASON.END - new Date();
   const daysLeft    = Math.max(0, Math.ceil(msLeft / 86_400_000));
+  const totalKfc    = players.reduce((s, p) => s + p.balance, 0);
 
   document.getElementById('hero-leader').textContent     = leader ? leader.name : '—';
   document.getElementById('hero-leader-bal').innerHTML   = leader ? `<strong>${fmt(leader.balance)}</strong> KFC` : '—';
-  document.getElementById('hero-players').textContent    = players.length;
+  animateCount(document.getElementById('hero-players'), players.length, 800, v => v.toString());
   document.getElementById('hero-contenders').innerHTML   = contenders.length
     ? `<strong>${contenders.length}</strong> contender${contenders.length !== 1 ? 's' : ''} in Endgame`
     : 'No contenders yet';
   document.getElementById('hero-progress').innerHTML     = `<strong>${pct.toFixed(1)}%</strong> of ${SEASON.TARGET_LABEL} target`;
-  document.getElementById('hero-refresh').textContent    = new Date().toLocaleTimeString();
-  document.getElementById('hero-next').textContent       = `${daysLeft}d remaining · auto-refresh 60s`;
+  animateCount(document.getElementById('hero-refresh'), totalKfc, 1400, fmt);
+  document.getElementById('hero-next').textContent       = `Updated ${new Date().toLocaleTimeString()} · ${daysLeft}d left`;
 }
 
 /* ══════════════════════════════════════════
@@ -870,8 +976,10 @@ function renderTable(players, txData) {
     return;
   }
   const rankClass = ['gold', 'silver', 'bronze'];
+  const leaderBal = players[0]?.balance ?? 1;
   const rows = players.map((p, i) => {
     const isContender  = p.balance >= SEASON.CONTENDER_MIN;
+    const isBust       = p.balance === 0;
     const contenderTag = isContender ? '<span class="contender-tag">Contender</span>' : '';
     const series       = txData[p.name];
     let sessionCell    = '<span style="color:var(--muted);font-size:11px;letter-spacing:1px">No sessions recorded</span>';
@@ -901,7 +1009,11 @@ function renderTable(players, txData) {
           <div class="player-name-row">${p.name}${contenderTag}</div>
           <div class="session-mobile">${sessionCell}</div>
         </td>
-        <td class="td-balance">${fmt(p.balance)}</td>
+        <td class="td-balance">${
+          isBust
+            ? '<span class="bust-badge">Bust</span>'
+            : `${fmt(p.balance)}<div class="balance-bar-track"><div class="balance-bar-fill" style="width:${Math.min(100,(p.balance/leaderBal)*100).toFixed(1)}%;background:${isContender?'#e04040':'var(--green)'}"></div></div>`
+        }</td>
         <td class="td-session">${sessionCell}</td>
       </tr>`;
   }).join('');
@@ -1092,6 +1204,29 @@ function updateHeaderSubtitle() {
 initStars();
 updateHeaderSubtitle();
 refresh();
+
+/* ── HERO CARD 3D TILT ── */
+document.querySelectorAll('.hero-card').forEach(card => {
+  card.addEventListener('mousemove', e => {
+    const rect = card.getBoundingClientRect();
+    const dx = ((e.clientX - rect.left) / rect.width  - 0.5) * 2;
+    const dy = ((e.clientY - rect.top)  / rect.height - 0.5) * 2;
+    card.style.transform = `translateY(-3px) rotateX(${-dy * 6}deg) rotateY(${dx * 6}deg)`;
+  });
+  card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+});
+
+/* ── SCROLL REVEAL ── */
+(function() {
+  const obs = new IntersectionObserver(entries => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('revealed'); obs.unobserve(e.target); } });
+  }, { threshold: 0.08 });
+  document.querySelectorAll('.section-label, .chart-card, .chart-grid').forEach((el, i) => {
+    el.classList.add('reveal-target');
+    el.style.transitionDelay = `${i * 0.05}s`;
+    obs.observe(el);
+  });
+})();
 </script>
 </body>
 </html>

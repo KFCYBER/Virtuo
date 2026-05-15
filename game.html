@@ -13201,6 +13201,27 @@ const PM = (() => {
         });
         _saveMarkets(); render();
 
+        // Admin wipe: GAS returned explicit empty bets array — sheet was cleared.
+        // Void all local open bets and refund their stakes so nothing is stuck.
+        if(Array.isArray(d.bets) && d.bets.length === 0){
+          const _wipedLocal = _loadBets();
+          let _wipeRefund = 0;
+          const _wipedCleaned = _wipedLocal.map(b => {
+            if(b.payout !== null) return b; // already settled, keep as-is
+            _wipeRefund += b.amount || 0;
+            return {...b, payout: 0, refunded: true};
+          });
+          _saveBets(_wipedCleaned);
+          // Also wipe season history and prev-balance snapshots so P&L display starts clean
+          localStorage.removeItem(LS_SEASON_HIST);
+          localStorage.removeItem(LS_PREV_BAL);
+          localStorage.removeItem(LS_SEASON_DATES);
+          _seasonHist  = {};
+          _prevBalances = {};
+          _seasonDates = {};
+          if(_wipeRefund > 0){ G.balance += _wipeRefund; updateUI(); _syncBalanceAfterPM(); }
+        }
+
         // Merge server-side bets into localStorage so portfolio is cross-device.
         // GAS now returns payout=0 for bets on deleted markets (orphaned bets).
         // When we see payout=0 from GAS for a locally-unsettled bet on a market that

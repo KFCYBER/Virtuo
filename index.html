@@ -622,6 +622,21 @@
     .pm-pos-amt { color: var(--gold); }
     .pm-pos-payout { color: var(--muted); }
 
+    /* ── Most Bet On strip (hub) ── */
+    .hub-hot-wrap { margin: 20px 0 8px; }
+    .hub-hot-header { font-family: var(--mono); font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 10px; }
+    .hub-hot-strip { display: flex; gap: 10px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 4px; }
+    .hub-hot-strip::-webkit-scrollbar { display: none; }
+    .hub-hot-card { flex: 0 0 170px; background: rgba(201,168,76,.05); border: 1px solid rgba(201,168,76,.18); border-radius: 6px; padding: 12px 14px; }
+    .hub-hot-card-type { font-family: var(--mono); font-size: 7px; letter-spacing: 2px; color: var(--gold-lo); text-transform: uppercase; margin-bottom: 4px; }
+    .hub-hot-card-name { font-size: 11px; color: var(--text); line-height: 1.4; margin-bottom: 10px; }
+    .hub-hot-split-bar { height: 4px; background: rgba(255,55,75,.2); border-radius: 2px; overflow: hidden; margin-bottom: 4px; }
+    .hub-hot-split-fill { height: 100%; background: rgba(0,200,90,.75); border-radius: 2px; }
+    .hub-hot-split-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 8px; margin-bottom: 6px; }
+    .hub-hot-split-labels .hs-yes { color: #5cd97a; }
+    .hub-hot-split-labels .hs-no  { color: #e05555; }
+    .hub-hot-card-vol { font-family: var(--mono); font-size: 8px; color: var(--gold-hi); letter-spacing: 1px; }
+
     /* ── PM MARKETS SECTION ── */
     #pm-markets-section { max-width: 1320px; margin: 32px auto 0; padding: 0 24px; position: relative; z-index: 2; }
     .pm-mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap: 14px; margin-top: 14px; }
@@ -849,6 +864,10 @@
 <div id="pm-markets-section" style="display:none">
   <div style="max-width:1320px;margin:0 auto;padding:32px 24px 0">
     <div class="section-label" style="margin-bottom:0">Race &amp; Milestone Markets</div>
+    <div id="pm-hot-wrap" class="hub-hot-wrap" style="display:none">
+      <div class="hub-hot-header">🔥 Most Bet On</div>
+      <div class="hub-hot-strip" id="pm-hot-strip-hub"></div>
+    </div>
   </div>
   <div style="max-width:1320px;margin:0 auto;padding:0 24px">
     <div class="pm-mkt-grid" id="pm-mkt-grid">
@@ -1818,6 +1837,8 @@ async function _fetchPmMarketsAndRender() {
         }).join('');
       }
     }
+    // Render hot strip using all open markets (not filtered to race/season)
+    _renderHotStripHub((d.markets || []).filter(m => m.status === 'open'));
     // Only render if leaderboard data is ready (has balance info for odds computation).
     // If refresh() hasn't completed yet, it will call _renderPmMarkets itself once data lands.
     if (_hubPlayers.length > 0) {
@@ -1827,6 +1848,60 @@ async function _fetchPmMarketsAndRender() {
     const grid = document.getElementById('pm-mkt-grid');
     if (grid) grid.innerHTML = '<div class="pm-empty">Could not load markets</div>';
   }
+}
+
+/* ── Most Bet On strip (hub) ── */
+function _renderHotStripHub(openMarkets) {
+  const wrap  = document.getElementById('pm-hot-wrap');
+  const strip = document.getElementById('pm-hot-strip-hub');
+  if (!wrap || !strip) return;
+
+  // Build balance map for odds computation
+  const currBals = {};
+  _hubPlayers.forEach(p => {
+    currBals[p.name.toLowerCase()] = p.balance;
+    if (p.username) currBals[p.username.toLowerCase()] = p.balance;
+  });
+  // Merge GAS-authoritative balances
+  Object.assign(currBals, _hubGasBals);
+
+  const top = openMarkets
+    .filter(m => (m.betVolume || 0) > 0)
+    .sort((a, b) => (b.betVolume || 0) - (a.betVolume || 0))
+    .slice(0, 5);
+
+  if (!top.length) { wrap.style.display = 'none'; return; }
+  wrap.style.display = '';
+
+  const typeLabel = t => t === 'race' ? 'RACE' : t === 'season' ? 'SEASON' : 'SHOE';
+
+  strip.innerHTML = top.map(m => {
+    // Live-balance-based odds (mirrors game.html _fundamentalPct — no housePools needed)
+    let yPct = 50;
+    if (m.type === 'season') {
+      const playerName = (m.params && m.params.player) || '';
+      const low = playerName.toLowerCase();
+      const bal = currBals[low] || _hubGasBals[low] || 0;
+      const target = (m.params && m.params.target) || 0;
+      if (target > 0) yPct = Math.round(_milestoneYesBias(bal, target, Date.now()) * 100);
+    } else if (m.type === 'race') {
+      const playerName = (m.params && m.params.player) || '';
+      const low = playerName.toLowerCase();
+      const bal = currBals[low] || _hubGasBals[low] || 0;
+      const target = (m.params && m.params.target) || 0;
+      if (target > 0) yPct = Math.round(_raceYesBias(bal, currBals, target) * 100);
+    }
+
+    const name = m.desc.length > 45 ? m.desc.slice(0, 43) + '…' : m.desc;
+    const vol  = _fmtHub(m.betVolume || 0);
+    return `<div class="hub-hot-card">
+      <div class="hub-hot-card-type">${typeLabel(m.type)}</div>
+      <div class="hub-hot-card-name">${name}</div>
+      <div class="hub-hot-split-bar"><div class="hub-hot-split-fill" style="width:${yPct}%"></div></div>
+      <div class="hub-hot-split-labels"><span class="hs-yes">${yPct}% YES</span><span class="hs-no">${100 - yPct}% NO</span></div>
+      <div class="hub-hot-card-vol">${vol} KFC wagered</div>
+    </div>`;
+  }).join('');
 }
 
 /* ── PM MARKETS RENDER ── */

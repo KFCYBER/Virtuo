@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>KFC · Hub · Season 3</title>
+  <title>G.A.L Season 3: Dark Fall</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
   <style>
     :root {
@@ -50,7 +50,7 @@
       100% { transform: translateY(0px)  rotate(360deg); }
     }
 
-    .header-logo { height: 52px; width: auto; animation: logo-spin-float 4s ease-in-out infinite; }
+    .header-logo { height: 52px; width: auto; animation: logo-spin-float 4s ease-in-out infinite; mix-blend-mode: screen; filter: brightness(1.1) contrast(1.05); }
     .header-center { text-align: center; }
     .header-center h1 { font-size: 20px; font-weight: 800; letter-spacing: 7px; text-transform: uppercase; color: #fff; }
     .header-center p  { font-size: 9px; letter-spacing: 3px; color: var(--gold); margin-top: 4px; text-transform: uppercase; }
@@ -210,6 +210,8 @@
     .session-net.neu { color: var(--muted); }
     .session-sub { font-size: 10px; color: var(--muted); letter-spacing: 0.5px; margin-top: 2px; }
     .session-sub strong { color: var(--text); font-weight: 600; }
+    /* Mobile session block — hidden on desktop, shown inside player cell on mobile */
+    .session-mobile { display: none; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); }
 
     /* ── STATUS BAR ── */
     .status-bar { display: flex; align-items: center; justify-content: space-between; padding: 11px 20px; background: var(--surface2); border-top: 1px solid var(--border); font-size: 10px; color: var(--muted); letter-spacing: 1px; }
@@ -271,9 +273,13 @@
       .card table { table-layout: fixed; width: 100%; }
       th, td { padding: 10px 10px; }
       .td-rank { width: 36px; font-size: 10px; }
-      .td-player { font-size: 12px; display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-      .td-balance { width: 80px; font-size: 11px; }
+      .td-player { font-size: 12px; display: block; }
+      .td-balance { width: 80px; font-size: 11px; white-space: nowrap; }
       .td-session { display: none; }
+      .session-mobile { display: block; }
+      .session-mobile .session-result-row { gap: 5px; }
+      .session-mobile .session-net { font-size: 11px; }
+      .session-mobile .session-sub { font-size: 9px; }
       .chart-grid.cols-2 { grid-template-columns: 1fr; }
       .tax-grid { grid-template-columns: 1fr; }
       footer { font-size: 9px; }
@@ -290,8 +296,8 @@
 <header>
   <img src="KFC_LOGO.png" alt="KFC" class="header-logo" onerror="this.style.display='none'" />
   <div class="header-center">
-    <h1>KFC Hub</h1>
-    <p id="header-subtitle">Season 3 · Golden Aces League</p>
+    <h1>G.A.L Season 3</h1>
+    <p id="header-subtitle">Dark Fall · Golden Aces League</p>
   </div>
   <a href="game.html" class="play-btn" title="Open the game">
     PLAY <span class="arrow">→</span>
@@ -423,7 +429,7 @@
 
 <footer>
   <span>KFC</span> · Kimmo's Fabulous Casino · Season 3 · 2026
-  · <a href="../index_v2.html" style="color:var(--gold);text-decoration:none;letter-spacing:2px">▶ PLAY</a>
+  · <a href="game.html" style="color:var(--gold);text-decoration:none;letter-spacing:2px">▶ PLAY</a>
 </footer>
 
 <script>
@@ -693,7 +699,7 @@ function renderTable(players, txData) {
     return `
       <tr class="${isContender ? 'contender' : ''}">
         <td class="td-rank ${rankClass[i] ?? ''}">#${i + 1}</td>
-        <td class="td-player">${p.name}${contenderTag}</td>
+        <td class="td-player">${p.name}${contenderTag}<div class="session-mobile">${sessionCell}</div></td>
         <td class="td-balance">${fmt(p.balance)}</td>
         <td class="td-session">${sessionCell}</td>
       </tr>`;
@@ -713,23 +719,56 @@ function renderTable(players, txData) {
 }
 
 /* ══════════════════════════════════════════
-   TAX
+   TAX — rate driven by highest ever stake
 ══════════════════════════════════════════ */
-function renderTax(players) {
+const STAKE_ORDER = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
+const STAKE_TAX   = { low:.04, mid:.06, high:.08, royale:.10, legendary:.12, mythic:.14, highroller:.16, champion:.18 };
+const STAKE_LABEL = { low:'Low', mid:'Mid', high:'High', royale:'Royale', legendary:'Legendary', mythic:'Mythic', highroller:'High-Roller', champion:'Champion' };
+
+function stakeKey(raw) {
+  if (!raw) return null;
+  const s = raw.toLowerCase().replace(/[-\s]/g, '');
+  // normalise "highroller" variants
+  if (s === 'highroller' || s === 'high-roller') return 'highroller';
+  return STAKE_ORDER.find(k => s === k || s.startsWith(k)) || null;
+}
+
+function peakStake(series) {
+  if (!series || !series.length) return null;
+  let best = null;
+  for (const entry of series) {
+    const k = stakeKey(entry.stake);
+    if (!k) continue;
+    if (!best || STAKE_ORDER.indexOf(k) > STAKE_ORDER.indexOf(best)) best = k;
+  }
+  return best;
+}
+
+function renderTax(players, txData) {
   const days   = daysUntil25();
   const widget = document.getElementById('tax-widget');
-  const cards  = players.filter(p => p.taxAmt > 0).map(p => {
-    const bc = days === 0 ? 'tax-due-today' : days <= 3 ? 'tax-due-soon' : 'tax-due-later';
-    const bt = days === 0 ? 'Due Today' : days === 1 ? 'Due Tomorrow' : `Due in ${days} days`;
+  const bc = days === 0 ? 'tax-due-today' : days <= 3 ? 'tax-due-soon' : 'tax-due-later';
+  const bt = days === 0 ? 'Due Today'     : days === 1 ? 'Due Tomorrow' : `Due in ${days} days`;
+
+  const cards = players.map(p => {
+    const series  = txData[p.name] || [];
+    const peak    = peakStake(series);
+    const rate    = peak ? STAKE_TAX[peak] : null;
+    const taxAmt  = (rate && p.balance > 0) ? Math.round(p.balance * rate) : 0;
+    const rateStr = rate ? (rate * 100).toFixed(0) + '%' : '—';
+    const peakLbl = peak ? STAKE_LABEL[peak] : 'No sessions';
+    const pending = !peak;
     return `<div class="tax-card">
       <div class="tax-player">${p.name}</div>
       <div class="tax-row"><span>Balance</span><span>${fmt(p.balance)}</span></div>
-      <div class="tax-row"><span>Tax Rate</span><span>${p.taxRate}</span></div>
-      <div class="tax-row"><span>Tax Due</span><span>${fmt(p.taxAmt)} KFC</span></div>
-      <span class="tax-due-badge ${bc}">${bt}</span>
+      <div class="tax-row"><span>Peak Stake</span><span style="color:var(--gold)">${peakLbl}</span></div>
+      <div class="tax-row"><span>Tax Rate</span><span>${rateStr}</span></div>
+      <div class="tax-row"><span>Tax Due</span><span>${pending ? '—' : fmt(taxAmt) + ' KFC'}</span></div>
+      <span class="tax-due-badge ${pending ? 'tax-due-later' : bc}">${pending ? 'Pending' : bt}</span>
     </div>`;
   }).join('');
-  widget.innerHTML = cards || '<p style="color:var(--muted);font-size:12px;letter-spacing:1px">No tax data available.</p>';
+
+  widget.innerHTML = cards || '<p style="color:var(--muted);font-size:12px;letter-spacing:1px">No players found.</p>';
 }
 
 /* ══════════════════════════════════════════
@@ -824,7 +863,7 @@ async function refresh() {
     renderHero(players);
     renderCrucicon(players);
     renderTable(players, txData);
-    renderTax(players);
+    renderTax(players, txData);
     renderBar(players,             'chart-bar-fwd');
     renderBar(players.slice(0, 3), 'chart-top3');
     renderLine(txData, 'chart-full',        'wrap-chart-full',        { yMin: 1, yMax: SEASON.TARGET });

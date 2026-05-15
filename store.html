@@ -418,6 +418,48 @@ body {
 }
 .btn-confirm-secondary:hover { border-color: var(--muted2); color: var(--white); }
 
+/* ── TWINT PAYMENT BOX ── */
+.twint-box {
+  width: 100%; margin: 4px 0 20px;
+  background: rgba(201,168,76,0.05);
+  border: 1px solid rgba(201,168,76,0.22);
+  border-radius: 4px;
+  padding: 16px 18px;
+  text-align: left;
+}
+.twint-box-label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 3px; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 12px;
+}
+.twint-row {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 8px; margin-bottom: 12px; flex-wrap: wrap;
+}
+.twint-number-main {
+  font-size: 18px; font-weight: 800; letter-spacing: 2px; color: var(--gold);
+}
+.twint-number-intl {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2);
+}
+.twint-amount-row {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px;
+}
+.twint-amount-label {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 2px; color: var(--muted);
+  text-transform: uppercase;
+}
+.twint-amount-val {
+  font-size: 16px; font-weight: 800; color: var(--white);
+}
+.twint-msg-note {
+  font-family: var(--mono); font-size: 10px; color: var(--muted2); line-height: 1.7;
+  padding: 9px 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+}
+.twint-msg-note strong { color: var(--gold); font-weight: 400; }
+
 /* ── DISCLAIMER ── */
 .disclaimer {
   font-family: var(--mono); font-size: 10px; color: var(--muted);
@@ -466,7 +508,7 @@ body {
 <div class="page" style="position:relative;z-index:1">
   <div class="page-eyebrow">Kimmo's Fabulous Casino</div>
   <div class="page-title">KFC <span>Store</span></div>
-  <div class="page-sub">All purchases are processed manually — items delivered before your next session. Accepted: CHF (Twint &amp; Cash).</div>
+  <div class="page-sub">All purchases are processed manually — items delivered before your next session. Payment: CHF via Twint only.</div>
   <div class="page-header-rule"></div>
 
   <!-- TABS -->
@@ -478,13 +520,13 @@ body {
   <!-- CRATES -->
   <div class="section active" id="tab-crates">
     <div class="product-grid" id="grid-crates"></div>
-    <div class="disclaimer">⚠ Purchased with CHF (Twint &amp; Cash) only.</div>
+    <div class="disclaimer">⚠ Payment via Twint only (CHF). Send to 079 135 72 71 after placing your order.</div>
   </div>
 
   <!-- CURRENCY PACKS -->
   <div class="section" id="tab-currency">
     <div class="product-grid" id="grid-currency"></div>
-    <div class="disclaimer">⚠ Purchased with CHF (Twint &amp; Cash) only.</div>
+    <div class="disclaimer">⚠ Payment via Twint only (CHF). Send to 079 135 72 71 after placing your order.</div>
   </div>
 </div>
 
@@ -533,9 +575,27 @@ body {
     <!-- CONFIRMATION STATE -->
     <div class="drawer-confirm" id="drawer-confirm">
       <div class="confirm-check">✓</div>
-      <div class="confirm-heading">Thank You!</div>
-      <div class="confirm-sub">Your order has been placed.<br>Items will be delivered before your next session.</div>
+      <div class="confirm-heading">Order Placed!</div>
+      <div class="confirm-sub">Complete your Twint payment below to confirm delivery.</div>
       <div class="confirm-ref" id="confirm-ref">KFC-XXXXX</div>
+
+      <!-- Twint payment instructions -->
+      <div class="twint-box">
+        <div class="twint-box-label">Send payment via Twint</div>
+        <div class="twint-row">
+          <span class="twint-number-main">079 135 72 71</span>
+          <span class="twint-number-intl">+41 79 135 72 71</span>
+        </div>
+        <div class="twint-amount-row">
+          <span class="twint-amount-label">Amount</span>
+          <span class="twint-amount-val" id="confirm-amount">CHF 0.00</span>
+        </div>
+        <div class="twint-msg-note">
+          Include in your Twint message:<br>
+          <strong id="confirm-twint-msg">username + order ref</strong>
+        </div>
+      </div>
+
       <div class="confirm-actions">
         <button class="btn-confirm-primary" onclick="backToStore()">Continue Shopping</button>
         <button class="btn-confirm-secondary" onclick="window.close()">Back to Game</button>
@@ -833,7 +893,7 @@ async function placeOrder() {
     updateCartUI();
     btn.textContent = 'Place Order';
     btn.disabled = false;
-    showOrderConfirmation(orderId);
+    showOrderConfirmation(orderId, total, username);
   } catch (e) {
     msg.className = 'order-msg err';
     const detail = (e && (e.text || e.message || JSON.stringify(e))) || 'unknown error';
@@ -843,10 +903,12 @@ async function placeOrder() {
   }
 }
 
-function showOrderConfirmation(orderId) {
+function showOrderConfirmation(orderId, total, username) {
   document.getElementById('cart-body').style.display    = 'none';
   document.getElementById('cart-footer').style.display  = 'none';
   document.getElementById('confirm-ref').textContent    = orderId;
+  document.getElementById('confirm-amount').textContent = total || '';
+  document.getElementById('confirm-twint-msg').textContent = (username || 'username') + ' · ' + orderId;
   document.getElementById('drawer-title').textContent   = 'Order Placed';
   document.getElementById('drawer-confirm').classList.add('visible');
 }

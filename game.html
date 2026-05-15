@@ -13693,6 +13693,7 @@ const PM = (() => {
         </select>
         <button class="btn-ghost" style="padding:8px 14px;font-size:10px" onclick="PM._exportHandLog()">⬇ Export CSV</button>
       </div>
+      ${Object.keys(_currBalances).length === 0 ? '<div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:1px;margin-bottom:8px">⚠ Leaderboard not loaded yet — <span style="cursor:pointer;text-decoration:underline" onclick="PM._switchTab(\'history\')">click here to refresh</span></div>' : ''}
       <div id="pm-export-result" style="font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:1px"></div>
       <div style="height:1px;background:var(--line);margin:18px 0"></div>
       <div style="font-family:var(--mono);font-size:9px;color:var(--gold);letter-spacing:2px;margin-bottom:8px">ADMIN: PURGE DUPLICATE MARKETS</div>

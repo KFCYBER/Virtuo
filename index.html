@@ -1729,33 +1729,50 @@ function _renderPmMarkets(markets, txData) {
     grid.innerHTML = '<div class="pm-empty">No active race or milestone markets</div>';
     return;
   }
-  // Build current balance map — index by both display name and username so market
-  // condition params (which may use either) always find the right balance.
+
+  // Balance map — keyed by both display name and username (markets use username as params.player)
   const currBals = {};
   _hubPlayers.forEach(p => {
     currBals[p.name.toLowerCase()] = p.balance;
     if (p.username) currBals[p.username.toLowerCase()] = p.balance;
   });
 
-  // Group race markets by target amount to combine all players in one card
-  const raceGroups = {};
-  const milestones = [];
+  // Current week string (YYYY-MM-DD of Monday) — same format as game.html _weekStart()
+  const currWeekStr = new Date(_hubWeekStart()).toISOString().slice(0, 10);
+
+  // ── Milestone: one card per player, current week only, lowest open amount ──
+  // (game only creates one per player per week, but GAS may have stale rows from past bugs)
+  const milestoneByPlayer = {}; // pKey → market
   markets.forEach(m => {
-    if (m.type === 'race') {
-      const key = String((m.condition && m.condition.params && m.condition.params.amount) || 0);
-      if (!raceGroups[key]) raceGroups[key] = [];
-      raceGroups[key].push(m);
-    } else {
-      milestones.push(m);
+    if (m.type !== 'season') return;
+    const p = m.condition && m.condition.params;
+    if (!p || !p.player) return;
+    const weekStr = p.week || (p.date || '').slice(0, 10);
+    if (weekStr !== currWeekStr) return; // only this week's milestones
+    const pKey = (p.player || '').toLowerCase();
+    // Keep only the lowest-amount market per player (the "next" goal)
+    if (!milestoneByPlayer[pKey] || p.amount < milestoneByPlayer[pKey].condition.params.amount) {
+      milestoneByPlayer[pKey] = m;
+    }
+  });
+
+  // ── Race: one card per player, their next (lowest open) race target ──
+  const raceByPlayer = {}; // pKey → market
+  markets.forEach(m => {
+    if (m.type !== 'race') return;
+    const p = m.condition && m.condition.params;
+    if (!p || !p.player) return;
+    const pKey = (p.player || '').toLowerCase();
+    if (!raceByPlayer[pKey] || p.amount < raceByPlayer[pKey].condition.params.amount) {
+      raceByPlayer[pKey] = m;
     }
   });
 
   grid.innerHTML = '';
 
   // ── Milestone cards ──
-  milestones.forEach(mkt => {
-    const p = mkt.condition && mkt.condition.params;
-    if (!p) return;
+  Object.values(milestoneByPlayer).forEach(mkt => {
+    const p = mkt.condition.params;
     const playerName = p.player || '';
     const target     = p.amount || 0;
     const bal        = currBals[playerName.toLowerCase()] || 0;
@@ -1764,12 +1781,12 @@ function _renderPmMarkets(markets, txData) {
     const yesP       = Math.round(yesBias * 100);
     const noP        = 100 - yesP;
 
-    // Build sparkline from this week's TX entries for this player
+    // Sparkline: this week's TX entries for this player
     const series     = txData[playerName] || [];
     const weekStartMs = _hubWeekStart();
-    const weekSeries = series.filter(e => { const ts = _parseTxDate(e.date); return ts && ts >= weekStartMs; });
-    const sparkId    = 'spark_' + mkt.id.replace(/[^a-z0-9]/gi, '');
-    const hasChart   = weekSeries.length >= 2;
+    const weekSeries  = series.filter(e => { const ts = _parseTxDate(e.date); return ts && ts >= weekStartMs; });
+    const sparkId     = 'spark_' + mkt.id.replace(/[^a-z0-9]/gi, '');
+    const hasChart    = weekSeries.length >= 2;
 
     const card = document.createElement('div');
     card.className = 'pm-mkt-card';
@@ -1797,73 +1814,41 @@ function _renderPmMarkets(markets, txData) {
     }
   });
 
-  // ── Race cards (one card per target, all players shown) ──
-  Object.entries(raceGroups).forEach(([targetStr, rMkts]) => {
-    const target = parseFloat(targetStr) || 0;
-    // Build balances for all race participants
-    const raceBals = {};
-    rMkts.forEach(m => {
-      const mp = m.condition && m.condition.params;
-      if (mp && mp.player) raceBals[(mp.player).toLowerCase()] = currBals[(mp.player).toLowerCase()] || 0;
-    });
-    // Sort players by balance descending
-    const sorted = rMkts.map(m => {
-      const mp = m.condition.params;
-      return { name: mp.player, bal: currBals[(mp.player||'').toLowerCase()] || 0 };
-    }).sort((a,b) => b.bal - a.bal);
+  // ── Race cards — one card per player, their next (lowest) open race target ──
+  Object.values(raceByPlayer).forEach(mkt => {
+    const p      = mkt.condition.params;
+    const player = p.player || '';
+    const target = p.amount  || 0;
+    const bal    = currBals[(player).toLowerCase()] || 0;
+    const pct    = target > 0 ? Math.min(100, (bal / target) * 100) : 0;
+    // Use all players' balances as eligible pool — mirrors game.html _fundamentalPct
+    const yesP   = Math.round(_raceYesBias(bal, currBals, target) * 100);
+    const noP    = 100 - yesP;
 
-    const playersHTML = sorted.map(pl => {
-      // Use currBals (all players) as eligible pool — mirrors game.html _fundamentalPct
-      // which uses Object.values(_currBalances).filter(b => b < amount) for the denominator.
-      const yes = Math.round(_raceYesBias(pl.bal, currBals, target) * 100);
-      return `<div class="pm-player-row">
-        <span class="pm-player-name">${pl.name}</span>
-        <span class="pm-player-bal">${_fmtHub(pl.bal)} KFC</span>
-        <span class="pm-player-yes">${yes}%</span>
-      </div>`;
-    }).join('');
-
-    // Sparkline: use season-long TX history for all players, interleaved by game#
-    // Build merged timeline: each point = {game: g, bals: {player: bal}}
-    const allPoints = [];
-    rMkts.forEach(m => {
-      const mp = m.condition.params;
-      const pn = (mp.player || '').toLowerCase();
-      (txData[mp.player] || []).forEach(e => allPoints.push({ game: e.game, player: pn, balance: e.balance, ts: _parseTxDate(e.date) }));
-    });
-    allPoints.sort((a,b) => a.game - b.game);
-
-    // Rolling balance state for all players
-    const rollingBals = Object.assign({}, raceBals);
-    // But start from earliest TX
-    const sparkPts = [];
-    allPoints.forEach(pt => {
-      rollingBals[pt.player] = pt.balance;
-      // Avg YES across all players (shows market activity level)
-      const total = Object.values(rollingBals).reduce((s,b) => s+b, 0);
-      // Use the leading player's YES as the chart line
-      const leading = sorted[0];
-      if (leading) {
-        const leadBal = rollingBals[leading.name.toLowerCase()] || 0;
-        sparkPts.push({ x: pt.game, y: Math.round(_raceYesBias(leadBal, rollingBals, target) * 100) });
-      }
-    });
-
-    const sparkId = 'spark_race_' + targetStr.replace(/\D/g,'');
+    // Sparkline: this player's season-long TX history, YES% at each game
+    const pnLow   = player.toLowerCase();
+    const series  = txData[player] || [];
+    const sparkId = 'spark_rc_' + mkt.id.replace(/[^a-z0-9]/gi, '');
+    const sparkPts = series.map(e => ({
+      x: e.game,
+      y: Math.round(_raceYesBias(e.balance, currBals, target) * 100),
+    }));
     const hasChart = sparkPts.length >= 2;
 
-    const leaderName = sorted[0] ? sorted[0].name : '';
     const card = document.createElement('div');
     card.className = 'pm-mkt-card';
     card.innerHTML = `
       <span class="pm-type-tag race">Race · End of Season</span>
-      <div class="pm-mkt-title">First to reach ${_fmtHub(target)} KFC</div>
-      <div style="margin-bottom:12px">${playersHTML}</div>
+      <div class="pm-mkt-title">${player} → ${_fmtHub(target)} KFC</div>
       <div class="pm-prog-wrap">
-        <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${Math.min(100,((sorted[0]?.bal||0)/target)*100).toFixed(1)}%"></div></div>
-        <div class="pm-prog-labels"><span>Leader: ${_fmtHub(sorted[0]?.bal||0)}</span><span>Target: ${_fmtHub(target)}</span></div>
+        <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+        <div class="pm-prog-labels"><span>${_fmtHub(bal)} KFC</span><span>Target: ${_fmtHub(target)}</span></div>
       </div>
-      ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">Leader YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
+      <div class="pm-odds-row">
+        <div class="pm-odds-pill pm-odds-yes">YES ${yesP}%</div>
+        <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
+      </div>
+      ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
       <a href="game.html?panel=pm" class="cta-gold pm-bet-link">Place Bet →</a>`;
     grid.appendChild(card);
 

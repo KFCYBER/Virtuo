@@ -6067,10 +6067,15 @@ window.addEventListener('pagehide', ()=>{
      G.url && G.username && G._cachedPin &&
      G.sessionStart > 0 && G.balance !== G.sessionStart){
     try{
+      // Add open PM positions back — those funds are still the player's money,
+      // just locked until the market settles. Without this, syncing G.balance=0
+      // when all funds are in an open bet would permanently wipe the balance.
+      const _pmLocked = (typeof PM !== 'undefined') ? PM.getOpenBetsTotal() : 0;
+      const _syncBal  = G.balance + _pmLocked;
       const _p = new URLSearchParams({
         action:'updatebalance', username:G.username,
-        player:G.player||G.username, balance:String(G.balance),
-        sessionPL:String(G.balance - G.sessionStart),
+        player:G.player||G.username, balance:String(_syncBal),
+        sessionPL:String(_syncBal - G.sessionStart),
         buyIn:String(_walletBuyIn()),
         date:new Date().toISOString(), stake:'PM-ONLY', pin:G._cachedPin
       });
@@ -13843,7 +13848,11 @@ const PM = (() => {
     if(btn) btn.disabled = false;
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog };
+  function getOpenBetsTotal(){
+    return _loadBets().filter(b => b.payout == null).reduce((sum, b) => sum + (b.amount || 0), 0);
+  }
+
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog, getOpenBetsTotal };
 })();
 
 

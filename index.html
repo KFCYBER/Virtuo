@@ -505,25 +505,35 @@
       .hero-value { font-size: 15px; }
     }
 
-    /* ── HUB LOGIN BUTTON / USER BADGE ── */
-    .hub-login-btn {
-      display: inline-flex; align-items: center; gap: 7px;
-      background: transparent; border: 1px solid rgba(122,18,40,0.6);
-      color: #c94060; font-size: 10px; font-weight: 700;
-      letter-spacing: 2px; padding: 9px 16px; border-radius: 6px;
-      cursor: pointer; text-transform: uppercase; white-space: nowrap;
-      transition: background 0.2s, color 0.2s;
+    /* ── HEADER NAV BUTTONS ── */
+    .hub-nav-store {
+      font-size: 9px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase;
+      color: var(--muted); text-decoration: none; padding: 6px 8px;
+      transition: color 0.2s; white-space: nowrap;
     }
-    .hub-login-btn:hover { background: rgba(122,18,40,0.2); color: #e06080; }
-    .hub-user-badge {
-      display: none; align-items: center; gap: 8px;
-      background: rgba(201,168,76,0.06); border: 1px solid var(--gold-dim);
-      color: var(--gold); font-size: 10px; font-weight: 700;
-      letter-spacing: 1px; padding: 8px 14px; border-radius: 6px;
-      cursor: pointer; white-space: nowrap; transition: background 0.2s;
+    .hub-nav-store:hover { color: rgba(200,205,225,0.65); }
+    .hub-nav-login {
+      display: inline-flex; align-items: center;
+      background: rgba(122,18,40,0.10); border: 1px solid rgba(122,18,40,0.32);
+      color: #bf5070; font-size: 9px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase;
+      padding: 7px 14px; border-radius: 5px; cursor: pointer;
+      transition: background 0.2s, border-color 0.2s, color 0.2s; white-space: nowrap;
     }
-    .hub-user-badge:hover { background: rgba(201,168,76,0.12); }
-    .hub-badge-bal { font-family: var(--mono); color: var(--text); margin-left: 2px; }
+    .hub-nav-login:hover {
+      background: rgba(122,18,40,0.22); border-color: rgba(160,40,60,0.5); color: #e07090;
+    }
+    .hub-nav-user {
+      display: none; align-items: center; gap: 9px;
+      background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 6px; padding: 7px 13px; cursor: pointer;
+      transition: background 0.2s; white-space: nowrap;
+    }
+    .hub-nav-user:hover { background: rgba(255,255,255,0.07); }
+    .hub-nav-user-name {
+      font-size: 9px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: var(--text);
+    }
+    .hub-nav-user-bal { font-family: var(--mono); font-size: 9px; color: var(--gold); opacity: 0.8; }
 
     /* ── LOGIN MODAL ── */
     #hub-login-overlay {
@@ -643,16 +653,14 @@
     <div class="header-title">Season 3: <span class="dark-fall">Dark Fall</span></div>
     <div class="header-subtitle" id="header-subtitle">Golden Aces League</div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <a href="store.html" target="_blank" rel="noopener" class="cta-ghost" title="KFC Store">🛒 STORE</a>
-    <button id="hub-login-btn" class="cta-ghost" onclick="_showLoginModal()" style="background:transparent;border-color:rgba(122,18,40,0.5);color:#c94060">⬡ LOGIN</button>
-    <div id="hub-user-badge" class="cta-gold" title="Your account" onclick="_showLoginModal()" style="display:none;cursor:pointer">
-      <span id="hub-badge-name">—</span>
-      <span style="font-family:var(--mono);opacity:0.75" id="hub-badge-bal">—</span>
+  <div style="display:flex;align-items:center;gap:10px">
+    <a href="store.html" target="_blank" rel="noopener" class="hub-nav-store">Store</a>
+    <button id="hub-login-btn" class="hub-nav-login" onclick="_showLoginModal()">Login</button>
+    <div id="hub-user-badge" class="hub-nav-user" title="Your account" onclick="_showLoginModal()">
+      <span class="hub-nav-user-name" id="hub-badge-name">—</span>
+      <span class="hub-nav-user-bal" id="hub-badge-bal">—</span>
     </div>
-    <a id="hub-play-btn" href="game.html" class="cta-play" title="Open the game">
-      PLAY <span class="arrow">→</span>
-    </a>
+    <a id="hub-play-btn" href="game.html" class="cta-play">PLAY <span class="arrow">→</span></a>
   </div>
 </header>
 
@@ -759,6 +767,26 @@
   </div>
 </div>
 
+<!-- ══════════════════ STANDINGS -->
+<div style="max-width:1320px;margin:32px auto 0;padding:0 24px;position:relative;z-index:2">
+  <div class="section-label">Player League Statistics</div>
+  <div class="card">
+    <div id="standings-wrap">
+      <div class="skeleton-table" id="skeleton">
+        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
+        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
+        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
+        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
+        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
+      </div>
+    </div>
+    <div class="status-bar">
+      <div><span class="pulse"></span><span id="update-ts">Fetching live data…</span><span id="countdown-ts" style="opacity:0.5"></span></div>
+      <div>KFC · Season 3: Dark Fall · Auto-refresh 60s</div>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════ WALLET SECTION (login-gated) -->
 <div id="hub-wallet-section" style="display:none">
   <div class="wallet-row">
@@ -793,26 +821,6 @@
   <div style="max-width:1320px;margin:0 auto;padding:0 24px">
     <div class="pm-mkt-grid" id="pm-mkt-grid">
       <div class="pm-empty">Loading markets…</div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════ STANDINGS (right below crucicon) -->
-<div style="max-width:1320px;margin:32px auto 0;padding:0 24px;position:relative;z-index:2">
-  <div class="section-label">Player League Statistics</div>
-  <div class="card">
-    <div id="standings-wrap">
-      <div class="skeleton-table" id="skeleton">
-        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
-        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
-        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
-        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
-        <div class="skeleton-row"><div class="skel skel-rank"></div><div class="skel skel-name"></div><div class="skel skel-bal"></div><div class="skel skel-sess"></div></div>
-      </div>
-    </div>
-    <div class="status-bar">
-      <div><span class="pulse"></span><span id="update-ts">Fetching live data…</span><span id="countdown-ts" style="opacity:0.5"></span></div>
-      <div>KFC · Season 3: Dark Fall · Auto-refresh 60s</div>
     </div>
   </div>
 </div>
@@ -1667,7 +1675,7 @@ function _applyHubSession() {
   if (_hubSession) {
     if (loginBtn) loginBtn.style.display = 'none';
     if (badge) {
-      badge.style.display = 'inline-flex';
+      badge.style.display = 'flex';
       document.getElementById('hub-badge-name').textContent = _hubSession.playerName || _hubSession.username;
       document.getElementById('hub-badge-bal').textContent  = _fmtHub(_hubSession.balance) + ' KFC';
     }
@@ -1737,8 +1745,29 @@ function _renderPmMarkets(markets, txData) {
     if (p.username) currBals[p.username.toLowerCase()] = p.balance;
   });
 
-  // Current week string (YYYY-MM-DD of Monday) — same format as game.html _weekStart()
-  const currWeekStr = new Date(_hubWeekStart()).toISOString().slice(0, 10);
+  // Resolve a market's params.player (may be username or display name) to balance + TX series.
+  // Direct currBals lookup first; if that misses (name/username mismatch between sheet columns),
+  // fall back to a linear scan of _hubPlayers. txData is keyed by display name so also resolve
+  // through the player's display name when params.player is a username.
+  function resolvePlayer(playerName) {
+    const low  = (playerName || '').toLowerCase();
+    let bal    = currBals[low] || 0;
+    let series = txData[playerName] || [];
+    if (!bal || !series.length) {
+      const found = _hubPlayers.find(p =>
+        p.name.toLowerCase() === low || (p.username && p.username.toLowerCase() === low)
+      );
+      if (found) {
+        if (!bal)          bal    = found.balance;
+        if (!series.length) series = txData[found.name] || [];
+      }
+    }
+    return { bal, series };
+  }
+
+  // Current week start — string form for comparing params.week, ms form for TX filtering
+  const weekStartMs  = _hubWeekStart();
+  const currWeekStr  = new Date(weekStartMs).toISOString().slice(0, 10);
 
   // ── Milestone: one card per player, current week only, lowest open amount ──
   // (game only creates one per player per week, but GAS may have stale rows from past bugs)
@@ -1775,16 +1804,14 @@ function _renderPmMarkets(markets, txData) {
     const p = mkt.condition.params;
     const playerName = p.player || '';
     const target     = p.amount || 0;
-    const bal        = currBals[playerName.toLowerCase()] || 0;
+    const { bal, series: allSeries } = resolvePlayer(playerName);
     const pct        = target > 0 ? Math.min(100, (bal / target) * 100) : 0;
     const yesBias    = _milestoneYesBias(bal, target, Date.now());
     const yesP       = Math.round(yesBias * 100);
     const noP        = 100 - yesP;
 
     // Sparkline: this week's TX entries for this player
-    const series     = txData[playerName] || [];
-    const weekStartMs = _hubWeekStart();
-    const weekSeries  = series.filter(e => { const ts = _parseTxDate(e.date); return ts && ts >= weekStartMs; });
+    const weekSeries  = allSeries.filter(e => { const ts = _parseTxDate(e.date); return ts && ts >= weekStartMs; });
     const sparkId     = 'spark_' + mkt.id.replace(/[^a-z0-9]/gi, '');
     const hasChart    = weekSeries.length >= 2;
 
@@ -1819,15 +1846,11 @@ function _renderPmMarkets(markets, txData) {
     const p      = mkt.condition.params;
     const player = p.player || '';
     const target = p.amount  || 0;
-    const bal    = currBals[(player).toLowerCase()] || 0;
+    const { bal, series } = resolvePlayer(player);
     const pct    = target > 0 ? Math.min(100, (bal / target) * 100) : 0;
     // Use all players' balances as eligible pool — mirrors game.html _fundamentalPct
     const yesP   = Math.round(_raceYesBias(bal, currBals, target) * 100);
     const noP    = 100 - yesP;
-
-    // Sparkline: this player's season-long TX history, YES% at each game
-    const pnLow   = player.toLowerCase();
-    const series  = txData[player] || [];
     const sparkId = 'spark_rc_' + mkt.id.replace(/[^a-z0-9]/gi, '');
     const sparkPts = series.map(e => ({
       x: e.game,

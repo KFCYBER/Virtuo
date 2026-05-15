@@ -112,28 +112,71 @@
       margin-top: 5px; text-transform: uppercase;
     }
 
-    /* ── PLAY BUTTON ── */
-    @keyframes play-pulse {
-      0%, 100% { box-shadow: 0 0 0 0 rgba(201,168,76,0); border-color: var(--gold-dim); }
-      50%       { box-shadow: 0 0 0 6px rgba(201,168,76,0), 0 0 20px rgba(201,168,76,0.25); border-color: var(--gold); }
+    /* ══ HUB CTA SYSTEM ══
+       .cta-play    — primary action, crimson fill + glow pulse  (PLAY)
+       .cta-gold    — secondary action, gold outline              (MARKETS, Place Bet)
+       .cta-ghost   — tertiary, muted outline                    (STORE)
+       .cta-danger  — destructive, red ghost                     (Log Out)
+    */
+    @keyframes cta-play-pulse {
+      0%,100% { box-shadow: 0 0 0 0 rgba(122,18,40,0), 0 2px 14px rgba(122,18,40,0.35); }
+      50%     { box-shadow: 0 0 0 4px rgba(122,18,40,0.15), 0 2px 28px rgba(122,18,40,0.55); }
     }
-    .play-btn {
+    .cta-play {
       display: inline-flex; align-items: center; gap: 8px;
-      background: transparent; border: 1px solid var(--gold-dim);
-      color: var(--gold); font-size: 11px; font-weight: 700;
-      letter-spacing: 3px; padding: 10px 20px; border-radius: 6px;
+      background: var(--crimson); border: 1px solid rgba(180,30,60,0.6);
+      color: #fff; font-size: 10px; font-weight: 800;
+      letter-spacing: 3px; padding: 9px 18px; border-radius: 6px;
       cursor: pointer; text-decoration: none; text-transform: uppercase;
-      transition: background 0.2s, color 0.2s, transform 0.2s;
-      animation: play-pulse 3s ease-in-out infinite;
+      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+      animation: cta-play-pulse 3s ease-in-out infinite;
       white-space: nowrap;
     }
-    .play-btn:hover {
-      background: rgba(201,168,76,0.1); color: #fff;
-      box-shadow: 0 0 28px rgba(201,168,76,0.3) !important;
-      transform: translateY(-1px);
+    .cta-play:hover {
+      background: #9a1838; transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(122,18,40,0.6) !important;
+      color: #fff;
     }
-    .play-btn .arrow { font-size: 14px; transition: transform 0.2s; }
-    .play-btn:hover .arrow { transform: translateX(4px); }
+    .cta-play .arrow { font-size: 13px; transition: transform 0.2s; }
+    .cta-play:hover .arrow { transform: translateX(4px); }
+
+    .cta-gold {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 1px solid var(--gold-dim);
+      color: var(--gold); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; padding: 9px 16px; border-radius: 6px;
+      cursor: pointer; text-decoration: none; text-transform: uppercase;
+      transition: background 0.2s, color 0.2s, border-color 0.2s, transform 0.2s;
+      white-space: nowrap;
+    }
+    .cta-gold:hover {
+      background: rgba(201,168,76,0.1); border-color: var(--gold);
+      color: var(--gold-hi); transform: translateY(-1px);
+    }
+
+    .cta-ghost {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: transparent; border: 1px solid rgba(78,78,106,0.5);
+      color: var(--muted); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; padding: 9px 16px; border-radius: 6px;
+      cursor: pointer; text-decoration: none; text-transform: uppercase;
+      transition: background 0.2s, color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .cta-ghost:hover { background: rgba(255,255,255,0.04); color: var(--text); border-color: var(--muted); }
+
+    .cta-danger {
+      display: inline-flex; align-items: center; justify-content: center;
+      background: transparent; border: 1px solid rgba(224,64,64,0.3);
+      color: var(--red); font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; padding: 9px 16px; border-radius: 6px;
+      cursor: pointer; text-decoration: none; text-transform: uppercase;
+      transition: background 0.2s; white-space: nowrap;
+    }
+    .cta-danger:hover { background: rgba(224,64,64,0.08); }
+
+    /* Keep .play-btn as alias for backward compat */
+    .play-btn { display: inline-flex; align-items: center; gap: 8px; }
 
     /* ── HERO STATS ── */
     @keyframes hero-rise {
@@ -440,7 +483,7 @@
       .logo-wrap { width: 36px; height: 36px; }
       .header-title { font-size: 13px; letter-spacing: 3px; }
       .header-subtitle { font-size: 8px; }
-      .play-btn { font-size: 9px; padding: 7px 12px; letter-spacing: 2px; }
+      .cta-play, .cta-gold, .cta-ghost, .cta-danger { font-size: 9px; padding: 7px 12px; letter-spacing: 2px; }
       .hero { grid-template-columns: repeat(2, 1fr); padding: 16px 12px 0; gap: 10px; }
       .hero-value { font-size: 18px; }
       .crucicon-bar { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
@@ -543,17 +586,7 @@
     .wc-label { font-size: 8px; font-weight: 800; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 9px; }
     .wc-value { font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--gold); }
     .wc-sub   { font-size: 10px; color: var(--muted); margin-top: 5px; }
-    .wallet-actions { display: flex; gap: 10px; margin-top: 16px; }
-    .wbtn {
-      flex: 1; padding: 10px 8px; border-radius: 7px; cursor: pointer;
-      font-size: 9px; font-weight: 700; letter-spacing: 2px;
-      text-transform: uppercase; text-decoration: none; text-align: center;
-      display: block; transition: background 0.2s;
-    }
-    .wbtn-primary   { background: var(--crimson); border: none; color: #fff; }
-    .wbtn-primary:hover { background: #9a1838; }
-    .wbtn-secondary { background: transparent; border: 1px solid var(--gold-dim); color: var(--gold); }
-    .wbtn-secondary:hover { background: rgba(201,168,76,0.1); }
+    .wallet-actions { display: flex; gap: 8px; margin-top: 16px; }
     .wallet-logout {
       position: absolute; top: 13px; right: 14px; background: none; border: none;
       color: var(--muted); font-size: 9px; letter-spacing: 1px; cursor: pointer;
@@ -592,14 +625,7 @@
     .pm-chart-wrap  { margin-top: 11px; }
     .pm-chart-lbl   { font-size: 8px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
     .pm-sparkline   { width: 100%; height: 50px; display: block; }
-    .pm-bet-link {
-      display: block; width: 100%; margin-top: 12px; padding: 9px;
-      background: transparent; border: 1px solid var(--gold-dim);
-      border-radius: 6px; color: var(--gold); font-size: 9px; font-weight: 700;
-      letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
-      transition: background 0.2s; text-decoration: none; text-align: center;
-    }
-    .pm-bet-link:hover { background: rgba(201,168,76,0.1); }
+    .pm-bet-link { display: block; width: 100%; margin-top: 12px; text-align: center; justify-content: center; }
     .pm-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 40px 0; letter-spacing: 1px; }
   </style>
 </head>
@@ -617,14 +643,14 @@
     <div class="header-title">Season 3: <span class="dark-fall">Dark Fall</span></div>
     <div class="header-subtitle" id="header-subtitle">Golden Aces League</div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
-    <a href="store.html" target="_blank" rel="noopener" class="play-btn" title="KFC Store" style="border-color:var(--gold-dim);color:var(--muted);animation:none;font-size:10px;padding:9px 16px">🛒 STORE</a>
-    <button id="hub-login-btn" class="hub-login-btn" onclick="_showLoginModal()">⬡ LOGIN</button>
-    <div id="hub-user-badge" class="hub-user-badge" title="Your account" onclick="_showLoginModal()">
+  <div style="display:flex;align-items:center;gap:8px">
+    <a href="store.html" target="_blank" rel="noopener" class="cta-ghost" title="KFC Store">🛒 STORE</a>
+    <button id="hub-login-btn" class="cta-ghost" onclick="_showLoginModal()" style="background:transparent;border-color:rgba(122,18,40,0.5);color:#c94060">⬡ LOGIN</button>
+    <div id="hub-user-badge" class="cta-gold" title="Your account" onclick="_showLoginModal()" style="display:none;cursor:pointer">
       <span id="hub-badge-name">—</span>
-      <span class="hub-badge-bal" id="hub-badge-bal">—</span>
+      <span style="font-family:var(--mono);opacity:0.75" id="hub-badge-bal">—</span>
     </div>
-    <a id="hub-play-btn" href="game.html" class="play-btn" title="Open the game">
+    <a id="hub-play-btn" href="game.html" class="cta-play" title="Open the game">
       PLAY <span class="arrow">→</span>
     </a>
   </div>
@@ -701,20 +727,35 @@
 <div id="hub-login-overlay" onclick="if(event.target===this)_hideLoginModal()">
   <div class="hub-login-box">
     <button class="hub-lclose" onclick="_hideLoginModal()">✕</button>
-    <div class="hub-login-title">Player Login</div>
-    <div class="hub-lfield">
-      <label>Username</label>
-      <input type="text" id="hub-lusername" autocomplete="off" autocapitalize="off" spellcheck="false"
-             placeholder="your username"
-             onkeydown="if(event.key==='Enter')document.getElementById('hub-lpin').focus()">
+    <!-- Login form (shown when logged out) -->
+    <div id="hub-login-form">
+      <div class="hub-login-title">Player Login</div>
+      <div class="hub-lfield">
+        <label>Username</label>
+        <input type="text" id="hub-lusername" autocomplete="off" autocapitalize="off" spellcheck="false"
+               placeholder="your username"
+               onkeydown="if(event.key==='Enter')document.getElementById('hub-lpin').focus()">
+      </div>
+      <div class="hub-lfield">
+        <label>PIN</label>
+        <input type="password" id="hub-lpin" maxlength="8" placeholder="••••"
+               onkeydown="if(event.key==='Enter')_doHubLogin()">
+      </div>
+      <button class="hub-lsubmit" onclick="_doHubLogin()">Enter</button>
+      <div class="hub-lerr" id="hub-lerr"></div>
     </div>
-    <div class="hub-lfield">
-      <label>PIN</label>
-      <input type="password" id="hub-lpin" maxlength="8" placeholder="••••"
-             onkeydown="if(event.key==='Enter')_doHubLogin()">
+    <!-- Account panel (shown when logged in) -->
+    <div id="hub-account-panel" style="display:none">
+      <div class="hub-login-title">Your Account</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:6px" id="hub-acct-name">—</div>
+      <div style="font-family:var(--mono);font-size:20px;color:var(--gold);margin-bottom:4px" id="hub-acct-bal">—</div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:24px" id="hub-acct-sub">—</div>
+      <div style="display:flex;gap:8px">
+        <a href="game.html" class="cta-play" style="flex:1;justify-content:center">⬡ Play</a>
+        <a href="game.html?panel=pm" class="cta-gold" style="flex:1;justify-content:center">📈 Markets</a>
+      </div>
+      <button onclick="_hubLogout();_hideLoginModal()" class="cta-danger" style="width:100%;margin-top:10px;justify-content:center">Log Out</button>
     </div>
-    <button class="hub-lsubmit" onclick="_doHubLogin()">Enter</button>
-    <div class="hub-lerr" id="hub-lerr"></div>
   </div>
 </div>
 
@@ -727,8 +768,8 @@
       <div class="wc-value" id="wc-balance">—</div>
       <div class="wc-sub"   id="wc-sub">—</div>
       <div class="wallet-actions">
-        <a href="game.html" class="wbtn wbtn-primary">⬡ Play</a>
-        <a href="game.html?panel=pm" class="wbtn wbtn-secondary">📈 Markets</a>
+        <a href="game.html" class="cta-play" style="flex:1;justify-content:center;padding:10px 8px">⬡ Play</a>
+        <a href="game.html?panel=pm" class="cta-gold" style="flex:1;justify-content:center;padding:10px 8px">📈 Markets</a>
       </div>
     </div>
     <div class="wallet-card">
@@ -756,10 +797,8 @@
   </div>
 </div>
 
-<!-- ══════════════════ MAIN -->
-<main>
-
-  <!-- STANDINGS TABLE -->
+<!-- ══════════════════ STANDINGS (right below crucicon) -->
+<div style="max-width:1320px;margin:32px auto 0;padding:0 24px;position:relative;z-index:2">
   <div class="section-label">Player League Statistics</div>
   <div class="card">
     <div id="standings-wrap">
@@ -776,6 +815,10 @@
       <div>KFC · Season 3: Dark Fall · Auto-refresh 60s</div>
     </div>
   </div>
+</div>
+
+<!-- ══════════════════ MAIN -->
+<main>
 
   <!-- SEASON CHARTS -->
   <div class="section-label" style="margin-top:8px">Season League Progress</div>
@@ -1007,7 +1050,7 @@ function parseRecords(rows) {
     const balance = parseFloat(rawBal.replace(/,/g, ''));
     if (!isFinite(balance) || balance < 0) continue;
     players.push({
-      name, balance,
+      name, username, balance,
       taxRate: (row[6] ?? '').trim(),
       taxAmt:  parseFloat((row[7] ?? '0').replace(/,/g, '')) || 0,
     });
@@ -1384,6 +1427,22 @@ async function refresh() {
     _hubTxData  = txData;
     if (_hubMarkets.length > 0) _renderPmMarkets(_hubMarkets, _hubTxData);
 
+    // Keep wallet balance in sync with live leaderboard data
+    if (_hubSession) {
+      const _me = players.find(p =>
+        p.name.toLowerCase()     === _hubSession.username.toLowerCase() ||
+        (p.username && p.username.toLowerCase() === _hubSession.username.toLowerCase())
+      );
+      if (_me && _me.balance !== _hubSession.balance) {
+        _hubSession.balance = _me.balance;
+        localStorage.setItem('kfc_hub_session', JSON.stringify(_hubSession));
+        const bb = document.getElementById('hub-badge-bal');
+        if (bb) bb.textContent = _fmtHub(_me.balance) + ' KFC';
+        const wb = document.getElementById('wc-balance');
+        if (wb) wb.textContent = _fmtHub(_me.balance) + ' KFC';
+      }
+    }
+
     renderHero(players);
     renderCrucicon(players);
     renderTable(players, txData);
@@ -1529,18 +1588,28 @@ function _drawSparkline(canvasId, data, hexColor) {
 function _showLoginModal() {
   const ov = document.getElementById('hub-login-overlay');
   if (!ov) return;
+  const form   = document.getElementById('hub-login-form');
+  const acct   = document.getElementById('hub-account-panel');
   if (_hubSession) {
-    // Already logged in — modal becomes a logout confirmation
-    ov.classList.add('open');
+    if (form)  form.style.display  = 'none';
+    if (acct)  acct.style.display  = 'block';
+    const nameEl = document.getElementById('hub-acct-name');
+    const balEl  = document.getElementById('hub-acct-bal');
+    const subEl  = document.getElementById('hub-acct-sub');
+    if (nameEl) nameEl.textContent = _hubSession.playerName || _hubSession.username;
+    if (balEl)  balEl.textContent  = _fmtHub(_hubSession.balance) + ' KFC';
+    if (subEl)  subEl.textContent  = (_hubSession.games || 0) + ' sessions · session saved for 8 hours';
   } else {
-    ov.classList.add('open');
+    if (form)  form.style.display  = 'block';
+    if (acct)  acct.style.display  = 'none';
     setTimeout(() => {
       const u = document.getElementById('hub-lusername');
       if (u) { u.value = localStorage.getItem('kfc_last_user') || ''; u.focus(); }
       const p = document.getElementById('hub-lpin'); if (p) p.value = '';
     }, 50);
+    document.getElementById('hub-lerr').textContent = '';
   }
-  document.getElementById('hub-lerr').textContent = '';
+  ov.classList.add('open');
 }
 function _hideLoginModal() {
   document.getElementById('hub-login-overlay').classList.remove('open');
@@ -1657,9 +1726,13 @@ function _renderPmMarkets(markets, txData) {
     grid.innerHTML = '<div class="pm-empty">No active race or milestone markets</div>';
     return;
   }
-  // Build current balance map from leaderboard data
+  // Build current balance map — index by both display name and username so market
+  // condition params (which may use either) always find the right balance.
   const currBals = {};
-  _hubPlayers.forEach(p => { currBals[p.name.toLowerCase()] = p.balance; });
+  _hubPlayers.forEach(p => {
+    currBals[p.name.toLowerCase()] = p.balance;
+    if (p.username) currBals[p.username.toLowerCase()] = p.balance;
+  });
 
   // Group race markets by target amount to combine all players in one card
   const raceGroups = {};
@@ -1709,7 +1782,7 @@ function _renderPmMarkets(markets, txData) {
         <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
       </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · this week</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
-      <a href="game.html?panel=pm" class="pm-bet-link">Place Bet →</a>`;
+      <a href="game.html?panel=pm" class="cta-gold pm-bet-link">Place Bet →</a>`;
     grid.appendChild(card);
 
     if (hasChart) {
@@ -1786,7 +1859,7 @@ function _renderPmMarkets(markets, txData) {
         <div class="pm-prog-labels"><span>Leader: ${_fmtHub(sorted[0]?.bal||0)}</span><span>Target: ${_fmtHub(target)}</span></div>
       </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">Leader YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
-      <a href="game.html?panel=pm" class="pm-bet-link">Place Bet →</a>`;
+      <a href="game.html?panel=pm" class="cta-gold pm-bet-link">Place Bet →</a>`;
     grid.appendChild(card);
 
     if (hasChart) setTimeout(() => _drawSparkline(sparkId, sparkPts, '#e8c96a'), 60);

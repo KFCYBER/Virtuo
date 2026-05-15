@@ -506,7 +506,14 @@
       /* Avatar + extras shrink on tablet */
       .player-avatar { width: 26px; height: 26px; min-width: 26px; font-size: 8px; }
       .rank-delta { font-size: 7px; }
-      .player-name-row { gap: 6px; row-gap: 3px; }
+      /* Player name row: single line, truncate name with ellipsis instead of wrapping */
+      .player-name-row { gap: 6px; row-gap: 0; flex-wrap: nowrap; }
+      .player-name-row > span:not([class]) {
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        min-width: 0; flex-shrink: 1;
+      }
+      /* Session P&L row: allow wrap so net + pct don't get clipped on narrow screens */
+      .session-top { flex-wrap: wrap; row-gap: 3px; }
       /* Hot strip narrower cards */
       .hub-hot-card { flex: 0 0 148px; padding: 10px 12px; }
       /* PM grid 1 column */
@@ -527,9 +534,18 @@
       .hub-hot-card-name { font-size: 10px; }
       /* Contender tag smaller */
       .contender-tag { font-size: 6px; padding: 2px 5px; }
+      /* YES/NO bet buttons fit in 138px card */
+      .pm-bet-yes, .pm-bet-no { padding: 7px 4px; font-size: 9px; letter-spacing: 1px; }
       /* Wallet values smaller */
       .wc-value { font-size: 17px; }
       main { padding: 12px 10px 56px; }
+    }
+    @media (max-width: 400px) {
+      /* Hide store nav so header title isn't squeezed on small phones */
+      .hub-nav-store { display: none; }
+      .hub-nav-login { padding: 5px 9px; font-size: 8px; letter-spacing: 2px; }
+      .hub-nav-user  { padding: 5px 9px; }
+      .header-title  { font-size: 11px; letter-spacing: 2px; }
     }
 
     /* ── HEADER NAV BUTTONS ── */
@@ -806,10 +822,6 @@
     .pm-type-tag.race      { color: #e8c96a; }
     .pm-type-tag.milestone { color: #80d8ff; }
     .pm-mkt-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 13px; }
-    .pm-odds-row { display: flex; gap: 8px; margin-bottom: 12px; }
-    .pm-odds-pill { flex:1; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 700; font-family: var(--mono); text-align: center; }
-    .pm-odds-yes { background: rgba(59,189,111,0.1); border: 1px solid rgba(59,189,111,0.28); color: #3bbd6f; }
-    .pm-odds-no  { background: rgba(224,64,64,0.07);  border: 1px solid rgba(224,64,64,0.2);  color: #e04040; }
     .pm-prog-wrap { margin-bottom: 12px; }
     .pm-prog-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
     .pm-prog-fill  { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--gold), #e8c96a); }
@@ -2294,10 +2306,6 @@ function _renderPmMarkets(markets, txData) {
         <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
         <div class="pm-prog-labels"><span>${_fmtHub(bal)} KFC</span><span>Target: ${_fmtHub(target)}</span></div>
       </div>
-      <div class="pm-odds-row">
-        <div class="pm-odds-pill pm-odds-yes">YES ${yesP}%</div>
-        <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
-      </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · this week</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
       <div class="pm-bet-btns">
         <button class="pm-bet-yes" onclick="_openHubBetModal('${mkt.id}',${yesP},${noP},'YES')">YES ${yesP}%</button>
@@ -2339,10 +2347,6 @@ function _renderPmMarkets(markets, txData) {
       <div class="pm-prog-wrap">
         <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
         <div class="pm-prog-labels"><span>${_fmtHub(bal)} KFC</span><span>Target: ${_fmtHub(target)}</span></div>
-      </div>
-      <div class="pm-odds-row">
-        <div class="pm-odds-pill pm-odds-yes">YES ${yesP}%</div>
-        <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
       </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
       <div class="pm-bet-btns">

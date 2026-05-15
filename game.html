@@ -3192,7 +3192,7 @@ body.mp-bet-locked .all-sb-btn {
     <!-- Pre-confirm buttons -->
     <div id="co-actions-pre" style="display:flex;gap:8px;flex-direction:column">
       <div style="display:flex;gap:8px">
-        <button class="btn-primary" style="flex:1" onclick="confirmCashout()">Confirm & Sync</button>
+        <button class="btn-primary" style="flex:1" id="co-confirm-btn" onclick="confirmCashout()">Confirm &amp; Sync</button>
         <button class="btn-ghost" onclick="if(!G.mpMode&&G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else{G._atCashout=false;closeModal('cashout-modal');}">Stay</button>
       </div>
       <!-- Top Up option: shown when balance is low/zero — SP only -->
@@ -5862,6 +5862,7 @@ async function _sendTgNotif(){
   if(_isCreator()) return;
   if(!G.url || !G.username) return;
   if(!_tgNotifEnabled()) return;
+  if(!G.log || G.log.length === 0) return; // PM-only session — no hands played, no report
   const buyIn   = G.sessionStart != null && G.sessionStart > 0 ? G.sessionStart : G.balance;
   const pl      = G.balance - buyIn;
   const pnlPct  = buyIn > 0 ? Math.round((pl / buyIn) * 100) : 0;
@@ -9584,6 +9585,9 @@ async function sheetGet(url){
 
 async function confirmCashout(){
   if(G._syncInProgress){ notif('Already syncing — please wait'); return; }
+  // Immediate visual feedback — disable button before any async work
+  const _confirmBtn = document.getElementById('co-confirm-btn');
+  if(_confirmBtn){ _confirmBtn.disabled = true; _confirmBtn.textContent = 'Please wait…'; }
   // Balance was already synced on bust — skip network call, just do UI cleanup
   if(G._prebustSynced){
     G.cashedOut=true;

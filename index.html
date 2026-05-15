@@ -1427,7 +1427,7 @@ async function refresh() {
     const [recRows, txRows, lbRes] = await Promise.all([
       sheetsGet('records'),
       sheetsGet('transactions'),
-      fetch(`${GAME_WORKER}?action=getleaderboard`).then(r => r.json()).catch(() => null),
+      fetch('https://virtuo-proxy.kfcstaffco.workers.dev?action=getleaderboard').then(r => r.json()).catch(() => null),
     ]);
     const txData  = parseTransactions(txRows);
     const players = parseRecords(recRows).filter(p =>

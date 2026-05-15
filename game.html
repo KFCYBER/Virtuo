@@ -6183,7 +6183,26 @@ window.onload=()=>{
     }
   }catch(e){}
 
-  setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
+  // Hub auto-login: if player authenticated on the hub within the last 8 hours,
+  // pre-fill credentials and submit login so they skip the login screen entirely.
+  if(!G.player){
+    try{
+      const _hub=JSON.parse(localStorage.getItem('kfc_hub_session')||'null');
+      if(_hub && _hub.username && _hub.pin && Date.now()-(_hub.ts||0)<8*60*60*1000){
+        const _u=document.getElementById('lusername');
+        const _p=document.getElementById('lpin');
+        if(_u) _u.value=_hub.username;
+        if(_p) _p.value=_hub.pin;
+        setTimeout(()=>doLogin(), 160);
+      } else {
+        setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
+      }
+    }catch(e){
+      setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
+    }
+  } else {
+    setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
+  }
 
   // Play the welcome chime on first user interaction with the login page
   // (AudioContext requires a gesture — this fires on first touch/click/key before login)

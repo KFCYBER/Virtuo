@@ -3862,6 +3862,7 @@ const G = {
   _allSBNextHand:false,  // loyalty: auto-place sMin on all 4 side bets next deal
   _freeSBNames:[],       // SBs placed free by the all-SB token this hand (H1)
   _freeSBNames2:[],      // SBs placed free by the all-SB token this hand (H2)
+  _tipTotal:0,           // cumulative chips tipped to dealer this session
   _bonusPayouts:[], // [{label, pl}] — instant bonus card payouts to show in result
   cutCardTriggered:false, // set when cut card is drawn mid-shoe
 };
@@ -4919,6 +4920,8 @@ function finaliseLogin(stakeKey){
   G._clubPass=!!(_pendingLogin.clubPass); // carry through from auth response
   // Load loyalty points from sheet (authoritative) — falls back to localStorage if offline
   _loadPtsFromLogin(_pendingLogin.loyaltyPoints||0);
+  // Load tip total from sheet
+  G._tipTotal = parseFloat(_pendingLogin.tipTotal) || 0;
   // Load store inventory
   const _inv = _pendingLogin.inventory || {};
   G._inventory = {
@@ -7254,6 +7257,79 @@ function buildPuPanel(){
   const extraShoesCost = _extraShoeCost();
   _addRedemption('+1 Extra Shoe',_shoesRemaining()+' remaining today',
     'pts-extrashoe',extraShoesCost, ()=>_redeemExtraShoe(), false, false);
+
+  // Tip Dealer button — always at the bottom
+  const tipDiv = document.createElement('div');
+  tipDiv.style.cssText = 'border-top:1px solid var(--line);margin:8px 0 0;padding:8px 0 2px';
+  const tipBtn = document.createElement('button');
+  tipBtn.className = 'btn-ghost';
+  tipBtn.style.cssText = 'width:100%;font-size:11px;letter-spacing:1px;display:flex;align-items:center;justify-content:space-between;padding:6px 8px';
+  tipBtn.innerHTML = '<span>💸 TIP DEALER</span><span style="font-family:var(--mono);font-size:9px;color:var(--muted)">Total: '+fmtKFC(G._tipTotal||0)+'</span>';
+  tipBtn.onclick = openTipModal;
+  tipDiv.appendChild(tipBtn);
+  c.appendChild(tipDiv);
+}
+
+async function _syncTipToSheet(amount){
+  if(!G.url || !G.username || !G._cachedPin) return;
+  try{
+    const p = new URLSearchParams({action:'updatetip', username:G.username, pin:G._cachedPin, amount:String(amount)});
+    const r = await fetch(G.url+'?'+p.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
+    const d = await r.json().catch(()=>({}));
+    if(d.tipTotal != null) G._tipTotal = d.tipTotal;
+  }catch(e){}
+}
+
+function openTipModal(){
+  const existing = document.getElementById('tip-modal');
+  if(existing) existing.remove();
+
+  const chips = G.s ? G.s.chips : [5,25,100,250,1000];
+  const modal = document.createElement('div');
+  modal.id = 'tip-modal';
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:9999;display:flex;align-items:center;justify-content:center';
+
+  let selectedAmt = 0;
+  const render = () => {
+    modal.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px 20px;min-width:280px;max-width:340px;width:90%">
+        <div style="font-family:var(--mono);font-size:11px;letter-spacing:2px;color:var(--gold-lo);margin-bottom:4px">TIP DEALER</div>
+        <div style="font-size:22px;font-weight:700;color:var(--white);margin-bottom:2px">${selectedAmt>0?'+'+fmtKFC(selectedAmt):'Select amount'}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-bottom:16px">Your total tips: ${fmtKFC(G._tipTotal||0)}</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px">
+          ${chips.map(c=>`<button class="chip-btn${selectedAmt===c?' active':''}" onclick="(function(){window._tipAmt=${c};document.querySelectorAll('#tip-modal .chip-btn').forEach(b=>b.classList.remove('active'));this.classList.add('active');document.getElementById('tip-custom').value='';document.getElementById('tip-display').textContent='+${fmtKFC(c)}';}).call(this)" style="font-family:var(--mono);font-size:10px;padding:5px 10px;border-radius:6px;border:1px solid var(--line);background:var(--bg);color:var(--white);cursor:pointer">${fmtKFC(c)}</button>`).join('')}
+        </div>
+        <div style="margin-bottom:14px">
+          <input id="tip-custom" type="number" min="1" placeholder="Custom amount…"
+            style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:7px 10px;color:var(--white);font-family:var(--mono);font-size:12px"
+            oninput="window._tipAmt=parseFloat(this.value)||0;document.querySelectorAll('#tip-modal .chip-btn').forEach(b=>b.classList.remove('active'));document.getElementById('tip-display').textContent=window._tipAmt>0?'+'+fmtKFC(window._tipAmt):'Select amount'">
+        </div>
+        <div id="tip-display" style="font-size:18px;font-weight:700;color:var(--gold);min-height:24px;text-align:center;margin-bottom:14px">${selectedAmt>0?'+'+fmtKFC(selectedAmt):''}</div>
+        <div style="display:flex;gap:8px">
+          <button class="btn-ghost" style="flex:1" onclick="document.getElementById('tip-modal').remove()">Cancel</button>
+          <button class="btn-primary" style="flex:2" onclick="_confirmTip()">Send Tip 💸</button>
+        </div>
+      </div>`;
+    window._tipAmt = selectedAmt;
+  };
+  render();
+  document.body.appendChild(modal);
+  modal.addEventListener('click', e=>{ if(e.target===modal) modal.remove(); });
+}
+
+function _confirmTip(){
+  const amt = parseFloat(window._tipAmt) || 0;
+  if(amt <= 0){ notif('Enter a tip amount'); return; }
+  if(G.balance < amt){ notif('Not enough balance'); return; }
+  G.balance -= amt;
+  if(G.preDealBal != null && G.phase !== 'bet') G.preDealBal -= amt;
+  G._tipTotal = (G._tipTotal||0) + amt;
+  updateUI();
+  document.getElementById('tip-modal')?.remove();
+  notif('💸 Tipped '+fmtKFC(amt)+' to the dealer!');
+  sfx('buy');
+  _syncTipToSheet(amt);
+  buildPuPanel();
 }
 
 function buyPu(pu,cost){
@@ -10421,9 +10497,12 @@ function _renderLeaderboard(players, errMsg){
     const isYou = (p.username||p.name||'').toLowerCase() === me;
     const crown = p.clubPass ? ' 👑' : '';
     const balCls = p.balance > 0 ? 'pos' : '';
+    const tipTag = p.tipTotal > 0 ? `<span style="font-family:var(--mono);font-size:8px;color:var(--muted);margin-left:4px" title="Total tipped to dealer">💸${fmtKFC(p.tipTotal)}</span>` : '';
     return `<div class="lb-row">
       <span class="lb-rank ${rankClass(i)}">${rankSymbol(i)}</span>
       <span class="lb-name${isYou?' is-you':''}">${p.username||p.name}${crown}</span>
+      <span style="flex:1"></span>
+      ${tipTag}
       <span class="lb-bal ${balCls}">${fmtKFC(p.balance)}</span>
     </div>`;
   }).join('');

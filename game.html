@@ -2283,20 +2283,6 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-bust-live { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 1px; text-align: center; margin-bottom: 4px; }
 .pm-tracker { font-family: var(--mono); font-size: 8px; color: var(--muted2); letter-spacing: 1px; text-align: center; margin-bottom: 5px; padding: 3px 6px; background: rgba(255,255,255,.04); border-radius: 4px; }
 .pm-tracker b { color: var(--gold-hi); font-weight: 700; }
-/* ── Hot Markets strip ─── */
-.pm-hot-header { font-family: var(--mono); font-size: 9px; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
-.pm-hot-strip { display: flex; gap: 8px; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; padding-bottom: 12px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
-.pm-hot-strip::-webkit-scrollbar { display: none; }
-.pm-hot-card { flex: 0 0 155px; background: rgba(201,168,76,.05); border: 1px solid rgba(201,168,76,.18); border-radius: 4px; padding: 10px 12px; cursor: pointer; transition: border-color .15s, background .15s; }
-.pm-hot-card:hover { background: rgba(201,168,76,.10); border-color: rgba(201,168,76,.38); }
-.pm-hot-card-type { font-family: var(--mono); font-size: 7px; letter-spacing: 2px; color: var(--gold-lo); text-transform: uppercase; margin-bottom: 4px; }
-.pm-hot-card-name { font-size: 10px; color: var(--white); line-height: 1.4; margin-bottom: 8px; }
-.pm-hot-split-bar { height: 3px; background: rgba(255,55,75,.25); border-radius: 2px; overflow: hidden; margin-bottom: 3px; }
-.pm-hot-split-fill { height: 100%; background: rgba(0,200,90,.7); border-radius: 2px; }
-.pm-hot-split-labels { display: flex; justify-content: space-between; font-family: var(--mono); font-size: 7px; margin-bottom: 6px; }
-.pm-hot-split-labels .hs-yes { color: #00c85a; }
-.pm-hot-split-labels .hs-no  { color: #ff3745; }
-.pm-hot-card-pool { font-family: var(--mono); font-size: 8px; color: var(--gold-hi); letter-spacing: 1px; }
 /* ── Help modal ─────────────────────────────────────────────────────────── */
 #help-modal .modal { max-width: 520px; width: 94vw; padding: 0; overflow: hidden; max-height: 88vh; display: flex; flex-direction: column; }
 .help-header { padding: 22px 24px 0; flex-shrink: 0; }
@@ -11698,53 +11684,6 @@ const PM = (() => {
     return 50;
   }
 
-  // ── Hot Markets ────────────────────────────────────────────────────────────
-  function _renderHotMarkets(){
-    const area  = document.getElementById('pm-hot-area');
-    const strip = document.getElementById('pm-hot-strip');
-    if(!area || !strip) return;
-
-    // Net active volume: gross betVolume minus early cash-outs by this player only.
-    const myBets = _loadBets();
-    const myCashedOut = {}; // mktId → total early-cashed-out stake by this player
-    myBets.forEach(b => {
-      if(b.cashoutEarly) myCashedOut[b.mktId] = (myCashedOut[b.mktId] || 0) + b.amount;
-    });
-    const netPool = m => Math.max(0, (m.betVolume || 0) - (myCashedOut[m.id] || 0));
-
-    const top = _markets
-      .filter(m => m.status === 'open')
-      .map(m => ({ m, pool: netPool(m) }))
-      .filter(x => x.pool > 0)
-      .sort((a,b) => b.pool - a.pool)
-      .slice(0, 5);
-
-    if(!top.length){ area.style.display = 'none'; return; }
-    area.style.display = '';
-
-    const typeLabel = t => t==='race'?'RACE':t==='season'?'SEASON':'SHOE';
-
-    strip.innerHTML = top.map(({m, pool}) => {
-      const hp   = m.housePools || null;
-      const yP   = hp ? Math.max(0, (m.pools.YES||0) - (hp.YES||0)) : 0;
-      const nP   = hp ? Math.max(0, (m.pools.NO||0)  - (hp.NO||0))  : 0;
-      const hasYN = m.pools && 'YES' in m.pools;
-      // Only show the split bar if housePools is known — without it the house-seed bias
-      // bleeds into nP and produces a misleading "100% NO" even after a YES bet.
-      const yPct = hasYN && hp && (yP+nP)>0 ? Math.round(yP/(yP+nP)*100) : null;
-      const splitHTML = yPct !== null
-        ? `<div class="pm-hot-split-bar"><div class="pm-hot-split-fill" style="width:${yPct}%"></div></div>
-           <div class="pm-hot-split-labels"><span class="hs-yes">${yPct}% YES</span><span class="hs-no">${100-yPct}% NO</span></div>`
-        : `<div class="pm-hot-split-labels"><span style="color:var(--muted);font-family:var(--mono);font-size:7px">— YES &nbsp; — NO</span></div>`;
-      const name = m.desc.length > 42 ? m.desc.slice(0,40)+'…' : m.desc;
-      return `<div class="pm-hot-card" onclick="PM._jumpToMarket('${m.id}')">
-        <div class="pm-hot-card-type">${typeLabel(m.type)}</div>
-        <div class="pm-hot-card-name">${name}</div>
-        ${splitHTML}
-        <div class="pm-hot-card-pool">${fmtFull(pool)} wagered</div>
-      </div>`;
-    }).join('');
-  }
 
   function _jumpToMarket(id){
     _switchTab('markets');
@@ -11819,7 +11758,6 @@ const PM = (() => {
     if(shoeCol) shoeCol.style.display = G.mpMode ? 'none' : '';
     const portPane = document.getElementById('pm-pane-portfolio');
 
-    _renderHotMarkets();
     if(raceEl) _renderRaceSection(raceEl, raceSect);
     if(seasonEl) _renderSeasonList(seasonEl);
     if(shoeEl){
@@ -14991,10 +14929,6 @@ const MP2 = {
       <button class="pm-tab"        id="pm-tab-history"   onclick="PM._switchTab('history')" style="display:none">HISTORY</button>
     </div>
     <div id="pm-pane-markets" class="pm-modal-body">
-      <div id="pm-hot-area" style="display:none">
-        <div class="pm-hot-header">🔥 Most Bet On</div>
-        <div class="pm-hot-strip" id="pm-hot-strip"></div>
-      </div>
       <div id="pm-race-section" style="display:none;margin-bottom:14px">
         <div class="pm-section-title">Race Markets</div>
         <div id="pm-race-list"></div>

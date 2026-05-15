@@ -2255,7 +2255,7 @@ function _renderPmMarkets(markets, txData) {
   // (game only creates one per player per week, but GAS may have stale rows from past bugs)
   const milestoneByPlayer = {}; // pKey → market
   markets.forEach(m => {
-    if (m.type !== 'season') return;
+    if (m.type !== 'milestone') return;
     const p = m.condition && m.condition.params;
     if (!p || !p.player) return;
     const weekStr = p.week || (p.date || '').slice(0, 10);

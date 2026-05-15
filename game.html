@@ -13227,6 +13227,21 @@ const PM = (() => {
           });
           if(changed) _saveBets(local);
         }
+        // Void local "open" bets whose market is no longer open after this poll cycle.
+        // Handles (a) settled markets where settle-event was missed locally, and
+        // (b) markets removed from GAS entirely (historical bugs left payout==null bets).
+        // payout=0 marks bet as closed without touching balance — balance was already
+        // handled by GAS settlement/refund or was never credited (bug scenario).
+        const _openAfterPoll = new Set(_markets.filter(m => m.status === 'open').map(m => m.id));
+        const _betsAfterPoll = _loadBets();
+        let _orphanVoided = false;
+        const _cleanedAfterPoll = _betsAfterPoll.map(b => {
+          if(b.payout !== null) return b;
+          if(_openAfterPoll.has(b.mktId)) return b;
+          _orphanVoided = true;
+          return {...b, payout: 0};
+        });
+        if(_orphanVoided) _saveBets(_cleanedAfterPoll);
       }
     }catch(e){}
     render();

@@ -886,7 +886,7 @@ async function refresh() {
 function updateHeaderSubtitle() {
   const daysLeft = Math.max(0, Math.ceil((SEASON.END - new Date()) / 86_400_000));
   const daysTxt  = daysLeft === 0 ? 'Final Day' : daysLeft === 1 ? '1 day remaining' : `${daysLeft} days remaining`;
-  document.getElementById('header-subtitle').textContent = `Season ${SEASON.NUMBER}  ·  ${daysTxt}  ·  Golden Aces League`;
+  document.getElementById('header-subtitle').textContent = `Dark Fall  ·  Season ${SEASON.NUMBER}  ·  ${daysTxt}  ·  Golden Aces League`;
 }
 
 updateHeaderSubtitle();

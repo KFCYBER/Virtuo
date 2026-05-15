@@ -1167,8 +1167,10 @@ function startCountdown() {
 async function refresh() {
   try {
     const [recRows, txRows] = await Promise.all([sheetsGet('records'), sheetsGet('transactions')]);
-    const players = parseRecords(recRows);
     const txData  = parseTransactions(txRows);
+    const players = parseRecords(recRows).filter(p =>
+      p.balance > 0 || (txData[p.name]?.length ?? 0) > 0
+    );
 
     players.forEach(p => playerColor(p.name));
     Object.keys(txData).forEach(n => playerColor(n));

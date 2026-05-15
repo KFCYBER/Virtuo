@@ -1424,11 +1424,28 @@ function startCountdown() {
 ══════════════════════════════════════════ */
 async function refresh() {
   try {
-    const [recRows, txRows] = await Promise.all([sheetsGet('records'), sheetsGet('transactions')]);
+    const [recRows, txRows, lbRes] = await Promise.all([
+      sheetsGet('records'),
+      sheetsGet('transactions'),
+      fetch(`${GAME_WORKER}?action=getleaderboard`).then(r => r.json()).catch(() => null),
+    ]);
     const txData  = parseTransactions(txRows);
     const players = parseRecords(recRows).filter(p =>
       p.balance > 0 || (txData[p.name]?.length ?? 0) > 0
     );
+
+    // Merge GAS-authoritative balances (same source game.html uses) into _hubGasBals and players
+    if (lbRes && lbRes.players) {
+      _hubGasBals = {};
+      lbRes.players.forEach(p => {
+        if (p.username) _hubGasBals[p.username.toLowerCase()] = p.balance;
+        if (p.name)     _hubGasBals[p.name.toLowerCase()]     = p.balance;
+      });
+      players.forEach(p => {
+        const b = _hubGasBals[p.username?.toLowerCase()] ?? _hubGasBals[p.name?.toLowerCase()];
+        if (b != null) p.balance = b;
+      });
+    }
 
     players.forEach(p => playerColor(p.name));
     Object.keys(txData).forEach(n => playerColor(n));
@@ -1495,6 +1512,7 @@ let _hubSession  = null;
 let _hubMarkets  = [];
 let _hubPlayers  = [];
 let _hubTxData   = {};
+let _hubGasBals  = {}; // username.lower → balance, from GAS getleaderboard (authoritative)
 
 /* ── Week/time helpers (mirror PM module in game.html) ── */
 function _hubWeekStart() {
@@ -1761,16 +1779,23 @@ function _renderPmMarkets(markets, txData) {
         p.name.toLowerCase() === low || (p.username && p.username.toLowerCase() === low)
       );
       if (found) {
-        if (!bal)          bal    = found.balance;
+        if (!bal)           bal    = found.balance;
         if (!series.length) series = txData[found.name] || [];
       }
     }
+    // Last resort: GAS leaderboard balances (authoritative, same as game.html)
+    if (!bal) bal = _hubGasBals[low] || 0;
     return { bal, series };
   }
 
-  // Current week start — string form for comparing params.week, ms form for TX filtering
+  // Current week start — ms for TX filtering, string for matching params.week
+  // currWeekStr must match game.html _weekStart() exactly (same ISO-string derivation, not UTC-midnight)
   const weekStartMs  = _hubWeekStart();
-  const currWeekStr  = new Date(weekStartMs).toISOString().slice(0, 10);
+  const currWeekStr  = (() => {
+    const d = new Date(), day = d.getDay();
+    d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+    return d.toISOString().slice(0, 10);
+  })();
 
   // ── Milestone: one card per player, current week only, lowest open amount ──
   // (game only creates one per player per week, but GAS may have stale rows from past bugs)

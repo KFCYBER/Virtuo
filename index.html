@@ -495,18 +495,41 @@
       .crucicon-num { font-size: 28px; }
       main { padding: 20px 12px 56px; }
       .card table { table-layout: fixed; width: 100%; }
-      th, td { padding: 10px 10px; }
-      .td-rank { width: 36px; font-size: 10px; }
-      .td-player { font-size: 12px; }
-      .td-balance { width: 80px; font-size: 11px; }
+      th, td { padding: 10px 8px; }
+      .td-rank { width: 42px; font-size: 10px; }
+      .td-player { font-size: 12px; max-width: 0; overflow: hidden; }
+      .td-balance { width: 76px; font-size: 11px; }
       .td-session { display: none; }
       .session-mobile { display: block; }
       .chart-grid.cols-2 { grid-template-columns: 1fr; }
       .tax-grid { grid-template-columns: 1fr; }
+      /* Avatar + extras shrink on tablet */
+      .player-avatar { width: 26px; height: 26px; min-width: 26px; font-size: 8px; }
+      .rank-delta { font-size: 7px; }
+      .player-name-row { gap: 6px; row-gap: 3px; }
+      /* Hot strip narrower cards */
+      .hub-hot-card { flex: 0 0 148px; padding: 10px 12px; }
+      /* PM grid 1 column */
+      .pm-mkt-grid { grid-template-columns: 1fr !important; }
+      /* Section padding */
+      #pm-markets-section > div { padding-left: 12px !important; padding-right: 12px !important; }
+      #hub-wallet-section { padding: 0 12px; }
     }
     @media (max-width: 500px) {
       .hero { grid-template-columns: 1fr 1fr; gap: 8px; }
       .hero-value { font-size: 15px; }
+      /* Hide avatar on very small screens to save space */
+      .player-avatar { display: none; }
+      /* Online dot still shows */
+      .online-dot { width: 6px; height: 6px; }
+      /* Hot strip tighter */
+      .hub-hot-card { flex: 0 0 138px; }
+      .hub-hot-card-name { font-size: 10px; }
+      /* Contender tag smaller */
+      .contender-tag { font-size: 6px; padding: 2px 5px; }
+      /* Wallet values smaller */
+      .wc-value { font-size: 17px; }
+      main { padding: 12px 10px 56px; }
     }
 
     /* ── HEADER NAV BUTTONS ── */
@@ -645,6 +668,74 @@
     /* ── Hot card hover lift ── */
     .hub-hot-card { transition: transform .2s ease, box-shadow .2s ease, border-color .15s, background .15s; cursor: default; }
     .hub-hot-card:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(201,168,76,0.13); border-color: rgba(201,168,76,0.4); }
+
+    /* ── PM Market card bet buttons ── */
+    .pm-bet-btns { display: flex; gap: 8px; margin-top: 14px; }
+    .pm-bet-yes, .pm-bet-no {
+      flex: 1; padding: 9px 6px; border: none; border-radius: 6px; cursor: pointer;
+      font-family: var(--mono); font-size: 10px; font-weight: 800; letter-spacing: 2px;
+      text-transform: uppercase; transition: opacity .15s, transform .12s;
+    }
+    .pm-bet-yes:hover, .pm-bet-no:hover { opacity: 0.85; transform: translateY(-1px); }
+    .pm-bet-yes { background: rgba(92,217,122,0.15); color: #5cd97a; border: 1px solid rgba(92,217,122,0.35); }
+    .pm-bet-no  { background: rgba(224,85,85,0.12); color: #e05555; border: 1px solid rgba(224,85,85,0.3); }
+
+    /* ── Hub betting modal ── */
+    #hub-bet-modal {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 950; backdrop-filter: blur(10px);
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #hub-bet-modal.open { opacity: 1; pointer-events: all; }
+    .hbm-box {
+      background: linear-gradient(160deg, rgba(12,14,26,0.98) 0%, rgba(16,18,32,0.96) 100%);
+      border: 1px solid rgba(201,168,76,0.18); border-radius: 16px;
+      padding: 32px 28px 28px; width: 360px; max-width: 94vw;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(255,255,255,0.03);
+      position: relative;
+      transform: translateY(14px); transition: transform 0.25s;
+    }
+    #hub-bet-modal.open .hbm-box { transform: translateY(0); }
+    .hbm-close {
+      position: absolute; top: 14px; right: 16px; background: none; border: none;
+      color: var(--muted); font-size: 17px; cursor: pointer; transition: color .2s; line-height: 1;
+    }
+    .hbm-close:hover { color: var(--text); }
+    .hbm-type-tag {
+      font-family: var(--mono); font-size: 7px; letter-spacing: 3px; font-weight: 700;
+      text-transform: uppercase; color: var(--gold-lo); margin-bottom: 8px;
+    }
+    .hbm-title { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.4; margin-bottom: 18px; }
+    .hbm-odds-row { display: flex; gap: 10px; margin-bottom: 20px; }
+    .hbm-odds-pill {
+      flex: 1; text-align: center; padding: 9px 8px; border-radius: 8px;
+      font-family: var(--mono); font-size: 12px; font-weight: 800; letter-spacing: 1px;
+      cursor: pointer; transition: opacity .15s, border-color .15s;
+      border: 2px solid transparent;
+    }
+    .hbm-odds-pill.yes { background: rgba(92,217,122,0.1); color: #5cd97a; border-color: rgba(92,217,122,0.25); }
+    .hbm-odds-pill.no  { background: rgba(224,85,85,0.09); color: #e05555; border-color: rgba(224,85,85,0.22); }
+    .hbm-odds-pill.selected.yes { background: rgba(92,217,122,0.22); border-color: #5cd97a; box-shadow: 0 0 0 3px rgba(92,217,122,0.12); }
+    .hbm-odds-pill.selected.no  { background: rgba(224,85,85,0.20); border-color: #e05555; box-shadow: 0 0 0 3px rgba(224,85,85,0.10); }
+    .hbm-odds-pill:not(.selected) { opacity: 0.45; }
+    .hbm-field-label { font-family: var(--mono); font-size: 8px; letter-spacing: 2.5px; color: var(--muted); text-transform: uppercase; margin-bottom: 8px; }
+    .hbm-amount-wrap { display: flex; align-items: center; gap: 8px; margin-bottom: 16px; }
+    .hbm-amount-wrap input {
+      flex: 1; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 8px; padding: 11px 14px; color: var(--text); font-family: var(--mono);
+      font-size: 16px; outline: none; transition: border-color .2s;
+    }
+    .hbm-amount-wrap input:focus { border-color: rgba(201,168,76,0.45); }
+    .hbm-amount-wrap span { font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap; }
+    .hbm-payout {
+      background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+      border-radius: 8px; padding: 12px 14px; display: flex;
+      justify-content: space-between; align-items: center; margin-bottom: 18px;
+    }
+    .hbm-payout-lbl { font-family: var(--mono); font-size: 9px; letter-spacing: 1.5px; color: var(--muted); text-transform: uppercase; }
+    .hbm-payout-val { font-family: var(--mono); font-size: 16px; font-weight: 700; color: #5cd97a; }
+    .hbm-note { font-size: 9px; color: var(--muted); text-align: center; margin-top: 10px; line-height: 1.5; opacity: 0.7; }
 
     /* ── WALLET SECTION ── */
     #hub-wallet-section { max-width: 1320px; margin: 26px auto 0; padding: 0 24px; position: relative; z-index: 2; }
@@ -2059,6 +2150,48 @@ function _renderHotStripHub(openMarkets) {
   }).join('');
 }
 
+/* ── Hub betting preview modal ── */
+const _hbmState = { mktId: null, yesP: 50, noP: 50, outcome: 'YES' };
+
+function _openHubBetModal(mktId, yesP, noP, outcome) {
+  _hbmState.mktId   = mktId;
+  _hbmState.yesP    = yesP;
+  _hbmState.noP     = noP;
+  _hbmState.outcome = outcome;
+  const mkt = _hubMarkets.find(m => m.id === mktId);
+  if (!mkt) return;
+  document.getElementById('hbm-tag').textContent   = (mkt.type || 'market').toUpperCase();
+  document.getElementById('hbm-title').textContent = mkt.desc || '—';
+  document.getElementById('hbm-yes-pill').textContent = `YES ${yesP}%`;
+  document.getElementById('hbm-no-pill').textContent  = `NO ${noP}%`;
+  document.getElementById('hbm-amount').value = '';
+  document.getElementById('hbm-payout').style.display = 'none';
+  document.getElementById('hbm-game-link').href = `game.html?panel=pm&mktid=${encodeURIComponent(mktId)}`;
+  _hbmSelectOutcome(outcome);
+  document.getElementById('hub-bet-modal').classList.add('open');
+}
+function _closeHubBetModal() {
+  document.getElementById('hub-bet-modal').classList.remove('open');
+}
+function _hbmSelectOutcome(side) {
+  _hbmState.outcome = side;
+  const yp = document.getElementById('hbm-yes-pill');
+  const np = document.getElementById('hbm-no-pill');
+  if (yp) { yp.classList.toggle('selected', side === 'YES'); }
+  if (np) { np.classList.toggle('selected', side === 'NO'); }
+  _hbmUpdatePayout();
+}
+function _hbmUpdatePayout() {
+  const amt  = parseFloat(document.getElementById('hbm-amount').value) || 0;
+  const pRow = document.getElementById('hbm-payout');
+  const pVal = document.getElementById('hbm-payout-val');
+  if (amt <= 0 || !pRow || !pVal) { if (pRow) pRow.style.display = 'none'; return; }
+  const pct  = _hbmState.outcome === 'NO' ? _hbmState.noP : _hbmState.yesP;
+  const odds = pct > 0 ? (100 / pct) : 2;
+  pRow.style.display = '';
+  pVal.textContent = `~${_fmtHub(Math.round(amt * odds))} KFC`;
+}
+
 /* ── PM MARKETS RENDER ── */
 function _renderPmMarkets(markets, txData) {
   const grid = document.getElementById('pm-mkt-grid');
@@ -2166,7 +2299,10 @@ function _renderPmMarkets(markets, txData) {
         <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
       </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · this week</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
-      <a href="game.html?panel=pm" class="cta-gold pm-bet-link">Place Bet →</a>`;
+      <div class="pm-bet-btns">
+        <button class="pm-bet-yes" onclick="_openHubBetModal('${mkt.id}',${yesP},${noP},'YES')">YES ${yesP}%</button>
+        <button class="pm-bet-no"  onclick="_openHubBetModal('${mkt.id}',${yesP},${noP},'NO')">NO ${noP}%</button>
+      </div>`;
     grid.appendChild(card);
 
     if (hasChart) {
@@ -2209,7 +2345,10 @@ function _renderPmMarkets(markets, txData) {
         <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
       </div>
       ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
-      <a href="game.html?panel=pm" class="cta-gold pm-bet-link">Place Bet →</a>`;
+      <div class="pm-bet-btns">
+        <button class="pm-bet-yes" onclick="_openHubBetModal('${mkt.id}',${yesP},${noP},'YES')">YES ${yesP}%</button>
+        <button class="pm-bet-no"  onclick="_openHubBetModal('${mkt.id}',${yesP},${noP},'NO')">NO ${noP}%</button>
+      </div>`;
     grid.appendChild(card);
 
     if (hasChart) setTimeout(() => _drawSparkline(sparkId, sparkPts, '#e8c96a'), 60);
@@ -2242,6 +2381,31 @@ document.querySelectorAll('.hero-card').forEach(card => {
   });
 })();
 </script>
+<!-- ══ Hub PM betting preview modal ══ -->
+<div id="hub-bet-modal" onclick="if(event.target===this)_closeHubBetModal()">
+  <div class="hbm-box">
+    <button class="hbm-close" onclick="_closeHubBetModal()">✕</button>
+    <div class="hbm-type-tag" id="hbm-tag">MARKET</div>
+    <div class="hbm-title" id="hbm-title">—</div>
+    <div class="hbm-odds-row">
+      <div class="hbm-odds-pill yes" id="hbm-yes-pill" onclick="_hbmSelectOutcome('YES')">YES —%</div>
+      <div class="hbm-odds-pill no"  id="hbm-no-pill"  onclick="_hbmSelectOutcome('NO')">NO —%</div>
+    </div>
+    <div class="hbm-field-label">Stake amount</div>
+    <div class="hbm-amount-wrap">
+      <input type="number" id="hbm-amount" placeholder="0" min="1" oninput="_hbmUpdatePayout()">
+      <span>KFC</span>
+    </div>
+    <div class="hbm-payout" id="hbm-payout" style="display:none">
+      <span class="hbm-payout-lbl">Est. payout if wins</span>
+      <span class="hbm-payout-val" id="hbm-payout-val">—</span>
+    </div>
+    <a id="hbm-game-link" href="game.html?panel=pm" class="cta-gold" style="width:100%;justify-content:center;display:flex">
+      Open in Game →
+    </a>
+    <div class="hbm-note">Odds are live estimates. Actual payout is parimutuel and may differ.</div>
+  </div>
+</div>
 <div id="hub-toast"></div>
 </body>
 </html>

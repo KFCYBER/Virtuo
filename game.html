@@ -4779,8 +4779,12 @@ function buildLoginStakeList(){
   const _lastStakeIdx = _lastStakeKey ? STAKE_ORDER.indexOf(_lastStakeKey) : -1;
   const _lastPlayedMin = _lastStakeKey ? ((STAKES[_lastStakeKey]||{}).min || 1) : 1;
   Object.entries(STAKES).forEach(([key,s])=>{
-    // When balance is 0, all stakes selectable (player will enter buy-in from external top-up)
-    const canAfford=bal<=0||bal>=s.min;
+    // Sub-minimum: balance > 0 but below lowest stake min — only Low stake is clickable (delivery bypass)
+    const _lowestMin = Math.min(...Object.values(STAKES).map(s=>s.min));
+    const _isZero = bal <= 0;
+    const _isSubMin = bal > 0 && bal < _lowestMin;
+    const _isLowestStake = key === STAKE_ORDER[0];
+    const canAfford = _isZero || bal >= s.min || (_isSubMin && _isLowestStake);
     const thisIdx=STAKE_ORDER.indexOf(key);
     const belowLastPlayed=_lastStakeIdx>=0 && thisIdx<_lastStakeIdx;
     const tooManySteps=belowLastPlayed&&(_lastStakeIdx-thisIdx>1);
@@ -4794,11 +4798,15 @@ function buildLoginStakeList(){
     btn.innerHTML='<span>'+s.label+' Stakes'+_downTag+'</span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min '+fmt(s.min)+'</span>';
     btn.onmouseover=()=>{btn.style.borderColor='rgba(201,168,76,0.5)';btn.style.background='rgba(201,168,76,0.06)';};
     btn.onmouseout=()=>{btn.style.borderColor='var(--line2)';btn.style.background='var(--bg2)';};
+    // Sub-minimum Low stakes button: show a delivery hint
+    if(_isSubMin && _isLowestStake){
+      btn.innerHTML='<span>Low Stakes <span style="font-size:9px;letter-spacing:1px;color:var(--gold);opacity:0.75">· claim delivery</span></span><span style="font-family:var(--mono);font-size:10px;color:var(--muted)">min '+fmt(s.min)+'</span>';
+    }
     btn.onclick=()=>{
       _selectedStakeKey=key;
-      if(bal<=0){
-        // Broke player — skip buy-in, enter with 0 balance so the top-up option is reachable in-game
-        _pendingLogin.totalBalance=0;
+      if(_isZero || _isSubMin){
+        // Broke/sub-minimum player — skip buy-in, process deliveries then enter game
+        _pendingLogin.totalBalance = bal || 0;
         finaliseLogin(key);
       } else {
         goLoginStep(3);

@@ -4762,7 +4762,7 @@ function buildLoginStakeList(){
   const bd=document.getElementById('login-bal-display');
   if(bd){
     if(bal<=0){
-      bd.textContent='Balance: 0 KFC — select a stake to buy in';
+      bd.textContent='Balance: 0 KFC — claim delivery on Low Stakes to continue';
       bd.style.color='var(--muted)';
     } else {
       bd.textContent='Balance: '+fmtKFC(bal);
@@ -4784,7 +4784,7 @@ function buildLoginStakeList(){
     const _isZero = bal <= 0;
     const _isSubMin = bal > 0 && bal < _lowestMin;
     const _isLowestStake = key === STAKE_ORDER[0];
-    const canAfford = _isZero || bal >= s.min || (_isSubMin && _isLowestStake);
+    const canAfford = (_isZero || _isSubMin) ? _isLowestStake : bal >= s.min;
     const thisIdx=STAKE_ORDER.indexOf(key);
     const belowLastPlayed=_lastStakeIdx>=0 && thisIdx<_lastStakeIdx;
     const tooManySteps=belowLastPlayed&&(_lastStakeIdx-thisIdx>1);
@@ -5622,7 +5622,7 @@ function clearSession(){
 // Auto-sync a stale session (>4h) to the sheet so chips aren't lost.
 // Fires silently in the background — player never sees this UI-side.
 async function _expireStaleSession(snap){
-  if(!snap||!snap.username||!snap.balance) return;
+  if(!snap||!snap.username||snap.balance==null||snap.balance===undefined) return;
   if((snap.username||'').toLowerCase()==='creator') return;
   const url=localStorage.getItem('kfc_url')||G.url; // declare early — used in points sync below
   // Award loyalty points for the partial shoe before expiring

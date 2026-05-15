@@ -471,7 +471,10 @@ body {
       </div>
       <div class="checkout-section">
         <label class="checkout-label">Your KFC Username</label>
-        <input class="checkout-input" id="checkout-username" type="text" placeholder="Enter your username…" autocomplete="off" />
+        <div style="position:relative">
+          <input class="checkout-input" id="checkout-username" type="text" placeholder="Enter your username…" autocomplete="off" style="padding-right:2rem" />
+          <span id="username-status" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none"></span>
+        </div>
         <button class="btn-order" id="btn-order" onclick="placeOrder()">Place Order</button>
         <div class="order-msg" id="order-msg"></div>
       </div>
@@ -722,6 +725,11 @@ async function placeOrder() {
     msg.textContent = 'Please enter your KFC username.';
     return;
   }
+  if (!_usernameVerified) {
+    msg.className = 'order-msg err';
+    msg.textContent = 'Username not recognised — please check and try again.';
+    return;
+  }
   if (cartCount() === 0) {
     msg.className = 'order-msg err';
     msg.textContent = 'Your cart is empty.';
@@ -857,6 +865,8 @@ function switchTab(tab) {
 const EJS_PUBLIC_KEY  = 'RSujIHSWQZvXi_Vrw';
 const EJS_SERVICE_ID  = 'service_ov7ta7o';
 const EJS_TEMPLATE_ID = 'template_3c7trbe';
+const WORKER_URL      = 'https://virtuo-proxy.kfcstaffco.workers.dev';
+let _usernameVerified = false;
 
 // ── BACKGROUND CANVAS ─────────────────────────────────────────────
 (function initBg() {
@@ -913,6 +923,33 @@ document.addEventListener('DOMContentLoaded', () => {
   renderProducts(CRATES, 'grid-crates');
   renderProducts(CURRENCY_PACKS, 'grid-currency');
 
+  // Username validation helper
+  async function verifyUsername(username) {
+    const statusEl = document.getElementById('username-status');
+    if (!username) { statusEl.textContent = ''; _usernameVerified = false; return; }
+    statusEl.textContent = '…';
+    statusEl.style.color = 'var(--muted2)';
+    try {
+      const res = await fetch(WORKER_URL + '?action=getbalance&username=' + encodeURIComponent(username.toLowerCase()), { cache: 'no-store' });
+      const data = await res.json();
+      // auth:true = logged in user; error:'Incorrect PIN' = user exists but wrong PIN
+      const exists = data.auth === true || (data.error && data.error.toLowerCase().includes('incorrect pin'));
+      if (exists) {
+        _usernameVerified = true;
+        statusEl.textContent = '✓';
+        statusEl.style.color = '#4caf50';
+      } else {
+        _usernameVerified = false;
+        statusEl.textContent = '✗';
+        statusEl.style.color = '#e53935';
+      }
+    } catch(_) {
+      _usernameVerified = false;
+      statusEl.textContent = '?';
+      statusEl.style.color = 'var(--muted2)';
+    }
+  }
+
   // Auto-fill username from the game session (same origin localStorage)
   try {
     const saved = localStorage.getItem('kfc_last_user') || '';
@@ -922,8 +959,21 @@ document.addEventListener('DOMContentLoaded', () => {
       input.readOnly = true;
       input.style.color = 'var(--muted2)';
       input.title = 'Logged in as ' + saved;
+      verifyUsername(saved);
     }
   } catch(e) {}
+
+  // Validate on blur for manual entry
+  const unInput = document.getElementById('checkout-username');
+  unInput.addEventListener('blur', () => {
+    if (!unInput.readOnly) verifyUsername(unInput.value.trim());
+  });
+  unInput.addEventListener('input', () => {
+    if (_usernameVerified) {
+      _usernameVerified = false;
+      document.getElementById('username-status').textContent = '';
+    }
+  });
 });
 </script>
 </body>

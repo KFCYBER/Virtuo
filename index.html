@@ -1878,18 +1878,17 @@ function _renderHotStripHub(openMarkets) {
   strip.innerHTML = top.map(m => {
     // Live-balance-based odds (mirrors game.html _fundamentalPct — no housePools needed)
     let yPct = 50;
-    if (m.type === 'season') {
-      const playerName = (m.params && m.params.player) || '';
-      const low = playerName.toLowerCase();
-      const bal = currBals[low] || _hubGasBals[low] || 0;
-      const target = (m.params && m.params.target) || 0;
-      if (target > 0) yPct = Math.round(_milestoneYesBias(bal, target, Date.now()) * 100);
-    } else if (m.type === 'race') {
-      const playerName = (m.params && m.params.player) || '';
-      const low = playerName.toLowerCase();
-      const bal = currBals[low] || _hubGasBals[low] || 0;
-      const target = (m.params && m.params.target) || 0;
-      if (target > 0) yPct = Math.round(_raceYesBias(bal, currBals, target) * 100);
+    const cp = m.condition && m.condition.params;
+    if (cp && (m.type === 'season' || m.type === 'race')) {
+      const playerName = cp.player || '';
+      const low    = playerName.toLowerCase();
+      const bal    = currBals[low] || _hubGasBals[low] || 0;
+      const target = cp.amount || cp.target || 0;
+      if (target > 0) {
+        yPct = m.type === 'season'
+          ? Math.round(_milestoneYesBias(bal, target, Date.now()) * 100)
+          : Math.round(_raceYesBias(bal, currBals, target) * 100);
+      }
     }
 
     const name = m.desc.length > 45 ? m.desc.slice(0, 43) + '…' : m.desc;

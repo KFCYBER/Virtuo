@@ -400,6 +400,28 @@ body:not(.betting) #betting-spacer { flex: 0; }
 /* Staggered field rows */
 .login-field-row { opacity:0; transform:translateY(10px); }
 .login-field-row.lf-in { animation:lfFadeUp 0.55s cubic-bezier(.16,1,.3,1) both; }
+/* ── Floating label inputs ── */
+.lf-wrap { position: relative; margin-bottom: 4px; }
+.lf-label {
+  position: absolute; left: 13px; top: 11px;
+  font-family: var(--mono); font-size: 12px; letter-spacing: 0.3px;
+  color: var(--muted); pointer-events: none; z-index: 1;
+  transition: top .18s ease, font-size .18s ease, color .18s ease, letter-spacing .18s ease, background .18s ease;
+}
+.lf-wrap:focus-within .lf-label,
+.lf-wrap input:not(:placeholder-shown) ~ .lf-label {
+  top: -9px; font-size: 8px; letter-spacing: 2px; color: var(--gold-lo);
+  text-transform: uppercase; font-weight: 700;
+  background: var(--bg1); padding: 0 4px; left: 9px;
+}
+.lf-wrap input { margin-bottom: 0; }
+/* ── Shake animation ── */
+@keyframes loginShake { 0%,100%{transform:translateX(0)} 15%{transform:translateX(-10px)} 35%{transform:translateX(10px)} 55%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
+.shake-input { animation: loginShake 0.44s ease; }
+/* ── Step indicator dots ── */
+.step-dots { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
+.step-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: background 0.25s, transform 0.25s; }
+.step-dot.active { background: var(--gold); transform: scale(1.3); }
 /* Button shine streak — scoped to login only */
 #login .btn-primary::after {
   content:''; position:absolute; top:0; left:-80%; bottom:0; width:55%;
@@ -2483,12 +2505,16 @@ body.mp-bet-locked .all-sb-btn {
     <div id="login-loading" style="font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:2px;margin-bottom:24px;display:none">LOADING PLAYERS ···</div>
     <div id="login-step1">
       <div class="login-field-row" id="lf-username">
-        <label class="field-label">Username</label>
-        <input type="text" id="lusername" placeholder="your username" autocomplete="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('lpin').focus()">
+        <div class="lf-wrap">
+          <input type="text" id="lusername" placeholder=" " autocomplete="off" autocapitalize="off" spellcheck="false" onkeydown="if(event.key==='Enter')document.getElementById('lpin').focus()">
+          <label class="lf-label" for="lusername">Username</label>
+        </div>
       </div>
       <div class="login-field-row" id="lf-pin">
-        <label class="field-label">PIN</label>
-        <input type="password" id="lpin" placeholder="" maxlength="8" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
+        <div class="lf-wrap">
+          <input type="password" id="lpin" placeholder=" " maxlength="8" autocomplete="new-password" onkeydown="if(event.key==='Enter')doLogin()">
+          <label class="lf-label" for="lpin">PIN</label>
+        </div>
       </div>
       <div class="login-field-row" id="lf-btn">
         <button class="btn-primary" onclick="doLogin()">Continue</button>
@@ -2496,6 +2522,7 @@ body.mp-bet-locked .all-sb-btn {
       </div>
       <div class="err" id="lerr"></div>
       <a href="index.html" style="display:block;margin-top:20px;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);text-decoration:none;text-transform:uppercase;transition:color 0.2s" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--muted)'">← Back to Hub</a>
+      <div class="step-dots"><div class="step-dot active" id="sdot-1"></div><div class="step-dot" id="sdot-2"></div></div>
     </div>
     <!-- Step 2: Stake selection (shown first after credentials) -->
     <div id="login-step2" style="display:none">
@@ -4759,6 +4786,9 @@ function goLoginStep(step, back){
     void target.offsetWidth;
     target.classList.add(inCls);
     if(step===1) setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },50);
+    // Sync step dots
+    const d1=document.getElementById('sdot-1'), d2=document.getElementById('sdot-2');
+    if(d1&&d2){ d1.classList.toggle('active',step===1); d2.classList.toggle('active',step>=2); }
   }, delay);
 }
 
@@ -6279,7 +6309,12 @@ async function doLogin(){
     err.textContent='Connecting...';
     try{
       const d=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
-      if(d.error&&d.auth===false){err.textContent=d.error||'Authentication failed';return;}
+      if(d.error&&d.auth===false){
+        err.textContent=d.error||'Authentication failed';
+        const pinIn=document.getElementById('lpin');
+        if(pinIn){pinIn.classList.remove('shake-input');void pinIn.offsetWidth;pinIn.classList.add('shake-input');setTimeout(()=>pinIn.classList.remove('shake-input'),500);}
+        return;
+      }
       if(d.auth){
         err.textContent='';
         G.username=username;

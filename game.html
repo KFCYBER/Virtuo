@@ -2509,6 +2509,7 @@ body.mp-bet-locked .all-sb-btn {
         <div style="display:flex;gap:8px;margin-top:12px"></div>
       </div>
       <div class="err" id="lerr"></div>
+      <a href="index.html" style="display:block;margin-top:20px;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);text-decoration:none;text-transform:uppercase;transition:color 0.2s" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--muted)'">← Back to Hub</a>
     </div>
     <!-- Step 2: Stake selection (shown first after credentials) -->
     <div id="login-step2" style="display:none">
@@ -3497,6 +3498,7 @@ body.mp-bet-locked .all-sb-btn {
     <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:28px;letter-spacing:1px;">How would you like to play?</div>
     <button class="mp-mode-btn primary" onclick="MP2._chooseSP()">&#9654; SINGLEPLAYER</button>
     <button class="mp-mode-btn ghost" onclick="MP2._chooseMP()">&#9782; MULTIPLAYER</button>
+    <button class="mp-mode-btn ghost" onclick="MP2._backToLogin()" style="margin-top:8px;opacity:0.6;font-size:9px;letter-spacing:2px">&#8592; BACK TO LOGIN</button>
   </div>
 </div>
 
@@ -11079,16 +11081,17 @@ function _startVortexAnim(canvasId, watchId) {
   setTimeout(lStart,200);
 }
 
-// ── LOGIN PARTICLE FIELD (dramatic gold constellation) ───────────────────────
-function _startLoginParticles(){
-  const canvas=document.getElementById('login-bg');
+// ── SHARED PARTICLE CONSTELLATION (gold, used on all login/MP overlay screens) ──
+// canvasId: the canvas element id; watchId: the parent overlay id to pause when hidden
+function _startParticleField(canvasId, watchId){
+  const canvas=document.getElementById(canvasId);
   if(!canvas) return;
   const ctx=canvas.getContext('2d');
   let W,H,animId;
   const N=120, MAX_D=150, MAX_D2=MAX_D*MAX_D;
 
   function mkP(){
-    const bright=Math.random()<0.12; // ~12% are hero particles
+    const bright=Math.random()<0.12;
     return {
       x:Math.random()*(W||window.innerWidth),
       y:Math.random()*(H||window.innerHeight),
@@ -11112,28 +11115,20 @@ function _startLoginParticles(){
   function init(){ resize(); particles=Array.from({length:N},mkP); }
 
   function frame(){
-    // Deep background
     ctx.fillStyle='rgba(9,10,12,1)';
     ctx.fillRect(0,0,W,H);
-
-    // Radial centre bloom — strong and dramatic
     const bloom=ctx.createRadialGradient(W/2,H/2,0,W/2,H/2,Math.min(W,H)*0.65);
     bloom.addColorStop(0,'rgba(201,168,76,0.13)');
     bloom.addColorStop(0.45,'rgba(201,168,76,0.05)');
     bloom.addColorStop(1,'rgba(201,168,76,0)');
     ctx.fillStyle=bloom; ctx.fillRect(0,0,W,H);
-
-    // Move & draw
     for(let i=0;i<N;i++){
       const p=particles[i];
       p.x+=p.vx; p.y+=p.vy; p.pulse+=p.ps;
       if(p.x<-20) p.x=W+20; else if(p.x>W+20) p.x=-20;
       if(p.y<-20) p.y=H+20; else if(p.y>H+20) p.y=-20;
-
       const ao=p.baseOp+Math.sin(p.pulse)*0.18;
       const ar=p.r+Math.sin(p.pulse)*0.6;
-
-      // Connections
       for(let j=i+1;j<N;j++){
         const q=particles[j];
         const dx=p.x-q.x, dy=p.y-q.y, d2=dx*dx+dy*dy;
@@ -11144,19 +11139,15 @@ function _startLoginParticles(){
           ctx.strokeStyle=`rgba(201,168,76,${la})`; ctx.lineWidth=p.bright||q.bright?1:0.6; ctx.stroke();
         }
       }
-
-      // Particle glow (hero particles get a halo)
       if(p.bright){
         const grd=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,ar*4);
         grd.addColorStop(0,`rgba(201,168,76,${ao*0.35})`);
         grd.addColorStop(1,'rgba(201,168,76,0)');
         ctx.fillStyle=grd; ctx.fillRect(p.x-ar*4,p.y-ar*4,ar*8,ar*8);
       }
-
       ctx.beginPath(); ctx.arc(p.x,p.y,Math.max(0.3,ar),0,Math.PI*2);
       ctx.fillStyle=`rgba(201,168,76,${Math.max(0.08,ao)})`; ctx.fill();
     }
-
     animId=requestAnimationFrame(frame);
   }
 
@@ -11168,16 +11159,18 @@ function _startLoginParticles(){
   });
 
   const obs=new MutationObserver(()=>{
-    const el=document.getElementById('login');
+    const el=document.getElementById(watchId);
     const hidden=!el||el.style.display==='none'||el.style.display==='';
     if(hidden&&animId){ cancelAnimationFrame(animId); animId=null; }
     else if(!hidden&&!animId){ frame(); }
   });
-  const loginEl=document.getElementById('login');
-  if(loginEl) obs.observe(loginEl,{attributes:true,attributeFilter:['style']});
+  const watchEl=document.getElementById(watchId);
+  if(watchEl) obs.observe(watchEl,{attributes:true,attributeFilter:['style']});
 
   setTimeout(start,80);
 }
+
+function _startLoginParticles(){ _startParticleField('login-bg','login'); }
 
 // ── LOGIN ENTRANCE SEQUENCE ───────────────────────────────────────────────────
 function _runLoginEntrance(){
@@ -11225,8 +11218,8 @@ function _runLoginEntrance(){
 _startLoginParticles();
 _runLoginEntrance();
 document.addEventListener('DOMContentLoaded',()=>{
-  _startVortexAnim('mp-mode-bg','mp-mode-select');
-  _startVortexAnim('mp-lobby-bg','mp-lobby-overlay');
+  _startParticleField('mp-mode-bg','mp-mode-select');
+  _startParticleField('mp-lobby-bg','mp-lobby-overlay');
 });
 
 // ── PREDICTION MARKETS ────────────────────────────────────────────────────────
@@ -14068,6 +14061,11 @@ const MP2 = {
   _backToModeSelect() {
     document.getElementById('mp-lobby-overlay').style.display = 'none';
     this._showModeSelect();
+  },
+  _backToLogin() {
+    document.getElementById('mp-mode-select').style.display = 'none';
+    const lg = document.getElementById('login');
+    if (lg) lg.style.display = 'flex';
   },
   _populateStakes(selId, cat) {
     const sel = document.getElementById(selId);

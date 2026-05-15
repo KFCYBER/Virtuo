@@ -1093,8 +1093,10 @@ async function refresh() {
       sheetsGet('transactions'),
     ]);
 
-    const players = parseRecords(recRows);
     const txData  = parseTransactions(txRows);
+    const players = parseRecords(recRows).filter(p =>
+      p.balance > 0 || (txData[p.name]?.length ?? 0) > 0
+    );
 
     // Assign colours in standings order so rank #1 always gets colour[0]
     players.forEach(p => playerColor(p.name));

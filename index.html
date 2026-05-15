@@ -2258,8 +2258,6 @@ function _renderPmMarkets(markets, txData) {
     if (m.type !== 'season') return;
     const p = m.condition && m.condition.params;
     if (!p || !p.player) return;
-    const weekStr = p.week || (p.date || '').slice(0, 10);
-    if (weekStr !== currWeekStr) return; // only this week's milestones
     const pKey = (p.player || '').toLowerCase();
     // Keep only the lowest-amount market per player (the "next" goal)
     if (!milestoneByPlayer[pKey] || p.amount < milestoneByPlayer[pKey].condition.params.amount) {

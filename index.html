@@ -337,14 +337,14 @@
     td { padding: 14px 20px; vertical-align: middle; }
 
     /* ── RANK ── */
-    .td-rank { width: 52px; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--muted); white-space: nowrap; }
+    .td-rank { width: 52px; font-size: 11px; font-weight: 800; letter-spacing: 1px; color: var(--muted); white-space: nowrap; vertical-align: middle; }
     .td-rank.gold   { color: #FFD700; text-shadow: 0 0 14px rgba(255,215,0,0.55); }
     .td-rank.silver { color: #C0C0C0; text-shadow: 0 0 10px rgba(192,192,192,0.35); }
     .td-rank.bronze { color: #CD7F32; text-shadow: 0 0 10px rgba(205,127,50,0.35); }
 
     /* ── PLAYER CELL ── */
     .td-player { font-weight: 600; font-size: 15px; }
-    .player-name-row { display: flex; align-items: center; gap: 10px; }
+    .player-name-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; row-gap: 4px; }
     @keyframes contender-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(224,64,64,0.4),0 0 6px rgba(224,64,64,0.2)} 50%{box-shadow:0 0 0 4px rgba(224,64,64,0),0 0 14px rgba(224,64,64,0.4)} }
     .contender-tag { font-size: 7px; font-weight: 800; letter-spacing: 2px; padding: 3px 8px; border-radius: 3px; border: 1px solid #e04040; color: #e04040; text-transform: uppercase; white-space: nowrap; animation: contender-pulse 2.4s ease-in-out infinite; }
 
@@ -584,6 +584,68 @@
     }
     .hub-lclose:hover { color: var(--text); }
 
+    /* ── Hub login floating labels ── */
+    .hub-lfield { margin-bottom: 22px; position: relative; }
+    .hub-lfield label {
+      position: absolute; left: 14px; top: 14px;
+      font-size: 13px; font-weight: 400; letter-spacing: 0.3px;
+      color: var(--muted); text-transform: none; display: block;
+      pointer-events: none; transition: top 0.18s ease, font-size 0.18s ease, color 0.18s ease, letter-spacing 0.18s ease, font-weight 0.18s ease;
+      background: transparent;
+    }
+    .hub-lfield.focused label, .hub-lfield.has-val label {
+      top: -9px; font-size: 8px; letter-spacing: 2.5px; font-weight: 700;
+      color: var(--gold-dim); text-transform: uppercase;
+      background: var(--surface); padding: 0 4px; left: 10px;
+    }
+    .hub-lfield input {
+      width: 100%; padding: 13px 14px 11px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-size: 14px; font-family: inherit;
+      transition: border-color 0.2s, box-shadow 0.2s; outline: none; box-sizing: border-box;
+    }
+    .hub-lfield input:focus { border-color: rgba(201,168,76,0.5); box-shadow: 0 0 0 3px rgba(201,168,76,0.07); }
+    .hub-lsubmit { background: linear-gradient(135deg,#b8923e 0%,var(--gold-hi) 50%,#b8923e 100%) !important; color: #0a0b0d !important; font-weight: 800 !important; border: none !important; }
+    .hub-lsubmit:hover { opacity: 0.88; background: var(--gold-hi) !important; }
+    @keyframes hub-shake { 0%,100%{transform:translateX(0)} 15%{transform:translateX(-9px)} 35%{transform:translateX(9px)} 55%{transform:translateX(-5px)} 75%{transform:translateX(5px)} }
+    .hub-lfield.shake { animation: hub-shake 0.44s ease; }
+
+    /* ── Player avatar circles ── */
+    .player-avatar {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 30px; height: 30px; min-width: 30px; border-radius: 50%;
+      font-size: 9px; font-weight: 900; letter-spacing: 0.5px; color: #0a0b0d;
+      text-transform: uppercase;
+    }
+
+    /* ── Online pulse dot ── */
+    @keyframes online-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(92,217,122,0.55)} 60%{box-shadow:0 0 0 5px rgba(92,217,122,0)} }
+    .online-dot {
+      display: inline-block; width: 7px; height: 7px; min-width: 7px; border-radius: 50%;
+      background: #5cd97a; animation: online-pulse 2.2s ease-in-out infinite;
+    }
+
+    /* ── Rank delta ── */
+    .rank-delta { font-size: 8px; font-weight: 800; letter-spacing: 0; display: block; margin-top: 2px; }
+    .rank-up   { color: #5cd97a; }
+    .rank-down { color: #e05555; }
+
+    /* ── Hub toast ── */
+    #hub-toast {
+      position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+      background: rgba(10,11,20,0.95); border: 1px solid rgba(201,168,76,0.22);
+      border-radius: 24px; padding: 8px 22px;
+      font-family: var(--mono); font-size: 10px; letter-spacing: 2px;
+      color: var(--gold-hi); text-transform: uppercase;
+      z-index: 9999; pointer-events: none; white-space: nowrap;
+      opacity: 0; transition: opacity 0.3s;
+    }
+    #hub-toast.show { opacity: 1; }
+
+    /* ── Hot card hover lift ── */
+    .hub-hot-card { transition: transform .2s ease, box-shadow .2s ease, border-color .15s, background .15s; cursor: default; }
+    .hub-hot-card:hover { transform: translateY(-3px); box-shadow: 0 8px 22px rgba(201,168,76,0.13); border-color: rgba(201,168,76,0.4); }
+
     /* ── WALLET SECTION ── */
     #hub-wallet-section { max-width: 1320px; margin: 26px auto 0; padding: 0 24px; position: relative; z-index: 2; }
     .wallet-row { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 14px; }
@@ -593,6 +655,8 @@
       background: linear-gradient(140deg, rgba(10,10,24,0.96) 0%, rgba(14,14,30,0.9) 100%);
       border: 1px solid var(--border); border-radius: var(--r);
       padding: 20px 22px; position: relative; overflow: hidden;
+      backdrop-filter: blur(12px);
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(201,168,76,0.07);
     }
     .wallet-card::before {
       content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
@@ -782,15 +846,18 @@
     <!-- Login form (shown when logged out) -->
     <div id="hub-login-form">
       <div class="hub-login-title">Player Login</div>
-      <div class="hub-lfield">
+      <div class="hub-lfield" id="hlf-user">
         <label>Username</label>
         <input type="text" id="hub-lusername" autocomplete="off" autocapitalize="off" spellcheck="false"
-               placeholder="your username"
+               onfocus="_hlfFocus('hlf-user')" onblur="_hlfBlur('hlf-user','hub-lusername')"
+               oninput="_hlfInput('hlf-user','hub-lusername')"
                onkeydown="if(event.key==='Enter')document.getElementById('hub-lpin').focus()">
       </div>
-      <div class="hub-lfield">
+      <div class="hub-lfield" id="hlf-pin">
         <label>PIN</label>
-        <input type="password" id="hub-lpin" maxlength="8" placeholder="••••"
+        <input type="password" id="hub-lpin" maxlength="8"
+               onfocus="_hlfFocus('hlf-pin')" onblur="_hlfBlur('hlf-pin','hub-lpin')"
+               oninput="_hlfInput('hlf-pin','hub-lpin')"
                onkeydown="if(event.key==='Enter')_doHubLogin()">
       </div>
       <button class="hub-lsubmit" onclick="_doHubLogin()">Enter</button>
@@ -1282,14 +1349,48 @@ function renderTable(players, txData) {
     document.getElementById('standings-wrap').innerHTML = '<div class="state">No active players found.</div>';
     return;
   }
+  // Rank delta — compare to previous render
+  const prevRanks = JSON.parse(localStorage.getItem('kfc_prev_ranks') || '{}');
+  const newRanks  = {};
+  players.forEach((p, i) => { newRanks[p.name] = i + 1; });
+
+  // Today in ms (midnight local) for online check
+  const _todayMs = new Date(); _todayMs.setHours(0,0,0,0);
+  const todayStart = _todayMs.getTime();
+
   const rankClass = ['gold', 'silver', 'bronze'];
   const leaderBal = players[0]?.balance ?? 1;
   const rows = players.map((p, i) => {
+    const rank = i + 1;
+    const prev = prevRanks[p.name];
+    const delta = prev ? prev - rank : 0;
+    const deltaHtml = delta > 0
+      ? `<span class="rank-delta rank-up">▲${delta}</span>`
+      : delta < 0
+      ? `<span class="rank-delta rank-down">▼${Math.abs(delta)}</span>`
+      : '';
+
+    const initials    = p.name.trim().substring(0, 2).toUpperCase();
+    const avatarColor = playerColor(p.name);
+    const avatarHtml  = `<span class="player-avatar" style="background:${avatarColor}">${initials}</span>`;
+
     const isContender  = p.balance >= SEASON.CONTENDER_MIN;
     const isBust       = p.balance === 0;
     const contenderTag = isContender ? '<span class="contender-tag">Contender</span>' : '';
     const series       = txData[p.name];
-    let sessionCell    = '<span style="color:var(--muted);font-size:11px;letter-spacing:1px">No sessions recorded</span>';
+
+    // Online dot — played a session today
+    let onlineDot = '';
+    if (series && series.length > 0) {
+      const lastDateStr = series[series.length - 1].date;
+      const dm = String(lastDateStr).match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (dm) {
+        const sessionMs = new Date(+dm[3], +dm[2]-1, +dm[1]).getTime();
+        if (sessionMs >= todayStart) onlineDot = '<span class="online-dot" title="Active today"></span>';
+      }
+    }
+
+    let sessionCell = '<span style="color:var(--muted);font-size:11px;letter-spacing:1px">No sessions recorded</span>';
     if (series && series.length > 0) {
       const s          = series[series.length - 1];
       const resClass   = s.result === 'WIN' ? 'win' : s.result === 'LOSE' ? 'lose' : 'push';
@@ -1309,18 +1410,17 @@ function renderTable(players, txData) {
           <span style="margin-left:6px;opacity:0.45">· G#${s.game} · ${s.date}</span>
         </div>`;
     }
+    const balBar = isBust
+      ? '<span class="bust-badge">Bust</span>'
+      : `<span class="bal-num">0</span><div class="balance-bar-track"><div class="balance-bar-fill" data-w="${Math.min(100,(p.balance/leaderBal)*100).toFixed(1)}" style="width:0%;background:${isContender?'#e04040':'var(--green)'};transition:width 0.9s cubic-bezier(.16,1,.3,1)"></div></div>`;
     return `
       <tr class="${isContender ? 'contender' : ''}" style="animation-delay:${i * 0.05}s">
-        <td class="td-rank ${rankClass[i] ?? ''}">#${i + 1}</td>
+        <td class="td-rank ${rankClass[i] ?? ''}">#${rank}${deltaHtml}</td>
         <td class="td-player">
-          <div class="player-name-row">${p.name}${contenderTag}</div>
+          <div class="player-name-row">${avatarHtml}<span>${p.name}</span>${onlineDot}${contenderTag}</div>
           <div class="session-mobile">${sessionCell}</div>
         </td>
-        <td class="td-balance">${
-          isBust
-            ? '<span class="bust-badge">Bust</span>'
-            : `${fmt(p.balance)}<div class="balance-bar-track"><div class="balance-bar-fill" style="width:${Math.min(100,(p.balance/leaderBal)*100).toFixed(1)}%;background:${isContender?'#e04040':'var(--green)'}"></div></div>`
-        }</td>
+        <td class="td-balance" data-bal="${Math.round(p.balance)}">${balBar}</td>
         <td class="td-session">${sessionCell}</td>
       </tr>`;
   }).join('');
@@ -1336,6 +1436,20 @@ function renderTable(players, txData) {
       </thead>
       <tbody>${rows}</tbody>
     </table>`;
+
+  // Save new ranks for next render's delta
+  localStorage.setItem('kfc_prev_ranks', JSON.stringify(newRanks));
+
+  // Animate balance count-up and bar slide-in
+  requestAnimationFrame(() => {
+    document.querySelectorAll('.td-balance[data-bal]').forEach(td => {
+      const target = parseInt(td.dataset.bal, 10);
+      const span   = td.querySelector('.bal-num');
+      const bar    = td.querySelector('.balance-bar-fill');
+      if (span) animateCount(span, target, 750, v => fmt(v));
+      if (bar)  setTimeout(() => { bar.style.width = bar.dataset.w + '%'; }, 60);
+    });
+  });
 }
 
 /* ══════════════════════════════════════════
@@ -1501,7 +1615,7 @@ async function refresh() {
     // Save for PM odds chart access
     _hubPlayers = players;
     _hubTxData  = txData;
-    if (_hubMarkets.length > 0) _renderPmMarkets(_hubMarkets, _hubTxData);
+    if (_hubMarkets.length > 0) { _renderHotStripHub(_hubMarkets); _renderPmMarkets(_hubMarkets, _hubTxData); }
 
     // Keep wallet balance in sync with live leaderboard data
     if (_hubSession) {
@@ -1530,6 +1644,7 @@ async function refresh() {
     renderLine(txData, 'chart-backmarkers', 'wrap-chart-backmarkers', { filter: b => b >= ZONES.backmarkers.min && b < ZONES.backmarkers.max });
 
     document.getElementById('update-ts').textContent = `Live · last updated ${new Date().toLocaleTimeString()}`;
+    _showToast('↻ Updated');
     startCountdown();
 
   } catch (err) {
@@ -1563,10 +1678,16 @@ function _updateSeasonCountdown() {
     : d > 1 ? `${d}d ${h}h remaining`
     : d === 1 ? `${d}d ${h}h ${m}m remaining`
     : `${h}h ${m}m ${s}s remaining`;
-  const el = document.getElementById('season-cd-text');
+  const el   = document.getElementById('season-cd-text');
   const fill = document.getElementById('season-cd-fill');
-  if (el) el.textContent = txt;
-  if (fill) fill.style.width = pct.toFixed(1) + '%';
+  const bar  = document.getElementById('season-countdown-bar');
+  // Urgency colouring: red < 24h, amber < 3 days, gold otherwise
+  const urgency = msLeft < 86400000 ? { text:'#e05555', fill:'linear-gradient(90deg,#c0392b,#e05555)', bg:'rgba(224,64,64,0.07)', border:'rgba(224,64,64,0.2)' }
+                : msLeft < 259200000 ? { text:'#e8922a', fill:'linear-gradient(90deg,#b8621e,#e8922a)', bg:'rgba(232,146,42,0.07)', border:'rgba(232,146,42,0.2)' }
+                : { text:'var(--gold)', fill:'linear-gradient(90deg,#b8923e,var(--gold-hi))', bg:'rgba(201,168,76,0.06)', border:'rgba(201,168,76,0.12)' };
+  if (el)   { el.textContent = txt; el.style.color = urgency.text; }
+  if (fill) { fill.style.width = pct.toFixed(1) + '%'; fill.style.background = urgency.fill; }
+  if (bar)  { bar.style.background = urgency.bg; bar.style.borderBottomColor = urgency.border; }
 }
 _updateSeasonCountdown();
 setInterval(_updateSeasonCountdown, 1000);
@@ -1685,6 +1806,34 @@ function _drawSparkline(canvasId, data, hexColor) {
 }
 
 /* ── AUTH ── */
+/* ── Toast notification ── */
+let _toastTimer = null;
+function _showToast(msg) {
+  const el = document.getElementById('hub-toast');
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+/* ── Hub login floating label helpers ── */
+function _hlfFocus(fieldId) {
+  const f = document.getElementById(fieldId);
+  if (f) f.classList.add('focused');
+}
+function _hlfBlur(fieldId, inputId) {
+  const f = document.getElementById(fieldId);
+  const i = document.getElementById(inputId);
+  if (f) f.classList.remove('focused');
+  if (f && i) f.classList.toggle('has-val', i.value.length > 0);
+}
+function _hlfInput(fieldId, inputId) {
+  const f = document.getElementById(fieldId);
+  const i = document.getElementById(inputId);
+  if (f && i) f.classList.toggle('has-val', i.value.length > 0);
+}
+
 function _showLoginModal() {
   const ov = document.getElementById('hub-login-overlay');
   if (!ov) return;
@@ -1706,6 +1855,9 @@ function _showLoginModal() {
       const u = document.getElementById('hub-lusername');
       if (u) { u.value = localStorage.getItem('kfc_last_user') || ''; u.focus(); }
       const p = document.getElementById('hub-lpin'); if (p) p.value = '';
+      // Sync floating label state with pre-filled value
+      _hlfInput('hlf-user', 'hub-lusername');
+      _hlfInput('hlf-pin',  'hub-lpin');
     }, 50);
     document.getElementById('hub-lerr').textContent = '';
   }
@@ -1723,7 +1875,12 @@ async function _doHubLogin() {
   try {
     const res = await fetch(`${GAME_WORKER}?action=getBalance&username=${encodeURIComponent(username)}&pin=${encodeURIComponent(pin)}`);
     const d   = await res.json();
-    if (!d.auth) { errEl.textContent = d.error || 'Authentication failed'; return; }
+    if (!d.auth) {
+      errEl.textContent = d.error || 'Authentication failed';
+      const pinField = document.getElementById('hlf-pin');
+      if (pinField) { pinField.classList.remove('shake'); void pinField.offsetWidth; pinField.classList.add('shake'); setTimeout(() => pinField.classList.remove('shake'), 500); }
+      return;
+    }
     _hubSession = {
       username:     (d.username     || username).toLowerCase(),
       playerName:   d.playerName   || username,
@@ -1837,11 +1994,10 @@ async function _fetchPmMarketsAndRender() {
         }).join('');
       }
     }
-    // Render hot strip using all open markets (not filtered to race/season)
-    _renderHotStripHub((d.markets || []).filter(m => m.status === 'open' && (m.type === 'race' || m.type === 'season')));
-    // Only render if leaderboard data is ready (has balance info for odds computation).
-    // If refresh() hasn't completed yet, it will call _renderPmMarkets itself once data lands.
+    // Only render odds-dependent sections once player balances are available.
+    // If refresh() hasn't completed yet, it will call both once data lands.
     if (_hubPlayers.length > 0) {
+      _renderHotStripHub(_hubMarkets);
       _renderPmMarkets(_hubMarkets, _hubTxData);
     }
   } catch(e) {
@@ -2086,5 +2242,6 @@ document.querySelectorAll('.hero-card').forEach(card => {
   });
 })();
 </script>
+<div id="hub-toast"></div>
 </body>
 </html>

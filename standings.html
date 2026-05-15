@@ -699,10 +699,10 @@ function parseRecords(rows) {
 
     if (!name || status !== 'Active') continue;
     if (name.toLowerCase() === 'creator') continue;
-    if (!rawBal || rawBal === '0' || rawBal === '-' || rawBal.startsWith('#')) continue;
+    if (!rawBal || rawBal === '-' || rawBal.startsWith('#')) continue;
 
     const balance = parseFloat(rawBal.replace(/,/g, ''));
-    if (!isFinite(balance) || balance <= 0) continue;
+    if (!isFinite(balance) || balance < 0) continue;
 
     const taxRate = (row[6] ?? '').trim();
     const taxAmt  = parseFloat((row[7] ?? '0').replace(/,/g, '')) || 0;

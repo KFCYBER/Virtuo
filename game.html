@@ -3160,6 +3160,11 @@ body.mp-bet-locked .all-sb-btn {
         <button class="btn-ghost" style="flex:1;font-size:11px;padding:5px 0" onclick="document.getElementById('gift-amount-input').value=1000">1000</button>
       </div>
     </div>
+    <div style="margin-bottom:14px">
+      <div style="font-size:10px;letter-spacing:2px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Message <span style="opacity:0.45">(optional)</span></div>
+      <textarea id="gift-msg-input" maxlength="120" placeholder="Add a note…" rows="2"
+        style="width:100%;box-sizing:border-box;background:var(--bg2);color:var(--fg);border:1px solid var(--line);border-radius:var(--radius);padding:8px 10px;font-family:var(--mono);font-size:13px;resize:none"></textarea>
+    </div>
     <div id="gift-status" style="font-size:11px;color:var(--muted);min-height:16px;text-align:center;margin-bottom:10px"></div>
     <div style="display:flex;gap:8px">
       <button class="btn-ghost" style="flex:1" onclick="closeModal('gift-modal')">Cancel</button>
@@ -6756,7 +6761,12 @@ function _showDeliveryModal(deliveries, kfcCredit){
   // Route pure-gift deliveries to the two-screen gift reveal
   const isGiftOnly = kfcCredit > 0 && deliveries.length > 0 &&
     deliveries.every(d => (d.name||'').includes('Gift from Creator'));
-  if(isGiftOnly){ _showGiftRevealModal(kfcCredit); return; }
+  if(isGiftOnly){
+    const _giftName = deliveries[0].name || '';
+    const _msgMatch = _giftName.match(/—\s*"(.+)"$/);
+    _showGiftRevealModal(kfcCredit, _msgMatch ? _msgMatch[1] : '');
+    return;
+  }
 
   const ICONS = { kfc:'🪙', leverage_token:'🎰', insurance_token:'🛡️', power_up:'⚡' };
   const rows = deliveries.map(d=>{
@@ -6784,7 +6794,7 @@ function _showDeliveryModal(deliveries, kfcCredit){
 }
 
 // ── GIFT REVEAL (two-screen) ──────────────────────────────────────
-function _showGiftRevealModal(amount){
+function _showGiftRevealModal(amount, giftMsg){
   const el = document.createElement('div');
   el.id = 'delivery-modal';
   el.style.cssText = 'position:fixed;inset:0;z-index:2000;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.88)';
@@ -6797,7 +6807,8 @@ function _showGiftRevealModal(amount){
 <div id="_gs1" style="text-align:center;animation:_gfadein 0.4s ease both">
   <div style="font-size:88px;display:inline-block;animation:_gpulse 1.6s ease-in-out infinite;margin-bottom:28px">🎁</div>
   <div style="font-size:13px;letter-spacing:5px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:10px">You've Received a Gift!</div>
-  <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:40px;letter-spacing:2px">from the Creator</div>
+  <div style="font-family:var(--mono);font-size:11px;color:var(--muted);margin-bottom:${giftMsg?'16px':'40px'};letter-spacing:2px">from the Creator</div>
+  ${giftMsg ? `<div style="font-family:var(--mono);font-size:12px;color:var(--fg);background:rgba(201,168,76,0.08);border:1px solid rgba(201,168,76,0.2);border-radius:4px;padding:10px 16px;margin-bottom:32px;max-width:280px;line-height:1.5;font-style:italic">"${giftMsg.replace(/"/g,'&quot;')}"</div>` : ''}
   <button onclick="_giftDoReveal(${amount})" style="background:var(--gold);color:#0d0d0d;font-family:var(--sans);font-size:12px;font-weight:800;letter-spacing:4px;text-transform:uppercase;border:none;cursor:pointer;padding:15px 50px;border-radius:3px">OPEN</button>
 </div>
 <div id="_gs2" style="display:none;text-align:center;position:relative;width:320px;animation:_gscale 0.35s ease both">
@@ -10523,6 +10534,8 @@ function _openGiftPanel(){
   }
   const inp = document.getElementById('gift-amount-input');
   if(inp) inp.value = '';
+  const msgInp = document.getElementById('gift-msg-input');
+  if(msgInp) msgInp.value = '';
   const st = document.getElementById('gift-status');
   if(st) st.textContent = '';
   const sendBtn = document.getElementById('btn-gift-send');
@@ -10535,13 +10548,16 @@ function _sendGift(){
   const inp = document.getElementById('gift-amount-input');
   const st  = document.getElementById('gift-status');
   const sendBtn = document.getElementById('btn-gift-send');
+  const msgInp  = document.getElementById('gift-msg-input');
   const recipient = sel ? sel.value.trim() : '';
   const amount    = parseInt(inp ? inp.value : 0, 10);
+  const giftMsg   = (msgInp ? msgInp.value.trim() : '').slice(0, 120);
   if(!recipient){ if(st) st.textContent = 'Please select a player.'; return; }
   if(!amount || amount < 1){ if(st) st.textContent = 'Enter a valid amount.'; return; }
   if(st) st.textContent = 'Sending…';
   if(sendBtn){ sendBtn.disabled = true; sendBtn.textContent = 'Sending…'; }
-  fetch(G.url + '?action=gift&from=creator&to=' + encodeURIComponent(recipient) + '&amount=' + amount)
+  const _giftUrl = G.url + '?action=gift&from=creator&to=' + encodeURIComponent(recipient) + '&amount=' + amount + (giftMsg ? '&msg=' + encodeURIComponent(giftMsg) : '');
+  fetch(_giftUrl)
     .then(r => r.json())
     .then(d => {
       if(d.ok){
@@ -12243,7 +12259,8 @@ const PM = (() => {
         : (() => { const _tp=Object.values(mkt.pools).reduce((a,b)=>a+b,0); return (bet.amount/mkt.pools[result])*_tp; })();
       const _sBonus = mkt.type !== 'shoe' && settleIdx > (bet.stakeIdx||0) ? 10 : 1;
       const _baseProfit = _basePay - bet.amount;
-      bet.payout = Math.round(bet.amount + _baseProfit * _sBonus);
+      // Floor at bet.amount so a winning bet never pays less than the stake (covers stake-drop edge cases)
+      bet.payout = Math.max(bet.amount, Math.round(bet.amount + _baseProfit * _sBonus));
       myTotal += bet.payout;
     });
     _saveBets(bets);
@@ -12935,7 +12952,8 @@ const PM = (() => {
               const _bpoll = bet.lockedPayout !== undefined ? bet.lockedPayout
                 : (() => { const _stp=Object.values(sm.pools).reduce((a,b)=>a+b,0); return (bet.amount/sm.pools[sm.result])*_stp; })();
               const _sbPoll = sm.type !== 'shoe' && settleIdx > (bet.stakeIdx||0) ? 10 : 1;
-              bet.payout = Math.round(bet.amount + (_bpoll - bet.amount) * _sbPoll);
+              // Floor at bet.amount so a winning bet never pays less than the stake (covers stake-drop edge cases)
+              bet.payout = Math.max(bet.amount, Math.round(bet.amount + (_bpoll - bet.amount) * _sbPoll));
               credit += bet.payout;
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }

@@ -1838,7 +1838,7 @@ async function _fetchPmMarketsAndRender() {
       }
     }
     // Render hot strip using all open markets (not filtered to race/season)
-    _renderHotStripHub((d.markets || []).filter(m => m.status === 'open'));
+    _renderHotStripHub((d.markets || []).filter(m => m.status === 'open' && (m.type === 'race' || m.type === 'season')));
     // Only render if leaderboard data is ready (has balance info for odds computation).
     // If refresh() hasn't completed yet, it will call _renderPmMarkets itself once data lands.
     if (_hubPlayers.length > 0) {

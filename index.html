@@ -461,6 +461,146 @@
       .hero { grid-template-columns: 1fr 1fr; gap: 8px; }
       .hero-value { font-size: 15px; }
     }
+
+    /* ── HUB LOGIN BUTTON / USER BADGE ── */
+    .hub-login-btn {
+      display: inline-flex; align-items: center; gap: 7px;
+      background: transparent; border: 1px solid rgba(122,18,40,0.6);
+      color: #c94060; font-size: 10px; font-weight: 700;
+      letter-spacing: 2px; padding: 9px 16px; border-radius: 6px;
+      cursor: pointer; text-transform: uppercase; white-space: nowrap;
+      transition: background 0.2s, color 0.2s;
+    }
+    .hub-login-btn:hover { background: rgba(122,18,40,0.2); color: #e06080; }
+    .hub-user-badge {
+      display: none; align-items: center; gap: 8px;
+      background: rgba(201,168,76,0.06); border: 1px solid var(--gold-dim);
+      color: var(--gold); font-size: 10px; font-weight: 700;
+      letter-spacing: 1px; padding: 8px 14px; border-radius: 6px;
+      cursor: pointer; white-space: nowrap; transition: background 0.2s;
+    }
+    .hub-user-badge:hover { background: rgba(201,168,76,0.12); }
+    .hub-badge-bal { font-family: var(--mono); color: var(--text); margin-left: 2px; }
+
+    /* ── LOGIN MODAL ── */
+    #hub-login-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.78);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 900; backdrop-filter: blur(10px);
+      opacity: 0; pointer-events: none; transition: opacity 0.2s;
+    }
+    #hub-login-overlay.open { opacity: 1; pointer-events: all; }
+    .hub-login-box {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 36px 32px; width: 340px; max-width: 92vw;
+      box-shadow: 0 28px 80px rgba(0,0,0,0.7);
+      transform: translateY(14px); transition: transform 0.25s;
+      position: relative;
+    }
+    #hub-login-overlay.open .hub-login-box { transform: translateY(0); }
+    .hub-login-title {
+      font-size: 10px; font-weight: 800; letter-spacing: 4px;
+      color: var(--gold); text-transform: uppercase; margin-bottom: 26px;
+    }
+    .hub-lfield { margin-bottom: 14px; }
+    .hub-lfield label { font-size: 9px; font-weight: 700; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; display: block; margin-bottom: 7px; }
+    .hub-lfield input {
+      width: 100%; padding: 11px 14px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 8px;
+      color: var(--text); font-size: 14px; font-family: inherit;
+      transition: border-color 0.2s; outline: none;
+    }
+    .hub-lfield input:focus { border-color: var(--gold-dim); }
+    .hub-lsubmit {
+      width: 100%; padding: 12px; background: var(--crimson); border: none;
+      border-radius: 8px; color: #fff; font-size: 11px; font-weight: 700;
+      letter-spacing: 3px; text-transform: uppercase; cursor: pointer;
+      transition: background 0.2s; margin-top: 8px;
+    }
+    .hub-lsubmit:hover { background: #9a1838; }
+    .hub-lerr { font-size: 11px; color: var(--red); min-height: 16px; margin-top: 10px; text-align: center; }
+    .hub-lclose {
+      position: absolute; top: 14px; right: 18px;
+      background: none; border: none; color: var(--muted);
+      font-size: 17px; cursor: pointer; line-height: 1;
+      transition: color 0.2s;
+    }
+    .hub-lclose:hover { color: var(--text); }
+
+    /* ── WALLET SECTION ── */
+    #hub-wallet-section { max-width: 1320px; margin: 26px auto 0; padding: 0 24px; position: relative; z-index: 2; }
+    .wallet-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
+    @media (max-width: 700px) { .wallet-row { grid-template-columns: 1fr; } }
+    .wallet-card {
+      background: linear-gradient(140deg, rgba(10,10,24,0.96) 0%, rgba(14,14,30,0.9) 100%);
+      border: 1px solid var(--border); border-radius: var(--r);
+      padding: 20px 22px; position: relative; overflow: hidden;
+    }
+    .wallet-card::before {
+      content: ''; position: absolute; top: 0; left: 12%; right: 12%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(201,168,76,0.35), transparent);
+    }
+    .wc-label { font-size: 8px; font-weight: 800; letter-spacing: 3px; color: var(--muted); text-transform: uppercase; margin-bottom: 9px; }
+    .wc-value { font-family: var(--mono); font-size: 21px; font-weight: 700; color: var(--gold); }
+    .wc-sub   { font-size: 10px; color: var(--muted); margin-top: 5px; }
+    .wallet-actions { display: flex; gap: 10px; margin-top: 16px; }
+    .wbtn {
+      flex: 1; padding: 10px 8px; border-radius: 7px; cursor: pointer;
+      font-size: 9px; font-weight: 700; letter-spacing: 2px;
+      text-transform: uppercase; text-decoration: none; text-align: center;
+      display: block; transition: background 0.2s;
+    }
+    .wbtn-primary   { background: var(--crimson); border: none; color: #fff; }
+    .wbtn-primary:hover { background: #9a1838; }
+    .wbtn-secondary { background: transparent; border: 1px solid var(--gold-dim); color: var(--gold); }
+    .wbtn-secondary:hover { background: rgba(201,168,76,0.1); }
+    .wallet-logout {
+      position: absolute; top: 13px; right: 14px; background: none; border: none;
+      color: var(--muted); font-size: 9px; letter-spacing: 1px; cursor: pointer;
+      text-transform: uppercase; padding: 4px 8px; border-radius: 4px;
+      transition: color 0.2s;
+    }
+    .wallet-logout:hover { color: var(--red); }
+
+    /* ── PM MARKETS SECTION ── */
+    #pm-markets-section { max-width: 1320px; margin: 32px auto 0; padding: 0 24px; position: relative; z-index: 2; }
+    .pm-mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px,1fr)); gap: 14px; margin-top: 14px; }
+    .pm-mkt-card {
+      background: linear-gradient(140deg, rgba(10,10,24,0.96) 0%, rgba(14,14,30,0.9) 100%);
+      border: 1px solid var(--border); border-radius: var(--r);
+      padding: 18px 20px; position: relative; overflow: hidden;
+      transition: border-color 0.25s, box-shadow 0.25s;
+    }
+    .pm-mkt-card:hover { border-color: rgba(201,168,76,0.22); box-shadow: 0 4px 32px rgba(0,0,0,0.45); }
+    .pm-type-tag { font-size: 8px; font-weight: 800; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 7px; display: block; }
+    .pm-type-tag.race      { color: #e8c96a; }
+    .pm-type-tag.milestone { color: #80d8ff; }
+    .pm-mkt-title { font-size: 12px; font-weight: 600; color: var(--text); line-height: 1.45; margin-bottom: 13px; }
+    .pm-odds-row { display: flex; gap: 8px; margin-bottom: 12px; }
+    .pm-odds-pill { flex:1; padding: 8px; border-radius: 7px; font-size: 12px; font-weight: 700; font-family: var(--mono); text-align: center; }
+    .pm-odds-yes { background: rgba(59,189,111,0.1); border: 1px solid rgba(59,189,111,0.28); color: #3bbd6f; }
+    .pm-odds-no  { background: rgba(224,64,64,0.07);  border: 1px solid rgba(224,64,64,0.2);  color: #e04040; }
+    .pm-prog-wrap { margin-bottom: 12px; }
+    .pm-prog-track { height: 3px; background: var(--border); border-radius: 2px; overflow: hidden; margin-bottom: 5px; }
+    .pm-prog-fill  { height: 100%; border-radius: 2px; background: linear-gradient(90deg, var(--gold), #e8c96a); }
+    .pm-prog-labels { display: flex; justify-content: space-between; font-size: 9px; color: var(--muted); font-family: var(--mono); }
+    .pm-player-row { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 11px; border-bottom: 1px solid var(--border); }
+    .pm-player-row:last-child { border-bottom: none; }
+    .pm-player-name { flex: 1; color: var(--text); font-weight: 500; }
+    .pm-player-bal  { font-family: var(--mono); color: var(--muted); font-size: 10px; }
+    .pm-player-yes  { font-family: var(--mono); font-size: 11px; font-weight: 700; color: #3bbd6f; min-width: 34px; text-align: right; }
+    .pm-chart-wrap  { margin-top: 11px; }
+    .pm-chart-lbl   { font-size: 8px; font-weight: 700; letter-spacing: 2px; color: var(--muted); text-transform: uppercase; margin-bottom: 5px; }
+    .pm-sparkline   { width: 100%; height: 50px; display: block; }
+    .pm-bet-link {
+      display: block; width: 100%; margin-top: 12px; padding: 9px;
+      background: transparent; border: 1px solid var(--gold-dim);
+      border-radius: 6px; color: var(--gold); font-size: 9px; font-weight: 700;
+      letter-spacing: 2px; text-transform: uppercase; cursor: pointer;
+      transition: background 0.2s; text-decoration: none; text-align: center;
+    }
+    .pm-bet-link:hover { background: rgba(201,168,76,0.1); }
+    .pm-empty { font-size: 12px; color: var(--muted); text-align: center; padding: 40px 0; letter-spacing: 1px; }
   </style>
 </head>
 <body>
@@ -479,8 +619,12 @@
   </div>
   <div style="display:flex;align-items:center;gap:10px">
     <a href="store.html" target="_blank" rel="noopener" class="play-btn" title="KFC Store" style="border-color:var(--gold-dim);color:var(--muted);animation:none;font-size:10px;padding:9px 16px">🛒 STORE</a>
-    <a href="game.html?panel=pm" class="play-btn" title="Prediction Markets" style="border-color:var(--gold-dim);color:var(--muted);animation:none;font-size:10px;padding:9px 16px">📈 MARKETS</a>
-    <a href="game.html" class="play-btn" title="Open the game">
+    <button id="hub-login-btn" class="hub-login-btn" onclick="_showLoginModal()">⬡ LOGIN</button>
+    <div id="hub-user-badge" class="hub-user-badge" title="Your account" onclick="_showLoginModal()">
+      <span id="hub-badge-name">—</span>
+      <span class="hub-badge-bal" id="hub-badge-bal">—</span>
+    </div>
+    <a id="hub-play-btn" href="game.html" class="play-btn" title="Open the game">
       PLAY <span class="arrow">→</span>
     </a>
   </div>
@@ -549,6 +693,65 @@
       <div class="regime-contenders" id="regime-contenders"></div>
       <div class="regime-header">Crucible Regime Rules</div>
       <ul class="regime-rules-list" id="regime-rules"></ul>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ LOGIN MODAL -->
+<div id="hub-login-overlay" onclick="if(event.target===this)_hideLoginModal()">
+  <div class="hub-login-box">
+    <button class="hub-lclose" onclick="_hideLoginModal()">✕</button>
+    <div class="hub-login-title">Player Login</div>
+    <div class="hub-lfield">
+      <label>Username</label>
+      <input type="text" id="hub-lusername" autocomplete="off" autocapitalize="off" spellcheck="false"
+             placeholder="your username"
+             onkeydown="if(event.key==='Enter')document.getElementById('hub-lpin').focus()">
+    </div>
+    <div class="hub-lfield">
+      <label>PIN</label>
+      <input type="password" id="hub-lpin" maxlength="8" placeholder="••••"
+             onkeydown="if(event.key==='Enter')_doHubLogin()">
+    </div>
+    <button class="hub-lsubmit" onclick="_doHubLogin()">Enter</button>
+    <div class="hub-lerr" id="hub-lerr"></div>
+  </div>
+</div>
+
+<!-- ══════════════════ WALLET SECTION (login-gated) -->
+<div id="hub-wallet-section" style="display:none">
+  <div class="wallet-row">
+    <div class="wallet-card">
+      <button class="wallet-logout" onclick="_hubLogout()">Log out</button>
+      <div class="wc-label">Your Wallet</div>
+      <div class="wc-value" id="wc-balance">—</div>
+      <div class="wc-sub"   id="wc-sub">—</div>
+      <div class="wallet-actions">
+        <a href="game.html" class="wbtn wbtn-primary">⬡ Play</a>
+        <a href="game.html?panel=pm" class="wbtn wbtn-secondary">📈 Markets</a>
+      </div>
+    </div>
+    <div class="wallet-card">
+      <div class="wc-label">Open PM Positions</div>
+      <div class="wc-value" id="wc-pm-count">—</div>
+      <div class="wc-sub"   id="wc-pm-locked">—</div>
+    </div>
+    <div class="wallet-card">
+      <div class="wc-label">Loyalty Points</div>
+      <div class="wc-value" id="wc-pts">—</div>
+      <div class="wc-sub"   id="wc-pts-sub">Available to spend in-game</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ PM RACE & MILESTONE MARKETS -->
+<div id="pm-markets-section" style="display:none">
+  <div style="max-width:1320px;margin:0 auto;padding:32px 24px 0">
+    <div class="section-label" style="margin-bottom:0">Race &amp; Milestone Markets</div>
+  </div>
+  <div style="max-width:1320px;margin:0 auto;padding:0 24px">
+    <div class="pm-mkt-grid" id="pm-mkt-grid">
+      <div class="pm-empty">Loading markets…</div>
     </div>
   </div>
 </div>
@@ -1176,6 +1379,11 @@ async function refresh() {
     players.forEach(p => playerColor(p.name));
     Object.keys(txData).forEach(n => playerColor(n));
 
+    // Save for PM odds chart access
+    _hubPlayers = players;
+    _hubTxData  = txData;
+    if (_hubMarkets.length > 0) _renderPmMarkets(_hubMarkets, _hubTxData);
+
     renderHero(players);
     renderCrucicon(players);
     renderTable(players, txData);
@@ -1208,6 +1416,381 @@ function updateHeaderSubtitle() {
 initStars();
 updateHeaderSubtitle();
 refresh();
+
+/* ══════════════════════════════════════════
+   HUB WALLET + PM MARKETS
+══════════════════════════════════════════ */
+const GAME_WORKER = 'https://virtuo-proxy.kfcstaffco.workers.dev';
+let _hubSession  = null;
+let _hubMarkets  = [];
+let _hubPlayers  = [];
+let _hubTxData   = {};
+
+/* ── Week/time helpers (mirror PM module in game.html) ── */
+function _hubWeekStart() {
+  const d = new Date(), day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  d.setHours(0,0,0,0); return d.getTime();
+}
+function _hubWeekEnd() {
+  const d = new Date(), day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? 0 : 7 - day));
+  d.setHours(23,59,59,999); return d.getTime();
+}
+function _hubWTF(atMs) {
+  // Fraction of the week remaining at a given timestamp (mirrors _weekTimeFactor)
+  const t = atMs || Date.now();
+  const d  = new Date(t), day = d.getDay();
+  const ws = (() => { const s=new Date(t); s.setDate(s.getDate()-(day===0?6:day-1)); s.setHours(0,0,0,0); return s.getTime(); })();
+  const we = (() => { const e=new Date(t); e.setDate(e.getDate()+(day===0?0:7-day)); e.setHours(23,59,59,999); return e.getTime(); })();
+  const total = we - ws;
+  return total > 0 ? Math.max(0.10, Math.min(1.0, Math.sqrt(Math.max(0, we - t) / total))) : 0.5;
+}
+
+/* ── Odds computation (mirrors game.html _fundamentalPct) ── */
+function _milestoneYesBias(balance, target, atMs) {
+  const gap = Math.max(0, target - balance);
+  if (gap === 0) return 0.92;
+  const reachable = target * 0.40 * _hubWTF(atMs);
+  const r = reachable / (reachable + gap);
+  return Math.max(0.05, Math.min(0.92, 0.05 + 0.87 * r));
+}
+function _raceYesBias(playerBal, allBalsObj, target) {
+  const eligBals  = Object.values(allBalsObj).filter(b => b < target);
+  const eligTotal = eligBals.reduce((s,b) => s+b, 0);
+  const ratio     = eligTotal > 0 ? playerBal / eligTotal : 0.5;
+  return Math.max(0.05, Math.min(0.92, 0.10 + 0.80 * ratio));
+}
+
+/* ── Helpers ── */
+function _fmtHub(n) {
+  if (!isFinite(n)) return '—';
+  if (n >= 1e12) return (n/1e12).toFixed(1)+'T';
+  if (n >= 1e9)  return (n/1e9).toFixed(1)+'B';
+  if (n >= 1e6)  return (n/1e6).toFixed(1)+'M';
+  if (n >= 1e3)  return (n/1e3).toFixed(0)+'K';
+  return String(Math.round(n));
+}
+function _parseTxDate(str) {
+  if (!str) return null;
+  if (typeof str === 'number' && str > 1e9) return str;
+  const s = String(str).trim();
+  const dm = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (dm) return new Date(+dm[3], +dm[2]-1, +dm[1]).getTime();
+  const ym = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (ym) return new Date(+ym[1], +ym[2]-1, +ym[3]).getTime();
+  return null;
+}
+function _rgba(hex, a) {
+  const h = hex.replace('#','');
+  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+
+/* ── Sparkline canvas draw ── */
+function _drawSparkline(canvasId, data, hexColor) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !data || data.length < 2) return;
+  const dpr = window.devicePixelRatio || 1;
+  const w   = canvas.offsetWidth  || 260;
+  const h   = canvas.offsetHeight || 50;
+  canvas.width  = w * dpr; canvas.height = h * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const vals = data.map(d => d.y);
+  const minV = Math.min(...vals), maxV = Math.max(...vals);
+  const range = maxV - minV || 1;
+  const pad   = { l:4, r:4, t:6, b:6 };
+  const cw = w - pad.l - pad.r, ch = h - pad.t - pad.b;
+  const pts = data.map((d,i) => ({
+    x: pad.l + (i / (data.length-1)) * cw,
+    y: pad.t + (1 - (d.y - minV) / range) * ch,
+  }));
+  // Fill
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, h - pad.b);
+  pts.forEach(p => ctx.lineTo(p.x, p.y));
+  ctx.lineTo(pts[pts.length-1].x, h - pad.b);
+  ctx.closePath();
+  const g = ctx.createLinearGradient(0, pad.t, 0, h);
+  g.addColorStop(0, _rgba(hexColor, 0.18));
+  g.addColorStop(1, _rgba(hexColor, 0.02));
+  ctx.fillStyle = g; ctx.fill();
+  // Line
+  ctx.beginPath();
+  pts.forEach((p,i) => i===0 ? ctx.moveTo(p.x,p.y) : ctx.lineTo(p.x,p.y));
+  ctx.strokeStyle = hexColor; ctx.lineWidth = 1.5; ctx.lineJoin = 'round'; ctx.stroke();
+  // End dot
+  const last = pts[pts.length-1];
+  ctx.beginPath(); ctx.arc(last.x, last.y, 2.5, 0, Math.PI*2);
+  ctx.fillStyle = hexColor; ctx.fill();
+}
+
+/* ── AUTH ── */
+function _showLoginModal() {
+  const ov = document.getElementById('hub-login-overlay');
+  if (!ov) return;
+  if (_hubSession) {
+    // Already logged in — modal becomes a logout confirmation
+    ov.classList.add('open');
+  } else {
+    ov.classList.add('open');
+    setTimeout(() => {
+      const u = document.getElementById('hub-lusername');
+      if (u) { u.value = localStorage.getItem('kfc_last_user') || ''; u.focus(); }
+      const p = document.getElementById('hub-lpin'); if (p) p.value = '';
+    }, 50);
+  }
+  document.getElementById('hub-lerr').textContent = '';
+}
+function _hideLoginModal() {
+  document.getElementById('hub-login-overlay').classList.remove('open');
+}
+async function _doHubLogin() {
+  const username = (document.getElementById('hub-lusername').value || '').trim();
+  const pin      = (document.getElementById('hub-lpin').value      || '').trim();
+  const errEl    = document.getElementById('hub-lerr');
+  if (!username) { errEl.textContent = 'Enter your username.'; return; }
+  errEl.textContent = 'Authenticating…';
+  try {
+    const res = await fetch(`${GAME_WORKER}?action=getBalance&username=${encodeURIComponent(username)}&pin=${encodeURIComponent(pin)}`);
+    const d   = await res.json();
+    if (!d.auth) { errEl.textContent = d.error || 'Authentication failed'; return; }
+    _hubSession = {
+      username:     (d.username     || username).toLowerCase(),
+      playerName:   d.playerName   || username,
+      pin,
+      balance:      d.balance      || 0,
+      loyaltyPoints:d.loyaltyPoints || 0,
+      games:        d.games        || 0,
+      ts:           Date.now(),
+    };
+    localStorage.setItem('kfc_hub_session', JSON.stringify(_hubSession));
+    localStorage.setItem('kfc_last_user', _hubSession.username);
+    _hideLoginModal();
+    _applyHubSession();
+    _fetchPmMarketsAndRender();
+  } catch(e) { errEl.textContent = 'Connection error — try again.'; }
+}
+function _hubLogout() {
+  _hubSession = null;
+  localStorage.removeItem('kfc_hub_session');
+  _applyHubSession();
+  // Reset markets section but keep it hidden since we cleared session
+  _hubMarkets = [];
+  const grid = document.getElementById('pm-mkt-grid');
+  if (grid) grid.innerHTML = '<div class="pm-empty">Log in to view your markets</div>';
+}
+function _initHubAuth() {
+  try {
+    const snap = JSON.parse(localStorage.getItem('kfc_hub_session') || 'null');
+    if (snap && snap.username && snap.pin && Date.now() - (snap.ts || 0) < 8 * 60 * 60 * 1000) {
+      _hubSession = snap;
+    }
+  } catch(e) {}
+  _applyHubSession();
+  if (_hubSession) _fetchPmMarketsAndRender();
+}
+function _applyHubSession() {
+  const loginBtn   = document.getElementById('hub-login-btn');
+  const badge      = document.getElementById('hub-user-badge');
+  const walletSect = document.getElementById('hub-wallet-section');
+  const mktSect    = document.getElementById('pm-markets-section');
+  if (_hubSession) {
+    if (loginBtn) loginBtn.style.display = 'none';
+    if (badge) {
+      badge.style.display = 'inline-flex';
+      document.getElementById('hub-badge-name').textContent = _hubSession.playerName || _hubSession.username;
+      document.getElementById('hub-badge-bal').textContent  = _fmtHub(_hubSession.balance) + ' KFC';
+    }
+    if (walletSect) { walletSect.style.display = 'block'; _renderWallet(); }
+    if (mktSect) mktSect.style.display = 'block';
+  } else {
+    if (loginBtn) loginBtn.style.display = 'inline-flex';
+    if (badge)    badge.style.display    = 'none';
+    if (walletSect) walletSect.style.display = 'none';
+    if (mktSect)    mktSect.style.display    = 'none';
+  }
+}
+function _renderWallet() {
+  if (!_hubSession) return;
+  const balEl  = document.getElementById('wc-balance');
+  const subEl  = document.getElementById('wc-sub');
+  const ptsEl  = document.getElementById('wc-pts');
+  if (balEl) balEl.textContent = _fmtHub(_hubSession.balance) + ' KFC';
+  if (subEl) subEl.textContent = (_hubSession.games || 0) + ' sessions played this season';
+  if (ptsEl) ptsEl.textContent = (_hubSession.loyaltyPoints || 0).toLocaleString() + ' pts';
+}
+
+/* ── PM MARKETS FETCH ── */
+async function _fetchPmMarketsAndRender() {
+  if (!_hubSession) return;
+  try {
+    const url = `${GAME_WORKER}?action=pmgetmarkets&username=${encodeURIComponent(_hubSession.username)}`;
+    const res = await fetch(url);
+    const d   = await res.json();
+    _hubMarkets = (d.markets || []).filter(m => (m.type === 'race' || m.type === 'season') && m.status === 'open');
+    // Update open PM positions in wallet
+    const openBets  = (d.bets || []).filter(b => b.payout == null);
+    const lockedAmt = openBets.reduce((s,b) => s + (b.amount||0), 0);
+    const cntEl  = document.getElementById('wc-pm-count');
+    const lckEl  = document.getElementById('wc-pm-locked');
+    if (cntEl) cntEl.textContent = openBets.length || '0';
+    if (lckEl) lckEl.textContent = lockedAmt > 0
+      ? _fmtHub(lockedAmt) + ' KFC locked in bets'
+      : 'No open positions';
+    _renderPmMarkets(_hubMarkets, _hubTxData);
+  } catch(e) {
+    const grid = document.getElementById('pm-mkt-grid');
+    if (grid) grid.innerHTML = '<div class="pm-empty">Could not load markets</div>';
+  }
+}
+
+/* ── PM MARKETS RENDER ── */
+function _renderPmMarkets(markets, txData) {
+  const grid = document.getElementById('pm-mkt-grid');
+  if (!grid) return;
+  if (!markets.length) {
+    grid.innerHTML = '<div class="pm-empty">No active race or milestone markets</div>';
+    return;
+  }
+  // Build current balance map from leaderboard data
+  const currBals = {};
+  _hubPlayers.forEach(p => { currBals[p.name.toLowerCase()] = p.balance; });
+
+  // Group race markets by target amount to combine all players in one card
+  const raceGroups = {};
+  const milestones = [];
+  markets.forEach(m => {
+    if (m.type === 'race') {
+      const key = String((m.condition && m.condition.params && m.condition.params.amount) || 0);
+      if (!raceGroups[key]) raceGroups[key] = [];
+      raceGroups[key].push(m);
+    } else {
+      milestones.push(m);
+    }
+  });
+
+  grid.innerHTML = '';
+
+  // ── Milestone cards ──
+  milestones.forEach(mkt => {
+    const p = mkt.condition && mkt.condition.params;
+    if (!p) return;
+    const playerName = p.player || '';
+    const target     = p.amount || 0;
+    const bal        = currBals[playerName.toLowerCase()] || 0;
+    const pct        = target > 0 ? Math.min(100, (bal / target) * 100) : 0;
+    const yesBias    = _milestoneYesBias(bal, target, Date.now());
+    const yesP       = Math.round(yesBias * 100);
+    const noP        = 100 - yesP;
+
+    // Build sparkline from this week's TX entries for this player
+    const series     = txData[playerName] || [];
+    const weekStartMs = _hubWeekStart();
+    const weekSeries = series.filter(e => { const ts = _parseTxDate(e.date); return ts && ts >= weekStartMs; });
+    const sparkId    = 'spark_' + mkt.id.replace(/[^a-z0-9]/gi, '');
+    const hasChart   = weekSeries.length >= 2;
+
+    const card = document.createElement('div');
+    card.className = 'pm-mkt-card';
+    card.innerHTML = `
+      <span class="pm-type-tag milestone">Milestone · This Week</span>
+      <div class="pm-mkt-title">${mkt.desc || '—'}</div>
+      <div class="pm-prog-wrap">
+        <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${pct.toFixed(1)}%"></div></div>
+        <div class="pm-prog-labels"><span>${_fmtHub(bal)} KFC</span><span>Target: ${_fmtHub(target)}</span></div>
+      </div>
+      <div class="pm-odds-row">
+        <div class="pm-odds-pill pm-odds-yes">YES ${yesP}%</div>
+        <div class="pm-odds-pill pm-odds-no">NO ${noP}%</div>
+      </div>
+      ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">YES odds · this week</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
+      <a href="game.html?panel=pm" class="pm-bet-link">Place Bet →</a>`;
+    grid.appendChild(card);
+
+    if (hasChart) {
+      const sparkData = weekSeries.map(e => ({
+        x: e.game,
+        y: Math.round(_milestoneYesBias(e.balance, target, _parseTxDate(e.date)) * 100),
+      }));
+      setTimeout(() => _drawSparkline(sparkId, sparkData, '#80d8ff'), 60);
+    }
+  });
+
+  // ── Race cards (one card per target, all players shown) ──
+  Object.entries(raceGroups).forEach(([targetStr, rMkts]) => {
+    const target = parseFloat(targetStr) || 0;
+    // Build balances for all race participants
+    const raceBals = {};
+    rMkts.forEach(m => {
+      const mp = m.condition && m.condition.params;
+      if (mp && mp.player) raceBals[(mp.player).toLowerCase()] = currBals[(mp.player).toLowerCase()] || 0;
+    });
+    // Sort players by balance descending
+    const sorted = rMkts.map(m => {
+      const mp = m.condition.params;
+      return { name: mp.player, bal: currBals[(mp.player||'').toLowerCase()] || 0 };
+    }).sort((a,b) => b.bal - a.bal);
+
+    const playersHTML = sorted.map(pl => {
+      const yes = Math.round(_raceYesBias(pl.bal, raceBals, target) * 100);
+      return `<div class="pm-player-row">
+        <span class="pm-player-name">${pl.name}</span>
+        <span class="pm-player-bal">${_fmtHub(pl.bal)} KFC</span>
+        <span class="pm-player-yes">${yes}%</span>
+      </div>`;
+    }).join('');
+
+    // Sparkline: use season-long TX history for all players, interleaved by game#
+    // Build merged timeline: each point = {game: g, bals: {player: bal}}
+    const allPoints = [];
+    rMkts.forEach(m => {
+      const mp = m.condition.params;
+      const pn = (mp.player || '').toLowerCase();
+      (txData[mp.player] || []).forEach(e => allPoints.push({ game: e.game, player: pn, balance: e.balance, ts: _parseTxDate(e.date) }));
+    });
+    allPoints.sort((a,b) => a.game - b.game);
+
+    // Rolling balance state for all players
+    const rollingBals = Object.assign({}, raceBals);
+    // But start from earliest TX
+    const sparkPts = [];
+    allPoints.forEach(pt => {
+      rollingBals[pt.player] = pt.balance;
+      // Avg YES across all players (shows market activity level)
+      const total = Object.values(rollingBals).reduce((s,b) => s+b, 0);
+      // Use the leading player's YES as the chart line
+      const leading = sorted[0];
+      if (leading) {
+        const leadBal = rollingBals[leading.name.toLowerCase()] || 0;
+        sparkPts.push({ x: pt.game, y: Math.round(_raceYesBias(leadBal, rollingBals, target) * 100) });
+      }
+    });
+
+    const sparkId = 'spark_race_' + targetStr.replace(/\D/g,'');
+    const hasChart = sparkPts.length >= 2;
+
+    const leaderName = sorted[0] ? sorted[0].name : '';
+    const card = document.createElement('div');
+    card.className = 'pm-mkt-card';
+    card.innerHTML = `
+      <span class="pm-type-tag race">Race · End of Season</span>
+      <div class="pm-mkt-title">First to reach ${_fmtHub(target)} KFC</div>
+      <div style="margin-bottom:12px">${playersHTML}</div>
+      <div class="pm-prog-wrap">
+        <div class="pm-prog-track"><div class="pm-prog-fill" style="width:${Math.min(100,((sorted[0]?.bal||0)/target)*100).toFixed(1)}%"></div></div>
+        <div class="pm-prog-labels"><span>Leader: ${_fmtHub(sorted[0]?.bal||0)}</span><span>Target: ${_fmtHub(target)}</span></div>
+      </div>
+      ${hasChart ? `<div class="pm-chart-wrap"><div class="pm-chart-lbl">Leader YES odds · full season</div><canvas class="pm-sparkline" id="${sparkId}"></canvas></div>` : ''}
+      <a href="game.html?panel=pm" class="pm-bet-link">Place Bet →</a>`;
+    grid.appendChild(card);
+
+    if (hasChart) setTimeout(() => _drawSparkline(sparkId, sparkPts, '#e8c96a'), 60);
+  });
+}
+
+// Init hub auth on load
+_initHubAuth();
 
 /* ── HERO CARD 3D TILT ── */
 document.querySelectorAll('.hero-card').forEach(card => {

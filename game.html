@@ -3712,6 +3712,27 @@ const PTS_COST = {
   extrashoe_pass:40,  // +1 shoe for pass players
 };
 
+// ── POWER-UP DAILY PURCHASE COUNTERS ────────────────────────────────
+// Each KFC-paid activation increments the counter for that power-up today.
+// Cost scales: base + (count × mainBet). Loyalty point path stays flat.
+// Resets at midnight (same pattern as shoe/extra-shoe limits).
+function _puCountKey(puId){
+  const today=new Date().toISOString().slice(0,10);
+  return 'kfc_pucount_'+today+'_'+(G.username||G.player||'').toLowerCase()+'_'+puId;
+}
+function _getPuCount(puId){
+  try{ return parseInt(localStorage.getItem(_puCountKey(puId))||'0',10)||0; }catch(e){ return 0; }
+}
+function _incPuCount(puId){
+  try{ localStorage.setItem(_puCountKey(puId),String(_getPuCount(puId)+1)); }catch(e){}
+}
+function _puKfcCost(pu){
+  return G.s.min*(pu.ratio||5) + (G.mainBet||0)*_getPuCount(pu.id);
+}
+function _levKfcCost(){
+  return G.s.min*3 + (G.mainBet||0)*_getPuCount('lev2x');
+}
+
 // ── LOYALTY POINTS — in-memory with sheet sync ────────────────────
 // Points live in G._pts during a session.
 // They are loaded from the sheet on login and synced back on every
@@ -3852,7 +3873,7 @@ const G = {
   hands:[[]], cur:0, splits:0, splitBets:[],
   dealer:[],
   mainBet:0, sideBets:{},
-  leverage:null, levCards:[], _levCardsPending:[],
+  leverage:null, levCards:[], _levCardsPending:[], _levKfcPaid:0,
   holeRevealed: false,
   puOwned:new Set(), puPending:new Set(), puActive:null,
   phase:'bet', // bet | play | dealer | done
@@ -6027,6 +6048,7 @@ function _logSessionToSheet(stakeLabel){
 }
 
 let _unloadFired = false; // guard against beforeunload + pagehide both firing
+let _autoOpenPM  = new URLSearchParams(window.location.search).get('panel') === 'pm';
 
 // Save session to localStorage when window/tab is closed
 window.addEventListener('beforeunload', ()=>{
@@ -6090,10 +6112,11 @@ window.onload=()=>{
   Object.keys(localStorage).forEach(k=>{
     if(k.startsWith('kfc_bal_')) localStorage.removeItem(k);
     // Purge dated shoe/free-pu keys older than today
-    const _shoeMatch = k.match(/^kfc_shoes_(\d{4}-\d{2}-\d{2})_/);
-    const _puMatch   = k.match(/^kfc_freepu_(\d{4}-\d{2}-\d{2})_/);
-    const _xsbMatch  = k.match(/^kfc_xsb_(\d{4}-\d{2}-\d{2})_/);
-    if((_shoeMatch && _shoeMatch[1] < _today) || (_puMatch && _puMatch[1] < _today) || (_xsbMatch && _xsbMatch[1] < _today)) localStorage.removeItem(k);
+    const _shoeMatch  = k.match(/^kfc_shoes_(\d{4}-\d{2}-\d{2})_/);
+    const _puMatch    = k.match(/^kfc_freepu_(\d{4}-\d{2}-\d{2})_/);
+    const _xsbMatch   = k.match(/^kfc_xsb_(\d{4}-\d{2}-\d{2})_/);
+    const _pucMatch   = k.match(/^kfc_pucount_(\d{4}-\d{2}-\d{2})_/);
+    if((_shoeMatch && _shoeMatch[1] < _today) || (_puMatch && _puMatch[1] < _today) || (_xsbMatch && _xsbMatch[1] < _today) || (_pucMatch && _pucMatch[1] < _today)) localStorage.removeItem(k);
   });
   // Auto-upgrade: migrate any old Google Script URLs to the Cloudflare Worker proxy
   const WORKER_URL = 'https://virtuo-proxy.kfcstaffco.workers.dev';
@@ -6322,7 +6345,10 @@ function openApp(displayName, balance){
   _updatePointsBadge(undefined, false); // show current points in topbar
   _initLeaderboard(); // fetch league table from sheet
   _startSessionTimer();
-  if(typeof PM !== 'undefined') setTimeout(()=>PM.init(), 500);
+  if(typeof PM !== 'undefined') setTimeout(()=>{
+    PM.init();
+    if(_autoOpenPM){ _autoOpenPM=false; setTimeout(()=>PM.openModal(), 400); }
+  }, 500);
   // Wire idle listeners — reset on any interaction
   ['pointerdown','keydown'].forEach(ev=>{
     document.removeEventListener(ev, _resetIdleTimer);
@@ -7113,9 +7139,11 @@ function buildLevPanel(){
   const c=document.getElementById('panel-lev');
   c.innerHTML='';
   if(!['highroller','champion'].includes(G.stake)){
-    const cost=G.s.min*3;
+    const cost=_levKfcCost();
     const invLev=(G._inventory&&G._inventory.leverage||0);
-    const levSub=G.leverage==='2x'?'Active — next hand':invLev>0?'FREE (store) · '+invLev+' owned':fmtKFC(cost);
+    const levCount=_getPuCount('lev2x');
+    const levScaleSuffix=(!invLev&&G.leverage!=='2x'&&levCount>0)?` (+${levCount}×bet)`:'';
+    const levSub=G.leverage==='2x'?'Active — next hand':invLev>0?'FREE (store) · '+invLev+' owned':fmtKFC(cost)+levScaleSuffix;
     addItemBtn(c,'2× Token',levSub,'lev-2x',G.leverage==='2x','',()=>toggleLev('2x'));
   }
   G.levCards.forEach((lc,i)=>{
@@ -7198,10 +7226,12 @@ function buildPuPanel(){
     const available=stakeIdx>=minIdx;
     const owned=G.puOwned.has(pu.id);
     const inInventory=(G._inventory&&(G._inventory.power_ups[pu.id]||0)>0)&&!owned;
-    const kfcCost=G.s.min*(pu.ratio||5);
+    const kfcCost=_puKfcCost(pu);
     const ptsCost=PTS_COST[pu.id]||60;
     const isFreeNext=_freePuAvailable()&&!owned;
-    const costLabel=inInventory?'FREE (store)':isFreeNext?'FREE (pass perk)':fmtKFC(kfcCost);
+    const puCount=_getPuCount(pu.id);
+    const scaleSuffix=(!inInventory&&!isFreeNext&&!owned&&puCount>0)?` (+${puCount}×bet)`:'';
+    const costLabel=inInventory?'FREE (store)':isFreeNext?'FREE (pass perk)':fmtKFC(kfcCost)+scaleSuffix;
     const subText=owned?'Active — expires end of shoe':pu.sub+' · '+costLabel;
     const itemDiv=document.createElement('div');
     addItemBtn(itemDiv,pu.label,subText,'pu-'+pu.id,owned,(!available&&!owned)?'locked':null,()=>buyPu(pu,kfcCost));
@@ -7378,7 +7408,9 @@ function buyPu(pu,cost){
   }
 
   if(G.balance<cost){notif('Not enough balance');return;}
-  G.balance-=cost; G.puOwned.add(pu.id); updateUI(); buildPuPanel();
+  G.balance-=cost;
+  _incPuCount(pu.id);
+  G.puOwned.add(pu.id); updateUI(); buildPuPanel();
   sfx('buy'); notif(pu.label+' activated — good for this shoe');
 }
 
@@ -7599,7 +7631,8 @@ function deal(){
   }
   const _freeSBTotal = G._freeSBNames.reduce((a,n)=>a+(G.sideBets[n]||0),0);
   const _freeSBTotal2 = G._freeSBNames2.reduce((a,n)=>a+(G.sideBets2&&G.sideBets2[n]||0),0);
-  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+(G.leverage==='2x'&&!G._levFree?G.s.min*3:0)
+  const _levKfcAtDeal=(G.leverage==='2x'&&!G._levFree)?_levKfcCost():0;
+  const totalDeducted=G.mainBet+Object.values(G.sideBets).reduce((a,b)=>a+b,0)-_freeSBTotal+_levKfcAtDeal
     +((G._hand2Active&&(G.mainBet2||0)>=G.s.min)?(G.mainBet2+Object.values(G.sideBets2||{}).reduce((a,b)=>a+b,0)-_freeSBTotal2):0);
   if(G.balance<totalDeducted){notif('Not enough balance');return;}
   let puCost=0;
@@ -7610,6 +7643,8 @@ function deal(){
   G.lastMainBet=G.mainBet; G.lastSideBets={...G.sideBets};
   if(G._hand2Active){ G.lastMainBet2=G.mainBet2||0; G.lastSideBets2={...G.sideBets2||{}}; }
   G.balance-=totalDeducted+puCost; updateUI();
+  G._levKfcPaid = _levKfcAtDeal; // persist so result phase can display the correct cost
+  if(_levKfcAtDeal>0) _incPuCount('lev2x'); // KFC-paid leverage — escalate next use
   if(G.balance===0) setTimeout(showAllIn, 200); // all-in!
   G._handStartBal=G.balance; // snapshot AFTER deductions — so P&L display is net of all costs
   G._handCommitted=true; // bet is locked — reload must not refund it
@@ -8486,7 +8521,7 @@ function settle(reason){
     if(b.label&&b.label.startsWith('Insurance')&&b.type==='warn') return acc+(b.pl||0); // insurance loss baked into preDealBal — include for display
     return acc;
   },0);
-  const levCost=(G.leverage==='2x'&&!G._levFree)?G.s.min*3:0; // 2× token cost (card leverages and pts-redeemed token are free)
+  const levCost=(G.leverage==='2x'&&!G._levFree)?(G._levKfcPaid||G.s.min*3):0; // 2× token cost — scaled by daily use count
   const totalPLForDisplay = mainPL + earlySBPL + sidePL + bonusPLDisplay - levCost;
   updateUI();
 

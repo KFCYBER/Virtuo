@@ -32,7 +32,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { height: 100%; }
 body {
-  background: var(--bg);
+  background: #05050E;
   color: var(--white);
   font-family: var(--sans);
   font-size: 14px;
@@ -45,19 +45,47 @@ body {
 ::-webkit-scrollbar-thumb { background: var(--line2); }
 
 /* ── TOP BAR ── */
+@keyframes header-glow-pulse {
+  0%, 100% { box-shadow: 0 1px 60px rgba(0,0,0,0.7), 0 0 100px rgba(122,18,40,0.04); }
+  50%       { box-shadow: 0 1px 60px rgba(0,0,0,0.7), 0 0 120px rgba(122,18,40,0.10); }
+}
 .topbar {
   position: fixed; top: 0; left: 0; right: 0; z-index: 200;
-  height: 52px;
-  background: var(--bg1);
-  border-bottom: 1px solid var(--line);
+  height: 60px;
+  background: linear-gradient(180deg, rgba(10,8,22,0.98) 0%, rgba(5,5,14,0.96) 100%);
+  border-bottom: 1px solid rgba(122,18,40,0.45);
+  backdrop-filter: blur(24px);
   display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px;
+  padding: 0 24px;
+  animation: header-glow-pulse 5s ease-in-out infinite;
 }
-.topbar-left { display: flex; align-items: center; gap: 8px; }
-.topbar-logo { font-size: 11px; letter-spacing: 4px; color: var(--gold); font-weight: 700; text-transform: uppercase; }
-.topbar-sep { color: var(--line2); font-size: 16px; }
-.topbar-sub { font-family: var(--mono); font-size: 10px; color: var(--muted); letter-spacing: 2px; }
+.topbar-left { display: flex; align-items: center; gap: 12px; }
+@keyframes logo-float {
+  0%   { transform: translateY(0); }
+  50%  { transform: translateY(-4px); }
+  100% { transform: translateY(0); }
+}
+.topbar-logo-img {
+  width: 36px; height: 36px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+  animation: logo-float 5s ease-in-out infinite;
+}
+.topbar-logo-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.topbar-center { display: flex; flex-direction: column; gap: 1px; }
+.topbar-title {
+  font-size: 13px; font-weight: 800; letter-spacing: 3px; color: var(--gold);
+  text-transform: uppercase; line-height: 1;
+}
+.topbar-sub { font-family: var(--mono); font-size: 8px; color: var(--muted); letter-spacing: 2px; text-transform: uppercase; }
 .topbar-right { display: flex; align-items: center; gap: 8px; }
+.topbar-hub-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--sans); font-size: 9px; font-weight: 700;
+  letter-spacing: 2px; text-transform: uppercase; text-decoration: none;
+  color: var(--muted2); border: 1px solid var(--line2);
+  padding: 6px 12px; border-radius: var(--radius);
+  transition: color .15s, border-color .15s;
+}
+.topbar-hub-link:hover { color: var(--white); border-color: var(--muted2); }
 
 .btn-ghost {
   background: transparent; border: 1px solid var(--line2);
@@ -69,15 +97,25 @@ body {
 .btn-ghost:hover { border-color: var(--muted2); color: var(--white); }
 
 /* ── MAIN LAYOUT ── */
-.page { max-width: 1100px; margin: 0 auto; padding: 80px 20px 120px; }
+.page { max-width: 1100px; margin: 0 auto; padding: 88px 24px 120px; }
 
 /* ── PAGE HEADER ── */
-.page-title {
-  font-size: 11px; letter-spacing: 5px; color: var(--gold); font-weight: 700;
-  text-transform: uppercase; margin-bottom: 4px;
+.page-eyebrow {
+  font-family: var(--mono); font-size: 9px; letter-spacing: 4px; color: var(--muted);
+  text-transform: uppercase; margin-bottom: 6px;
 }
+.page-title {
+  font-size: 28px; font-weight: 800; letter-spacing: 2px; color: var(--white);
+  text-transform: uppercase; margin-bottom: 6px; line-height: 1.1;
+}
+.page-title span { color: var(--gold); }
 .page-sub {
-  font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 32px;
+  font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 36px;
+  max-width: 560px; line-height: 1.6;
+}
+.page-header-rule {
+  height: 1px; background: linear-gradient(90deg, rgba(201,168,76,0.35), transparent);
+  margin-bottom: 36px; margin-top: -12px;
 }
 
 /* ── TABS ── */
@@ -394,6 +432,11 @@ body {
 @media (max-width: 560px) {
   .product-grid { grid-template-columns: 1fr; }
   .drawer { width: 100vw; }
+  .topbar { padding: 0 14px; }
+  .topbar-title { font-size: 11px; letter-spacing: 2px; }
+  .topbar-hub-link { padding: 5px 8px; font-size: 8px; }
+  .page { padding: 84px 14px 100px; }
+  .page-title { font-size: 22px; }
 }
 </style>
 </head>
@@ -403,21 +446,28 @@ body {
 <canvas id="store-bg" style="position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:0;opacity:0.4"></canvas>
 
 <!-- TOP BAR -->
-<div class="topbar" style="z-index:200">
+<div class="topbar">
   <div class="topbar-left">
-    <span class="topbar-logo">KFC</span>
-    <span class="topbar-sep">|</span>
-    <span class="topbar-sub">IN-GAME PURCHASES</span>
+    <div class="topbar-logo-img">
+      <img src="KFC_LOGO.png" alt="KFC" onerror="this.closest('.topbar-logo-img').style.display='none'">
+    </div>
+    <div class="topbar-center">
+      <div class="topbar-title">Season 3: Dark Fall</div>
+      <div class="topbar-sub">In-Game Store</div>
+    </div>
   </div>
   <div class="topbar-right">
-    <button onclick="window.close()" class="btn-ghost">✕ Close</button>
+    <a href="index.html" class="topbar-hub-link">← Hub</a>
+    <button onclick="window.history.length>1?window.history.back():window.close()" class="btn-ghost" style="font-size:9px;padding:6px 12px;letter-spacing:2px">✕ Close</button>
   </div>
 </div>
 
 <!-- MAIN -->
 <div class="page" style="position:relative;z-index:1">
-  <div class="page-title">KFC Store</div>
+  <div class="page-eyebrow">Kimmo's Fabulous Casino</div>
+  <div class="page-title">KFC <span>Store</span></div>
   <div class="page-sub">All purchases are processed manually — items delivered before your next session. Accepted: CHF (Twint &amp; Cash).</div>
+  <div class="page-header-rule"></div>
 
   <!-- TABS -->
   <div class="tabs">

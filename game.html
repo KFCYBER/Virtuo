@@ -5781,9 +5781,12 @@ async function _autoSaveToSheet(){
   if(_autoSaveInFlight) return; // previous save still in flight — skip, next hand will cover it
   _autoSaveInFlight = true;
   _autoSaveHandCount++;
+  // Include open PM positions in the checkpoint so funds locked in bets don't
+  // make the checkpoint look like 0 (which GAS would treat as a bust).
+  const _pmOpenBets = (typeof PM !== 'undefined') ? PM.getOpenBetsTotal() : 0;
   const params=new URLSearchParams({
     action:'updatebalance', username:G.username, player:G.player||G.username,
-    balance:String(G.balance),
+    balance:String(G.balance + _pmOpenBets),
     sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),
     date:new Date().toISOString(),
@@ -6184,16 +6187,22 @@ window.onload=()=>{
   }catch(e){}
 
   // Hub auto-login: if player authenticated on the hub within the last 8 hours,
-  // pre-fill credentials and submit login so they skip the login screen entirely.
+  // skip the username/PIN screen. For ?panel=pm entries, also skip mode-select
+  // and stake selection so PM opens immediately without any login steps.
   if(!G.player){
     try{
       const _hub=JSON.parse(localStorage.getItem('kfc_hub_session')||'null');
       if(_hub && _hub.username && _hub.pin && Date.now()-(_hub.ts||0)<8*60*60*1000){
-        const _u=document.getElementById('lusername');
-        const _p=document.getElementById('lpin');
-        if(_u) _u.value=_hub.username;
-        if(_p) _p.value=_hub.pin;
-        setTimeout(()=>doLogin(), 160);
+        if(_autoOpenPM){
+          // PM-direct: bypass mode select + stake selection entirely
+          setTimeout(()=>_hubPMDirectLogin(_hub.username, _hub.pin), 160);
+        } else {
+          const _u=document.getElementById('lusername');
+          const _p=document.getElementById('lpin');
+          if(_u) _u.value=_hub.username;
+          if(_p) _p.value=_hub.pin;
+          setTimeout(()=>doLogin(), 160);
+        }
       } else {
         setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
       }
@@ -6222,6 +6231,50 @@ window.onload=()=>{
 function buildPinRows(){
   const c=document.getElementById('pin-rows');
   c.innerHTML='<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7">PINs are managed in the <span style=\"color:var(--gold)\">KFC_ONLINE</span> tab of your Google Sheet (column D). No local config needed when sheet is connected.</div>';
+}
+
+// PM-direct login: used when arriving from hub with ?panel=pm.
+// Authenticates with GAS and enters the game directly — no mode-select, no stake screen.
+async function _hubPMDirectLogin(username, pin){
+  const loginEl = document.getElementById('login');
+  if(loginEl) loginEl.style.display = 'none';
+  try{
+    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
+    if(!d.auth){ if(loginEl) loginEl.style.display='flex'; return; }
+    G.username  = username;
+    G._cachedPin = pin;
+    G._clubPass  = !!d.clubPass;
+    G.playerId   = d.playerId || '';
+    // PM-balance recovery: if GAS returns 0 but open PM bets exist, use their total
+    if(d.balance === 0){
+      try{
+        const _lsBets = JSON.parse(localStorage.getItem('kfc_pm_bets_'+username.toLowerCase())||'[]');
+        const _pmLocked = _lsBets.filter(b=>b.payout==null).reduce((s,b)=>s+(b.amount||0),0);
+        if(_pmLocked > 0) d.balance = _pmLocked;
+      }catch(e){}
+    }
+    const _pq = getSyncQueue();
+    if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
+      d.balance = _pq.balance;
+    }
+    localStorage.setItem('kfc_last_user', username.toLowerCase());
+    _pendingLogin = {
+      name:          d.playerName || username,
+      balance:       d.balance,
+      totalBalance:  d.balance,
+      clubPass:      !!d.clubPass,
+      loyaltyPoints: d.loyaltyPoints || 0,
+      lastStake:     d.lastStake || '',
+      inventory:     d.inventory || {},
+      deliveries:    d.deliveries || [],
+      kfcCredit:     d.kfcCredit  || 0,
+    };
+    // Use last-played stake or fall back to lowest available
+    _selectedStakeKey = (d.lastStake && STAKE_ORDER.includes(d.lastStake)) ? d.lastStake : STAKE_ORDER[0];
+    finaliseLogin(_selectedStakeKey);
+  }catch(e){
+    if(loginEl) loginEl.style.display = 'flex';
+  }
 }
 
 // ── LOGIN ──────────────────────────────────────────────
@@ -6254,6 +6307,15 @@ async function doLogin(){
         // _syncCommitBalance() writes the committed balance to GAS immediately at deal,
         // so wagered chips are already reflected there before any reload.
         try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
+        // Recovery: if GAS returns 0 but the player has open PM bets in localStorage,
+        // those funds are still theirs (locked in bets). Add them back so they're not stuck.
+        if(d.balance === 0){
+          try{
+            const _lsBets = JSON.parse(localStorage.getItem('kfc_pm_bets_'+username.toLowerCase())||'[]');
+            const _pmLocked = _lsBets.filter(b=>b.payout==null).reduce((s,b)=>s+(b.amount||0),0);
+            if(_pmLocked > 0) d.balance = _pmLocked;
+          }catch(e){}
+        }
         _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
         // Clear any session belonging to a different player on this device
         try{
@@ -11234,15 +11296,16 @@ const PM = (() => {
   }
   function _saveBets(b){ localStorage.setItem(_bk(), JSON.stringify(b)); }
 
-  // One-time migration: wipe stale settled/cashed bets left over from before the
-  // cashoutEarly fix. Settled bets (payout !== null) are already credited — keeping
-  // them only pollutes the hot-markets strip. Runs once per user per device.
+  // Purge settled/refunded bets on every init — settled bets are already credited,
+  // keeping them only causes stale display after buggy resolves or refunds.
+  // Also drops bets older than 30 days regardless of settlement status.
   (function _purgeStaleBets(){
-    const _migKey = PM_PFX + 'bets_migrated_v1_' + (G.username||G.player||'guest').toLowerCase();
-    if(localStorage.getItem(_migKey)) return;
-    const cleaned = _loadBets().filter(b => b.payout == null);
+    const _30d = 30 * 24 * 60 * 60 * 1000;
+    const now  = Date.now();
+    const cleaned = _loadBets().filter(b => b.payout == null && (now - (b.ts||0)) < _30d);
     _saveBets(cleaned);
-    localStorage.setItem(_migKey, '1');
+    // Clear legacy one-time migration flag so future cleanup always runs
+    try{ localStorage.removeItem(PM_PFX+'bets_migrated_v1_'+(G.username||G.player||'guest').toLowerCase()); }catch(e){}
   })();
 
   // Push the current balance to GAS immediately after any PM credit/refund.

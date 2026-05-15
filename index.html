@@ -1698,8 +1698,11 @@ async function _fetchPmMarketsAndRender() {
     const res = await fetch(url);
     const d   = await res.json();
     _hubMarkets = (d.markets || []).filter(m => (m.type === 'race' || m.type === 'season') && m.status === 'open');
-    // Update open PM positions in wallet
-    const openBets  = (d.bets || []).filter(b => b.payout == null);
+    // Update open PM positions in wallet — only count bets whose market is currently open.
+    // GAS PM_Bets can have historical rows with payout==null from past bugs; cross-reference
+    // against d.markets so those orphaned GAS rows don't inflate the open-positions count.
+    const openMktIds = new Set((d.markets || []).filter(m => m.status === 'open').map(m => m.id));
+    const openBets  = (d.bets || []).filter(b => b.payout == null && openMktIds.has(b.mktId));
     const lockedAmt = openBets.reduce((s,b) => s + (b.amount||0), 0);
     const cntEl  = document.getElementById('wc-pm-count');
     const lckEl  = document.getElementById('wc-pm-locked');
@@ -1810,7 +1813,9 @@ function _renderPmMarkets(markets, txData) {
     }).sort((a,b) => b.bal - a.bal);
 
     const playersHTML = sorted.map(pl => {
-      const yes = Math.round(_raceYesBias(pl.bal, raceBals, target) * 100);
+      // Use currBals (all players) as eligible pool — mirrors game.html _fundamentalPct
+      // which uses Object.values(_currBalances).filter(b => b < amount) for the denominator.
+      const yes = Math.round(_raceYesBias(pl.bal, currBals, target) * 100);
       return `<div class="pm-player-row">
         <span class="pm-player-name">${pl.name}</span>
         <span class="pm-player-bal">${_fmtHub(pl.bal)} KFC</span>

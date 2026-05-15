@@ -84,7 +84,8 @@
     }
     .header-logo { width: 100%; height: 100%; object-fit: cover; display: block; }
 
-    .header-center { text-align: center; }
+    /* True center: logo and buttons each take flex:1 so center column is always symmetric */
+    .header-center { text-align: center; flex: 1; }
     @keyframes title-glow {
       0%, 100% { text-shadow: 0 0 20px rgba(201,168,76,0.2); }
       50%       { text-shadow: 0 0 40px rgba(201,168,76,0.45), 0 0 80px rgba(201,168,76,0.15); }
@@ -646,14 +647,16 @@
 
 <!-- ══════════════════ HEADER -->
 <header>
-  <div class="logo-wrap" id="logo-wrap" onerror="this.style.display='none'">
-    <img src="KFC_LOGO.png" alt="KFC" class="header-logo" onerror="this.closest('.logo-wrap').style.display='none'" />
+  <div style="flex:1;display:flex;align-items:center">
+    <div class="logo-wrap" id="logo-wrap" onerror="this.style.display='none'">
+      <img src="KFC_LOGO.png" alt="KFC" class="header-logo" onerror="this.closest('.logo-wrap').style.display='none'" />
+    </div>
   </div>
   <div class="header-center">
     <div class="header-title">Season 3: <span class="dark-fall">Dark Fall</span></div>
     <div class="header-subtitle" id="header-subtitle">Golden Aces League</div>
   </div>
-  <div style="display:flex;align-items:center;gap:10px">
+  <div style="flex:1;display:flex;align-items:center;justify-content:flex-end;gap:10px">
     <a href="store.html" target="_blank" rel="noopener" class="hub-nav-store">Store</a>
     <button id="hub-login-btn" class="hub-nav-login" onclick="_showLoginModal()">Login</button>
     <div id="hub-user-badge" class="hub-nav-user" title="Your account" onclick="_showLoginModal()">

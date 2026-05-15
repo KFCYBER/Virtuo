@@ -1638,7 +1638,11 @@ async function _fetchPmMarketsAndRender() {
     if (lckEl) lckEl.textContent = lockedAmt > 0
       ? _fmtHub(lockedAmt) + ' KFC locked in bets'
       : 'No open positions';
-    _renderPmMarkets(_hubMarkets, _hubTxData);
+    // Only render if leaderboard data is ready (has balance info for odds computation).
+    // If refresh() hasn't completed yet, it will call _renderPmMarkets itself once data lands.
+    if (_hubPlayers.length > 0) {
+      _renderPmMarkets(_hubMarkets, _hubTxData);
+    }
   } catch(e) {
     const grid = document.getElementById('pm-mkt-grid');
     if (grid) grid.innerHTML = '<div class="pm-empty">Could not load markets</div>';

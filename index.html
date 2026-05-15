@@ -120,23 +120,25 @@
        .cta-danger  — destructive, red ghost                     (Log Out)
     */
     @keyframes cta-play-pulse {
-      0%,100% { box-shadow: 0 0 0 0 rgba(122,18,40,0), 0 2px 14px rgba(122,18,40,0.35); }
-      50%     { box-shadow: 0 0 0 4px rgba(122,18,40,0.15), 0 2px 28px rgba(122,18,40,0.55); }
+      0%,100% { box-shadow: 0 0 0 0 rgba(201,168,76,0), 0 2px 14px rgba(201,168,76,0.25); }
+      50%     { box-shadow: 0 0 0 5px rgba(201,168,76,0.12), 0 2px 28px rgba(201,168,76,0.45); }
     }
     .cta-play {
       display: inline-flex; align-items: center; gap: 8px;
-      background: var(--crimson); border: 1px solid rgba(180,30,60,0.6);
-      color: #fff; font-size: 10px; font-weight: 800;
+      background: linear-gradient(135deg, #b8923e 0%, var(--gold-hi) 50%, #b8923e 100%);
+      background-size: 200% 100%;
+      border: 1px solid var(--gold);
+      color: #0a0b0d; font-size: 10px; font-weight: 800;
       letter-spacing: 3px; padding: 9px 18px; border-radius: 6px;
       cursor: pointer; text-decoration: none; text-transform: uppercase;
-      transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+      transition: background-position 0.4s, transform 0.2s, box-shadow 0.2s;
       animation: cta-play-pulse 3s ease-in-out infinite;
       white-space: nowrap;
     }
     .cta-play:hover {
-      background: #9a1838; transform: translateY(-1px);
-      box-shadow: 0 4px 24px rgba(122,18,40,0.6) !important;
-      color: #fff;
+      background-position: 100% 0; transform: translateY(-1px);
+      box-shadow: 0 4px 24px rgba(201,168,76,0.45) !important;
+      color: #0a0b0d;
     }
     .cta-play .arrow { font-size: 13px; transition: transform 0.2s; }
     .cta-play:hover .arrow { transform: translateX(4px); }
@@ -343,7 +345,8 @@
     /* ── PLAYER CELL ── */
     .td-player { font-weight: 600; font-size: 15px; }
     .player-name-row { display: flex; align-items: center; gap: 10px; }
-    .contender-tag { font-size: 7px; font-weight: 800; letter-spacing: 2px; padding: 3px 8px; border-radius: 3px; border: 1px solid #e04040; color: #e04040; text-transform: uppercase; white-space: nowrap; }
+    @keyframes contender-pulse { 0%,100%{box-shadow:0 0 0 0 rgba(224,64,64,0.4),0 0 6px rgba(224,64,64,0.2)} 50%{box-shadow:0 0 0 4px rgba(224,64,64,0),0 0 14px rgba(224,64,64,0.4)} }
+    .contender-tag { font-size: 7px; font-weight: 800; letter-spacing: 2px; padding: 3px 8px; border-radius: 3px; border: 1px solid #e04040; color: #e04040; text-transform: uppercase; white-space: nowrap; animation: contender-pulse 2.4s ease-in-out infinite; }
 
     /* ── BALANCE ── */
     .td-balance { text-align: right; font-family: var(--mono); font-weight: 700; font-size: 14px; color: var(--green); white-space: nowrap; }
@@ -583,8 +586,9 @@
 
     /* ── WALLET SECTION ── */
     #hub-wallet-section { max-width: 1320px; margin: 26px auto 0; padding: 0 24px; position: relative; z-index: 2; }
-    .wallet-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; }
-    @media (max-width: 700px) { .wallet-row { grid-template-columns: 1fr; } }
+    .wallet-row { display: grid; grid-template-columns: 1fr 2fr 1fr; gap: 14px; }
+    @media (max-width: 900px) { .wallet-row { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 600px) { .wallet-row { grid-template-columns: 1fr; } .wallet-card[style*="span 2"] { grid-column: span 1 !important; } }
     .wallet-card {
       background: linear-gradient(140deg, rgba(10,10,24,0.96) 0%, rgba(14,14,30,0.9) 100%);
       border: 1px solid var(--border); border-radius: var(--r);
@@ -605,6 +609,18 @@
       transition: color 0.2s;
     }
     .wallet-logout:hover { color: var(--red); }
+    .pm-pos-list { margin-top: 12px; display: flex; flex-direction: column; gap: 7px; }
+    .pm-pos-item {
+      background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+      border-radius: 5px; padding: 8px 10px;
+    }
+    .pm-pos-desc { font-size: 10px; color: var(--text); line-height: 1.4; margin-bottom: 4px; }
+    .pm-pos-meta { display: flex; align-items: center; gap: 8px; font-size: 9px; font-family: var(--mono); }
+    .pm-pos-outcome { font-weight: 800; letter-spacing: 1px; }
+    .pm-pos-outcome.yes { color: #5cd97a; }
+    .pm-pos-outcome.no  { color: #e05555; }
+    .pm-pos-amt { color: var(--gold); }
+    .pm-pos-payout { color: var(--muted); }
 
     /* ── PM MARKETS SECTION ── */
     #pm-markets-section { max-width: 1320px; margin: 32px auto 0; padding: 0 24px; position: relative; z-index: 2; }
@@ -666,6 +682,16 @@
     <a id="hub-play-btn" href="game.html" class="cta-play">PLAY <span class="arrow">→</span></a>
   </div>
 </header>
+
+<!-- ══════════════════ SEASON COUNTDOWN BAR -->
+<div id="season-countdown-bar" style="background:rgba(201,168,76,0.06);border-bottom:1px solid rgba(201,168,76,0.12);padding:7px 24px;display:flex;align-items:center;justify-content:center;gap:16px;font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);text-transform:uppercase">
+  <span style="color:rgba(201,168,76,0.5)">◆</span>
+  <span>Season 3: Dark Fall</span>
+  <span style="color:rgba(201,168,76,0.3)">·</span>
+  <span id="season-cd-text" style="color:var(--gold);font-weight:700">—</span>
+  <span style="color:rgba(201,168,76,0.3)">·</span>
+  <div id="season-cd-bar" style="width:120px;height:3px;background:rgba(255,255,255,0.06);border-radius:2px;overflow:hidden"><div id="season-cd-fill" style="height:100%;background:linear-gradient(90deg,#b8923e,var(--gold-hi));border-radius:2px;transition:width 1s"></div></div>
+</div>
 
 <!-- ══════════════════ HERO STATS -->
 <div class="hero" id="hero-stats">
@@ -803,10 +829,13 @@
         <a href="game.html?panel=pm" class="cta-gold" style="flex:1;justify-content:center;padding:10px 8px">📈 Markets</a>
       </div>
     </div>
-    <div class="wallet-card">
+    <div class="wallet-card" style="grid-column: span 2; min-width: 0">
       <div class="wc-label">Open PM Positions</div>
-      <div class="wc-value" id="wc-pm-count">—</div>
-      <div class="wc-sub"   id="wc-pm-locked">—</div>
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <div class="wc-value" id="wc-pm-count">—</div>
+        <div class="wc-sub" id="wc-pm-locked" style="margin-top:0">—</div>
+      </div>
+      <div class="pm-pos-list" id="wc-pm-pos-list"></div>
     </div>
     <div class="wallet-card">
       <div class="wc-label">Loyalty Points</div>
@@ -1500,6 +1529,29 @@ function updateHeaderSubtitle() {
   document.getElementById('header-subtitle').textContent = `${daysTxt}  ·  Golden Aces League`;
 }
 
+function _updateSeasonCountdown() {
+  const now    = Date.now();
+  const end    = SEASON.END.getTime();
+  const start  = SEASON.START.getTime();
+  const msLeft = Math.max(0, end - now);
+  const total  = end - start;
+  const pct    = Math.min(100, Math.max(0, ((now - start) / total) * 100));
+  const d  = Math.floor(msLeft / 86400000);
+  const h  = Math.floor((msLeft % 86400000) / 3600000);
+  const m  = Math.floor((msLeft % 3600000) / 60000);
+  const s  = Math.floor((msLeft % 60000) / 1000);
+  const txt = msLeft === 0 ? 'Season Ended'
+    : d > 1 ? `${d}d ${h}h remaining`
+    : d === 1 ? `${d}d ${h}h ${m}m remaining`
+    : `${h}h ${m}m ${s}s remaining`;
+  const el = document.getElementById('season-cd-text');
+  const fill = document.getElementById('season-cd-fill');
+  if (el) el.textContent = txt;
+  if (fill) fill.style.width = pct.toFixed(1) + '%';
+}
+_updateSeasonCountdown();
+setInterval(_updateSeasonCountdown, 1000);
+
 initStars();
 updateHeaderSubtitle();
 refresh();
@@ -1730,15 +1782,42 @@ async function _fetchPmMarketsAndRender() {
     // Update open PM positions in wallet — only count bets whose market is currently open.
     // GAS PM_Bets can have historical rows with payout==null from past bugs; cross-reference
     // against d.markets so those orphaned GAS rows don't inflate the open-positions count.
-    const openMktIds = new Set((d.markets || []).filter(m => m.status === 'open').map(m => m.id));
-    const openBets  = (d.bets || []).filter(b => b.payout == null && openMktIds.has(b.mktId));
+    const openMktMap = new Map((d.markets || []).filter(m => m.status === 'open').map(m => [m.id, m]));
+    const openBets  = (d.bets || []).filter(b => b.payout == null && openMktMap.has(b.mktId));
     const lockedAmt = openBets.reduce((s,b) => s + (b.amount||0), 0);
     const cntEl  = document.getElementById('wc-pm-count');
     const lckEl  = document.getElementById('wc-pm-locked');
+    const posEl  = document.getElementById('wc-pm-pos-list');
     if (cntEl) cntEl.textContent = openBets.length || '0';
     if (lckEl) lckEl.textContent = lockedAmt > 0
-      ? _fmtHub(lockedAmt) + ' KFC locked in bets'
+      ? _fmtHub(lockedAmt) + ' KFC locked'
       : 'No open positions';
+    if (posEl) {
+      if (openBets.length === 0) {
+        posEl.innerHTML = '';
+      } else {
+        posEl.innerHTML = openBets.map(b => {
+          const mkt = openMktMap.get(b.mktId);
+          const desc = mkt ? (mkt.desc || '—') : (b.mktId || '—');
+          const isYes = (b.outcome || '').toUpperCase() === 'YES';
+          const poolYes = mkt?.pools?.YES || 1;
+          const poolNo  = mkt?.pools?.NO  || 1;
+          const totalPool = poolYes + poolNo;
+          const winOdds = isYes
+            ? (totalPool / poolYes).toFixed(2)
+            : (totalPool / poolNo).toFixed(2);
+          const estPayout = Math.round((b.amount || 0) * parseFloat(winOdds));
+          return `<div class="pm-pos-item">
+            <div class="pm-pos-desc">${desc}</div>
+            <div class="pm-pos-meta">
+              <span class="pm-pos-outcome ${isYes ? 'yes' : 'no'}">${b.outcome || '?'}</span>
+              <span class="pm-pos-amt">${_fmtHub(b.amount || 0)} KFC staked</span>
+              <span class="pm-pos-payout">· ~${_fmtHub(estPayout)} if wins</span>
+            </div>
+          </div>`;
+        }).join('');
+      }
+    }
     // Only render if leaderboard data is ready (has balance info for odds computation).
     // If refresh() hasn't completed yet, it will call _renderPmMarkets itself once data lands.
     if (_hubPlayers.length > 0) {

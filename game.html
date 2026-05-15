@@ -2540,8 +2540,9 @@ body.mp-bet-locked .all-sb-btn {
   <div id="topbar">
     <div class="tb-logo">
       <button class="btn-ghost" id="btn-markets" onclick="PM.openModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700" title="Prediction Markets">MARKETS</button>
-      <a href="https://kfcyber.github.io/KFC-Standings/" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none" title="KFC Standings">STANDINGS</a>
+      <a href="index.html" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none" title="KFC Standings">STANDINGS</a>
       <a href="store.html" target="_blank" rel="noopener" class="btn-ghost" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;text-decoration:none;border-color:rgba(201,168,76,0.35);color:var(--gold)" title="KFC Store">STORE</a>
+      <button class="btn-ghost" id="btn-tip-dealer" onclick="openTipModal()" style="font-size:10px;padding:6px 10px;letter-spacing:2px;font-weight:700;border-color:rgba(201,168,76,0.25);color:var(--muted)" title="Tip the dealer">💸 TIP</button>
       <button class="btn-ghost" id="btn-creator-mode" onclick="_toggleCreatorMode()" style="font-size:10px;padding:6px 10px;letter-spacing:1px;font-weight:700;display:none">🧪 TEST</button>
       <button class="btn-ghost" id="btn-gift" onclick="_openGiftPanel()" style="font-size:10px;padding:6px 10px;letter-spacing:1px;font-weight:700;display:none;border-color:rgba(201,168,76,0.45);color:var(--gold)">🎁 GIFT</button>
     </div>
@@ -7258,16 +7259,6 @@ function buildPuPanel(){
   _addRedemption('+1 Extra Shoe',_shoesRemaining()+' remaining today',
     'pts-extrashoe',extraShoesCost, ()=>_redeemExtraShoe(), false, false);
 
-  // Tip Dealer button — always at the bottom
-  const tipDiv = document.createElement('div');
-  tipDiv.style.cssText = 'border-top:1px solid var(--line);margin:8px 0 0;padding:8px 0 2px';
-  const tipBtn = document.createElement('button');
-  tipBtn.className = 'btn-ghost';
-  tipBtn.style.cssText = 'width:100%;font-size:11px;letter-spacing:1px;display:flex;align-items:center;justify-content:space-between;padding:6px 8px';
-  tipBtn.innerHTML = '<span>💸 TIP DEALER</span><span style="font-family:var(--mono);font-size:9px;color:var(--muted)">Total: '+fmtKFC(G._tipTotal||0)+'</span>';
-  tipBtn.onclick = openTipModal;
-  tipDiv.appendChild(tipBtn);
-  c.appendChild(tipDiv);
 }
 
 async function _syncTipToSheet(amount){

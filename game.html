@@ -3805,7 +3805,10 @@ async function _syncPtsToSheet(silent){
       pin:      G._cachedPin||'',
       points:   String(G._pts)
     });
-    const r = await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
+    const _ptsCtrl = new AbortController();
+    const _ptsTimer = setTimeout(() => _ptsCtrl.abort(), 5000);
+    const r = await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store',signal:_ptsCtrl.signal});
+    clearTimeout(_ptsTimer);
     const text = await r.text();
     let d;
     try{ d = JSON.parse(text); }catch(_){ d = {}; }
@@ -6071,6 +6074,7 @@ function _logSessionToSheet(stakeLabel){
 
 let _unloadFired = false; // guard against beforeunload + pagehide both firing
 let _autoOpenPM  = new URLSearchParams(window.location.search).get('panel') === 'pm';
+let _autoMktId   = new URLSearchParams(window.location.search).get('mktid') || null;
 
 // Save session to localStorage when window/tab is closed
 window.addEventListener('beforeunload', ()=>{
@@ -6083,6 +6087,17 @@ window.addEventListener('beforeunload', ()=>{
 
 // pagehide fires on mobile when page is hidden/navigated away (more reliable than beforeunload)
 window.addEventListener('pagehide', ()=>{
+  // Mid-cashout crash guard: if confirmCashout was in-flight when the page died,
+  // the payload was already queued — fire a keepalive beacon so GAS still receives it.
+  if(G._atCashout && G.cashedOut && G._syncInProgress){
+    try{
+      const _cq = getSyncQueue();
+      if(_cq && _cq.username && G.url){
+        const _cp = new URLSearchParams(Object.assign({action:'updatebalance'}, _cq));
+        fetch(G.url+'?'+_cp.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}).catch(()=>{});
+      }
+    }catch(e){}
+  }
   // PM-only session guard: if a player placed PM bets but never dealt a hand,
   // _sessionActive is false so the block below never runs — sync balance separately.
   if(G.player && !G.cashedOut && !G._atCashout && !G._sessionActive &&
@@ -6216,11 +6231,22 @@ window.onload=()=>{
           // PM-direct: bypass mode select + stake selection entirely
           setTimeout(()=>_hubPMDirectLogin(_hub.username, _hub.pin), 160);
         } else {
+          // Seamless: hide credentials form entirely, show signing-in state
+          const _s1=document.getElementById('login-step1');
+          if(_s1){ _s1.style.visibility='hidden'; _s1.style.minHeight='120px'; }
+          const _lw=document.querySelector('#login .login-wrap');
+          if(_lw){
+            const _si=document.createElement('div');
+            _si.id='hub-signin-msg';
+            _si.style.cssText='font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted);text-align:center;padding:32px 0;text-transform:uppercase';
+            _si.textContent='Signing in as '+(_hub.playerName||_hub.username)+'…';
+            _lw.insertBefore(_si, _s1);
+          }
           const _u=document.getElementById('lusername');
           const _p=document.getElementById('lpin');
           if(_u) _u.value=_hub.username;
           if(_p) _p.value=_hub.pin;
-          setTimeout(()=>doLogin(), 160);
+          setTimeout(()=>doLogin(), 200);
         }
       } else {
         setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
@@ -6457,7 +6483,7 @@ function openApp(displayName, balance){
   _startSessionTimer();
   if(typeof PM !== 'undefined') setTimeout(()=>{
     PM.init();
-    if(_autoOpenPM){ _autoOpenPM=false; setTimeout(()=>PM.openModal(), 400); }
+    if(_autoOpenPM){ _autoOpenPM=false; setTimeout(()=>{ PM.openModal(); if(_autoMktId){ const _mid=_autoMktId; _autoMktId=null; setTimeout(()=>PM._jumpToMarket(_mid),550); } }, 400); }
   }, 500);
   // Wire idle listeners — reset on any interaction
   ['pointerdown','keydown'].forEach(ev=>{
@@ -9576,7 +9602,7 @@ async function attemptSync(payload){
     clearTimeout(_syncTimer);
   }catch(netErr){
     console.error('Sync network error:', netErr);
-    throw new Error(netErr.name === 'AbortError' ? 'Sync timed out after 30s — check connection' : 'Network error: '+netErr.message);
+    throw new Error(netErr.name === 'AbortError' ? 'Sync timed out — check connection and retry' : 'Network error: '+netErr.message);
   }
   if(!r.ok){
     console.error('Sync HTTP error:', r.status, r.statusText);
@@ -9639,8 +9665,8 @@ async function confirmCashout(){
     }
     _shoeHandCount = 0; _shoeLog = [];
   }
-  // Flush any pending points sync immediately — don't wait for the debounce timer
-  await _syncPtsToSheet(true);
+  // Fire points sync in background — never block the balance sync on it
+  _syncPtsToSheet(true).catch(()=>{});
   // Session is cleared only after sync/save succeeds — not here
   document.getElementById('co-actions-pre').style.display='none';
   const post=document.getElementById('co-actions-post');
@@ -9676,6 +9702,11 @@ async function confirmCashout(){
     stake: G.s.label, stakeKey: G.stake, pin: G._cachedPin||''
   };
   console.log('[KFC] Sync payload username:', payload.username, '| player:', payload.player);
+  // Pre-queue before any network attempt — if the page crashes before doSync completes,
+  // the next login will auto-retry this payload via getSyncQueue()
+  storeSyncQueue(payload);
+
+  let _autoRetryTimer = null;
 
   async function doSync(){
     badge.textContent='Syncing…';
@@ -9684,6 +9715,7 @@ async function confirmCashout(){
     setSyncBadge('','SYNCING');
     if(leaveBtn) leaveBtn.disabled=true;
     if(retryBtn) retryBtn.style.display='none';
+    if(_autoRetryTimer){ clearTimeout(_autoRetryTimer); _autoRetryTimer=null; }
 
     if(!G.url){
       // No sheet — save locally, allow leave
@@ -9719,26 +9751,47 @@ async function confirmCashout(){
       // Refresh leaderboard now that this player's balance has updated on the sheet
       setTimeout(()=>_fetchLeaderboard(true), 1500);
     }catch(e){
-      // Failed — store in queue, lock leave, show retry
       G._syncInProgress=false;
-      storeSyncQueue(payload);
+      // Payload already queued — auto-retry once after 10 s before handing off to user
       localStorage.setItem('kfc_bal_'+(G.username||G.player), G.balance);
       setSyncBadge('error','FAILED');
-      badge.textContent='⚠ Sync failed — must retry before leaving';
       badge.style.color='var(--red)';
       if(errDetail){ errDetail.textContent=e.message||'Unknown error'; errDetail.style.display='block'; }
-      if(leaveBtn){ leaveBtn.disabled=true; leaveBtn.textContent='Sync Required'; }
-      if(retryBtn) retryBtn.style.display='block';
       if(stayBtn) stayBtn.style.display='none';
-      notif('Sync failed: '+(e.message||'unknown error'));
+
+      let _retryCount = (doSync._retries||0);
+      if(_retryCount < 1){
+        // Auto-retry once — show countdown
+        doSync._retries = _retryCount + 1;
+        let _secs = 10;
+        badge.textContent='⚠ Sync failed — retrying in '+_secs+'s…';
+        if(leaveBtn){ leaveBtn.disabled=true; leaveBtn.textContent='Sync Required'; }
+        if(retryBtn) retryBtn.style.display='none';
+        _autoRetryTimer = setInterval(()=>{
+          _secs--;
+          if(_secs > 0){
+            badge.textContent='⚠ Sync failed — retrying in '+_secs+'s…';
+          } else {
+            clearInterval(_autoRetryTimer); _autoRetryTimer=null;
+            G._syncInProgress=true;
+            doSync();
+          }
+        }, 1000);
+      } else {
+        // Auto-retry already attempted — hand off to user
+        badge.textContent='⚠ Sync failed — your balance is saved, retry when connection is stable';
+        if(leaveBtn){ leaveBtn.disabled=true; leaveBtn.textContent='Sync Required'; }
+        if(retryBtn) retryBtn.style.display='block';
+        notif('Sync failed: '+(e.message||'unknown error'));
+      }
     }
   }
 
   await doSync();
 
-  // Wire retry button
+  // Wire manual retry button (used after auto-retry also fails)
   if(retryBtn){
-    retryBtn.onclick=async()=>{ await doSync(); };
+    retryBtn.onclick=async()=>{ G._syncInProgress=true; doSync._retries=1; await doSync(); };
   }
 
   G.sessionStart=G.balance;
@@ -13953,7 +14006,8 @@ const PM = (() => {
   }
 
   function getOpenBetsTotal(){
-    return _loadBets().filter(b => b.payout == null).reduce((sum, b) => sum + (b.amount || 0), 0);
+    const openIds = new Set(_markets.filter(m => m.status === 'open').map(m => m.id));
+    return _loadBets().filter(b => b.payout == null && openIds.has(b.mktId)).reduce((sum, b) => sum + (b.amount || 0), 0);
   }
 
   return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog, getOpenBetsTotal };

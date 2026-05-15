@@ -2057,7 +2057,7 @@ async function _fetchPmMarketsAndRender() {
     const url = `${GAME_WORKER}?action=pmgetmarkets&username=${encodeURIComponent(_hubSession.username)}`;
     const res = await fetch(url);
     const d   = await res.json();
-    _hubMarkets = (d.markets || []).filter(m => (m.type === 'race' || m.type === 'season' || m.type === 'milestone') && m.status === 'open');
+    _hubMarkets = (d.markets || []).filter(m => (m.type === 'race' || m.type === 'season') && m.status === 'open');
     // Update open PM positions in wallet — only count bets whose market is currently open.
     // GAS PM_Bets can have historical rows with payout==null from past bugs; cross-reference
     // against d.markets so those orphaned GAS rows don't inflate the open-positions count.
@@ -2255,7 +2255,7 @@ function _renderPmMarkets(markets, txData) {
   // (game only creates one per player per week, but GAS may have stale rows from past bugs)
   const milestoneByPlayer = {}; // pKey → market
   markets.forEach(m => {
-    if (m.type !== 'milestone') return;
+    if (m.type !== 'season') return;
     const p = m.condition && m.condition.params;
     if (!p || !p.player) return;
     const weekStr = p.week || (p.date || '').slice(0, 10);

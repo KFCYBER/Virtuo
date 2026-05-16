@@ -2368,6 +2368,8 @@ body.hand2-active #chip-strip .chip { position: relative; }
 .pm-summary-val.neg { color:var(--red); }
 .pm-cashout-btn { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:var(--gold-lo); background:rgba(201,168,76,.08); border:1px solid rgba(201,168,76,.3); border-radius:2px; padding:4px 10px; cursor:pointer; white-space:nowrap; }
 .pm-cashout-btn:hover { background:rgba(201,168,76,.18); color:var(--gold-hi); }
+.pm-claim-btn { font-family:var(--mono); font-size:8px; letter-spacing:1px; color:#3bbd6f; background:rgba(59,189,111,.10); border:1px solid rgba(59,189,111,.4); border-radius:2px; padding:4px 10px; cursor:pointer; white-space:nowrap; font-weight:700; }
+.pm-claim-btn:hover { background:rgba(59,189,111,.22); }
 /* ── Portfolio stats grid ── */
 .pm-stats-grid { display:grid; grid-template-columns:repeat(4,1fr); border-bottom:1px solid var(--line2); }
 .pm-stats-cell { padding:7px 4px; text-align:center; border-right:1px solid var(--line2); }
@@ -12391,6 +12393,18 @@ const PM = (() => {
     const bets = _loadBets();
     bets.push({ mktId: _betMktId, outcome: _betOutcome, amount, stakeIdx: _stkIdx(), stakeLevel: G.stake||'low', ts: Date.now(), payout: null, lockedPayout, entryOdds, mktDesc: mkt.desc, mktType: mkt.type });
     _saveBets(bets);
+
+    // Window markets: reset startHand and accumulated state to the current hand so the
+    // player always gets the full N-hand window from the moment they place their bet.
+    const _windowTypes = new Set(['natural_bj','quick_bj_window','dealer_no_bust_window',
+      'no_loss_window','win_streak_window','majority_wins_window','cold_dealer_window','comeback_window']);
+    if(mkt.type === 'shoe' && mkt.condition && _windowTypes.has(mkt.condition.type)){
+      mkt.condition.params.startHand = _pmShoeHands;
+      // Clear any state accumulated before this bet was placed
+      delete mkt._winStreak; delete mkt._mwWins;
+      delete mkt._cdBusts;   delete mkt._cbWins; delete mkt._cbActive;
+    }
+
     _saveMarkets();
 
     closeModal('pm-bet-modal');
@@ -12423,6 +12437,7 @@ const PM = (() => {
       const _baseProfit = _basePay - bet.amount;
       // Floor at bet.amount so a winning bet never pays less than the stake (covers stake-drop edge cases)
       bet.payout = Math.max(bet.amount, Math.round(bet.amount + _baseProfit * _sBonus));
+      bet.claimed = true; // auto-credited this session
       myTotal += bet.payout;
     });
     _saveBets(bets);
@@ -13116,6 +13131,7 @@ const PM = (() => {
               const _sbPoll = sm.type !== 'shoe' && settleIdx > (bet.stakeIdx||0) ? 10 : 1;
               // Floor at bet.amount so a winning bet never pays less than the stake (covers stake-drop edge cases)
               bet.payout = Math.max(bet.amount, Math.round(bet.amount + (_bpoll - bet.amount) * _sbPoll));
+              bet.claimed = true; // auto-credited via GAS poll
               credit += bet.payout;
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }
@@ -13528,6 +13544,8 @@ const PM = (() => {
                 ? `<span class="pm-port-type" style="color:var(--muted)">refunded</span>`
                 : '';
             const plDisplay = b.refunded ? `<span class="pm-port-pl muted">±0</span>` : `<span class="pm-port-pl ${plCl}">${pl>=0?'+':''}${fmtFull(pl)}</span>`;
+            const isClaimable = !b.claimed && !b.refunded && !b.cashoutEarly && (b.payout||0)>0 && b.mktType!=='shoe';
+            const claimBtn = isClaimable ? `<button class="pm-claim-btn" onclick="PM._claimPayout('${b.mktId}',${b.ts})">CLAIM +${fmtFull(pl)}</button>` : '';
             return `<div class="pm-portfolio-row" data-mkt="${b.mktId}">
               <div class="pm-port-name">${name}</div>
               <div class="pm-port-meta">
@@ -13537,6 +13555,7 @@ const PM = (() => {
                 ${tag ? `<span class="pm-port-type">${tag}</span>` : ''}
                 ${plDisplay}
               </div>
+              ${claimBtn ? `<div class="pm-port-cashout" style="justify-content:flex-end">${claimBtn}</div>` : ''}
             </div>`;
           }).join('');
           if(filteredClosed.length > HIST_CAP){
@@ -13550,6 +13569,20 @@ const PM = (() => {
     }
 
     el.innerHTML = html;
+  }
+
+  function _claimPayout(mktId, ts){
+    const bets = _loadBets();
+    const bet = bets.find(b => b.mktId===mktId && b.ts===ts && (b.payout||0)>0 && !b.claimed && b.mktType!=='shoe');
+    if(!bet){ notif('Nothing to claim'); return; }
+    bet.claimed = true;
+    const profit = bet.payout - bet.amount;
+    G.balance += bet.payout;
+    updateUI();
+    _saveBets(bets);
+    _syncBalanceAfterPM();
+    notif('✅ Claimed +'+fmtFull(profit)+' KFC — written to sheet', 'win');
+    render();
   }
 
   let _pendingCashOut = null;
@@ -13947,6 +13980,13 @@ const PM = (() => {
       if(_backfilled) _saveMarkets();
     }
     render();
+    // Notify player of any unclaimed winning payouts from previous sessions
+    setTimeout(() => {
+      const _unclaimed = _loadBets().filter(b => (b.payout||0) > 0 && !b.claimed && b.mktType !== 'shoe');
+      if(_unclaimed.length > 0){
+        notif('💰 '+_unclaimed.length+' unclaimed payout'+ (_unclaimed.length>1?'s':'')+' — open Markets to claim', 'win');
+      }
+    }, 1500);
     if(_pollTimer) clearInterval(_pollTimer);
     _pollTimer = setInterval(poll, 45000);
     poll();
@@ -14016,7 +14056,7 @@ const PM = (() => {
     return _loadBets().filter(b => b.payout == null && openIds.has(b.mktId)).reduce((sum, b) => sum + (b.amount || 0), 0);
   }
 
-  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog, getOpenBetsTotal };
+  return { init, poll, render, openModal: _openModal, closeModal: _closeModal, openBetModal, _selectBetOutcome, _onBetAmountInput, _confirmBet, _togglePlayerGroup, _switchTab, _saveSeasonHist, _clearSeasonHist, _cashOutBet, _promptCashOut, _confirmCashOut, _claimPayout, _jumpToMarket, onCardDrawn, onHandEnd, onStakeReached, onShoeEnd, onShoeNew, onLeaderboardUpdate, _portSetStatus, _portSetType, _portToggleOpen, _portToggleHist, _portToggleHistAll, _purgeDups, _exportHandLog, getOpenBetsTotal };
 })();
 
 

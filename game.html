@@ -422,6 +422,11 @@ body:not(.betting) #betting-spacer { flex: 0; }
 .step-dots { display: flex; justify-content: center; gap: 8px; margin-top: 24px; }
 .step-dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.15); transition: background 0.25s, transform 0.25s; }
 .step-dot.active { background: var(--gold); transform: scale(1.3); }
+/* ── Mode select overlay animation ── */
+@keyframes modeSelectIn  { from{opacity:0;transform:scale(0.95)} to{opacity:1;transform:scale(1)} }
+@keyframes modeSelectOut { from{opacity:1;transform:scale(1)}   to{opacity:0;transform:scale(0.97)} }
+.ms-enter { animation: modeSelectIn  0.28s cubic-bezier(.16,1,.3,1) both; }
+.ms-exit  { animation: modeSelectOut 0.18s ease both; pointer-events:none; }
 /* Button shine streak — scoped to login only */
 #login .btn-primary::after {
   content:''; position:absolute; top:0; left:-80%; bottom:0; width:55%;
@@ -2524,7 +2529,6 @@ body.mp-bet-locked .all-sb-btn {
       </div>
       <div class="err" id="lerr"></div>
       <a href="index.html" style="display:block;margin-top:20px;text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:2px;color:var(--muted);text-decoration:none;text-transform:uppercase;transition:color 0.2s" onmouseover="this.style.color='var(--gold)'" onmouseout="this.style.color='var(--muted)'">← Back to Hub</a>
-      <div class="step-dots"><div class="step-dot active" id="sdot-1"></div><div class="step-dot" id="sdot-2"></div></div>
     </div>
     <!-- Step 2: Stake selection (shown first after credentials) -->
     <div id="login-step2" style="display:none">
@@ -2545,6 +2549,7 @@ body.mp-bet-locked .all-sb-btn {
       <button class="btn-primary" onclick="confirmBuyIn()">Enter Table</button>
       <div class="err" id="buyin-err" style="margin-top:8px"></div>
     </div>
+    <div class="step-dots" id="login-step-dots"><div class="step-dot active" id="sdot-1"></div><div class="step-dot" id="sdot-2"></div><div class="step-dot" id="sdot-3"></div></div>
   </div>
 </div>
 
@@ -4773,7 +4778,7 @@ function goLoginStep(step, back){
   // Find the currently visible step and animate it out
   const cur = stepIds.map(id=>document.getElementById(id)).find(el=>el&&el.style.display!=='none');
   const hasExit = cur && cur.id !== targetId;
-  const delay = hasExit ? 185 : 0;
+  const delay = hasExit ? 220 : 0;
 
   if(hasExit){
     cur.classList.remove(...ALL_ANIM);
@@ -4791,9 +4796,11 @@ function goLoginStep(step, back){
     void target.offsetWidth;
     target.classList.add(inCls);
     if(step===1) setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },50);
-    // Sync step dots
-    const d1=document.getElementById('sdot-1'), d2=document.getElementById('sdot-2');
-    if(d1&&d2){ d1.classList.toggle('active',step===1); d2.classList.toggle('active',step>=2); }
+    // Sync step dots (3 dots: credentials / stake / buy-in)
+    const d1=document.getElementById('sdot-1'), d2=document.getElementById('sdot-2'), d3=document.getElementById('sdot-3');
+    if(d1){ d1.classList.toggle('active', step===1); }
+    if(d2){ d2.classList.toggle('active', step===2); }
+    if(d3){ d3.classList.toggle('active', step===3); }
   }, delay);
 }
 
@@ -6617,6 +6624,8 @@ function doLogout(skipToStake){
   G.player=''; G.username=''; G._pts=0; // clear identity so beforeunload won't re-save
   clearSession();
   _selectedStakeKey=null;
+  _loginFromModeSelect=false;
+  const _msEl=document.getElementById('mp-mode-select'); if(_msEl){ _msEl.style.display='none'; _msEl.classList.remove('ms-enter','ms-exit'); }
   document.getElementById('app').style.display='none';
   document.getElementById('login').style.display='flex';
 
@@ -14135,20 +14144,32 @@ const MP2 = {
     const lg = document.getElementById('login');
     if (lg) lg.style.display = 'none';
     const el = document.getElementById('mp-mode-select');
-    if (el) el.style.display = 'flex';
+    if (!el) return;
+    el.classList.remove('ms-exit');
+    el.style.display = 'flex';
+    void el.offsetWidth;
+    el.classList.add('ms-enter');
+  },
+  _hideModeSelect(cb) {
+    const el = document.getElementById('mp-mode-select');
+    if (!el || el.style.display === 'none') { if(cb) cb(); return; }
+    el.classList.remove('ms-enter');
+    void el.offsetWidth;
+    el.classList.add('ms-exit');
+    setTimeout(() => { el.style.display = 'none'; el.classList.remove('ms-exit'); if(cb) cb(); }, 185);
   },
 
   // ─── lobby ────────────────────────────────────────────────
   _chooseSP() {
-    document.getElementById('mp-mode-select').style.display = 'none';
-    const lg = document.getElementById('login');
-    if (lg) lg.style.display = 'flex';
-    _loginFromModeSelect = true;
-    if (typeof goLoginStep === 'function') goLoginStep(2);
+    this._hideModeSelect(() => {
+      const lg = document.getElementById('login');
+      if (lg) lg.style.display = 'flex';
+      _loginFromModeSelect = true;
+      if (typeof goLoginStep === 'function') goLoginStep(2);
+    });
   },
   _chooseMP() {
-    document.getElementById('mp-mode-select').style.display = 'none';
-    this._openLobby();
+    this._hideModeSelect(() => { this._openLobby(); });
   },
   _openLobby() {
     document.getElementById('mp-lobby-overlay').style.display = 'block';
@@ -14167,12 +14188,13 @@ const MP2 = {
   },
   _backToModeSelect() {
     document.getElementById('mp-lobby-overlay').style.display = 'none';
-    this._showModeSelect();
+    this._showModeSelect();  // already animated
   },
   _backToLogin() {
-    document.getElementById('mp-mode-select').style.display = 'none';
-    const lg = document.getElementById('login');
-    if (lg) lg.style.display = 'flex';
+    this._hideModeSelect(() => {
+      const lg = document.getElementById('login');
+      if (lg) lg.style.display = 'flex';
+    });
   },
   _populateStakes(selId, cat) {
     const sel = document.getElementById(selId);

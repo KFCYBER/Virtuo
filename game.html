@@ -5223,7 +5223,8 @@ function evaluateEarlySideBets(){
       const orig=(G.lastSideBets2&&G.lastSideBets2[name])||0;
       if(orig>0){
         const won=h2w.find(w=>w.name===name);
-        G._earlySBResults.push({name:'[H2] '+name,bet:orig,pl:won?won.pl:-orig,won:!!won,label:won?won.label:null});
+        const isFree2=(G._freeSBNames2||[]).includes(name);
+        G._earlySBResults.push({name:'[H2] '+name,bet:orig,pl:won?won.pl:(isFree2?0:-orig),won:!!won,label:won?won.label:null});
       }
     });
   }
@@ -5232,7 +5233,8 @@ function evaluateEarlySideBets(){
     const orig=G.lastSideBets&&G.lastSideBets[name]||0;
     if(orig>0){
       const won=wins.find(w=>w.name===name);
-      G._earlySBResults.push({name,bet:orig,pl:won?won.pl:-orig,won:!!won,label:won?won.label:null});
+      const isFreeR=(G._freeSBNames||[]).includes(name);
+      G._earlySBResults.push({name,bet:orig,pl:won?won.pl:(isFreeR?0:-orig),won:!!won,label:won?won.label:null});
     }
   });
   // Credit wins to live balance immediately
@@ -8684,7 +8686,8 @@ function settle(reason){
     const goldExtra=n==='Dealer Bust'?(G._goldCardBet||0):0;
     if(orig>0){
       const won=sbAnnouncements.find(a=>a.name===n);
-      breakdown.sbs.push({name:'Dealer Bust',bet:orig,pl:won?won.pl:-orig,won:!!won,free:(G._freeSBNames||[]).includes('Dealer Bust')});
+      const dbFree=(G._freeSBNames||[]).includes('Dealer Bust');
+      breakdown.sbs.push({name:'Dealer Bust',bet:orig,pl:won?won.pl:(dbFree?0:-orig),won:!!won,free:dbFree});
     }
     if(goldExtra>0){
       const gwon=sbAnnouncements.find(a=>a.name===n+'_gold');
@@ -8868,7 +8871,7 @@ function calcSide(name,amount,dealerBust,isFreeStake){
   if(name==='Perfect Pairs') result=evalPerfectPairs(hand);
   else if(name==='21+3') result=eval21Plus3(hand,dealerUp);
   else if(name==='Crazy 7s') result=evalCrazy7s(hand,dealerUp);
-  if(!result) return {pl:-amount,label:null};
+  if(!result) return {pl:isFreeStake?0:-amount,label:null};
   return {pl:amount*result.mult,label:result.name+' pays '+result.mult+':1'};
 }
 

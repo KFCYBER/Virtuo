@@ -3004,8 +3004,8 @@ body.mp-bet-locked .all-sb-btn {
     <!-- DESCRIPTION TABLE -->
     <div style="margin-bottom:18px">
       <div class="info-row" style="font-weight:700;color:var(--gold-hi)"><span>Power-Up</span><span>Effect</span></div>
-      <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover ½ bet</span></div>
-      <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe becomes a push</span></div>
+      <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover 75% of bet</span></div>
+      <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe → 50–75% back</span></div>
       <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">+2 to all Crazy 7s multipliers</span></div>
       <div class="info-row"><span class="info-label">BJ Guard</span><span class="info-val">Dealer blackjack → random 50–100% back</span></div>
       <div class="info-row"><span class="info-label">BJ Novak (3:1)</span><span class="info-val">Your blackjack pays 2:1 not 3:2</span></div>
@@ -3424,7 +3424,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">Safety Net <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
-          <p>Any time you reach exactly 22 this shoe, it counts as a push instead of a bust. Stays active for the whole shoe.</p>
+          <p>Any time you reach exactly 22 this shoe, you get back 50–75% of your bet (randomly determined) instead of a full bust loss. Stays active for the whole shoe.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Seven-Seeker <span style="color:var(--muted);font-weight:400">— High+</span></div>
@@ -3432,7 +3432,7 @@ body.mp-bet-locked .all-sb-btn {
         </div>
         <div class="help-card">
           <div class="help-card-title">BJ Guard <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
-          <p>If the dealer hits Blackjack, your hand becomes a push instead of a loss — no insurance needed.</p>
+          <p>If the dealer hits Blackjack, you get back a random 50–100% of your bet instead of a full loss. The exact amount is revealed when it triggers.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">BJ Novak <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
@@ -3663,9 +3663,9 @@ const SB_NAMES = ['Perfect Pairs','21+3','Crazy 7s','Dealer Bust'];
 
 const POWERUPS = [
   { id:'sally',  label:'Surrender Sally', sub:'Surrender vs dealer 10',   minStake:'mid',       chf:2.50, ratio:5 },
-  { id:'net',    label:'Safety Net',      sub:'Any 22 this shoe → push',  minStake:'mid',       chf:2.00, ratio:4 },
+  { id:'net',    label:'Safety Net',      sub:'Any 22 this shoe → 50–75% back',  minStake:'mid',       chf:2.00, ratio:4 },
   { id:'seeker', label:'Seven-Seeker',    sub:'+2× on Crazy 7s',          minStake:'high',      chf:2.00, ratio:4 },
-  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → lose half bet', minStake:'legendary', chf:1.50, ratio:5 },
+  { id:'guard',  label:'BJ Guard',        sub:'Dealer BJ → random 50–100% back', minStake:'legendary', chf:1.50, ratio:5 },
   { id:'novak',  label:'BJ Novak',        sub:'Blackjack pays 2:1',        minStake:'legendary', chf:1.50, ratio:5 },
 ];
 
@@ -8098,7 +8098,7 @@ function hit(){
   drawIntoHand(h, hitIdx, G.cur);
   renderAll();
   const v=hv(h);
-  if(v===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; notif('SAFETY NET — PUSH'+(G._hand2Active&&G.hands.length>1?' (Hand '+(G.cur+1)+')':'')); advOrEnd('safety');return; }
+  if(v===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; G._safetyNetPct=Math.floor(50+Math.random()*26); notif('SAFETY NET — '+G._safetyNetPct+'% BACK'+(G._hand2Active&&G.hands.length>1?' (Hand '+(G.cur+1)+')':'')); advOrEnd('safety');return; }
   if(isBust(h)){
     sfx('bust');
     _playBustAnimation(G.cur); // red shake on busted hand slot
@@ -8180,7 +8180,7 @@ function dbl(){
   drawIntoHand(h, dblIdx, G.cur);
   // Jester replacement handled inside drawIntoHand — no need for manual check
   renderAll();
-  if(hv(h)===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; notif('SAFETY NET — PUSH'); advOrEnd('safety'); return; }
+  if(hv(h)===22&&G.puOwned.has('net')){ G.safetyTrigger=true; G.safetyTriggerHand=G.cur; G._safetyNetPct=Math.floor(50+Math.random()*26); notif('SAFETY NET — '+G._safetyNetPct+'% BACK'); advOrEnd('safety'); return; }
   if(isBust(h)){
     sfx('bust');
     _playBustAnimation(G.cur);
@@ -8520,7 +8520,7 @@ function settle(reason){
     else if(reason==='push_player_bj'){w=0;detail='Both BJ — Push';}
     else if(reason==='safety'){
       // Only push the hand that triggered the safety net; other hands settle on their own merit
-      if(hi===(G.safetyTriggerHand||0)){w=0;detail='Safety Net — Push';}
+      if(hi===(G.safetyTriggerHand||0)){const _snp=G._safetyNetPct||50;w=-Math.floor(_betForHand*(1-_snp/100));detail='Safety Net — '+_snp+'% back';}
       else if(pb){ const freeLev=G.leverage&&G.leverage.startsWith('c'); w=-_betForHand; detail='Bust'+(freeLev?' [Lev card — lose stake only]':''); }
       else if(pbj){ if(isBJ(G.dealer)){w=0;detail='Push — both BJ';} else{const _sOn=G.steelOn[hi]||false;const _nOn=G.puOwned.has('novak');const r=_nOn||_sOn?2:1.5;w=Math.floor(_betForHand*r*lm);detail=`Blackjack ${r}:1${_sOn?' (Steel)':_nOn?' (Novak)':''}`;sfx('bj');} }
       else if(db){ w=_betForHand*lm; const levDesc=lm>1?(G.leverage.startsWith('c')?' ('+lm+'× free card)':' ('+lm+'× token)'):''; detail='Dealer Bust'+levDesc; }
@@ -8531,7 +8531,7 @@ function settle(reason){
     else if(reason==='desert_push'){w=0;detail='Desert Card — Push';}
     else if(G.safetyTrigger && hi===G.safetyTriggerHand){
       // Safety net hand settling under a non-safety reason (e.g. 'normal' after dealer play)
-      w=0; detail='Safety Net — Push';
+      const _snp2=G._safetyNetPct||50;w=-Math.floor(_betForHand*(1-_snp2/100));detail='Safety Net — '+_snp2+'% back';
     }
     else if(pb)                    {
       if(G.desertOn[hi]){w=0;detail='Desert Card — Protected (bust)';_desertFired=true;_thisDesert=true;}
@@ -9539,7 +9539,7 @@ function showCashout(){
   const atCap=G.balance>=BALANCE_CAP;
   const syncEl=document.getElementById('co-sync');
   if(atCap){
-    syncEl.textContent='⚠ 50 Billion KFC cap reached — you must cash out before playing again.';
+    syncEl.textContent='⚠ 20 Billion KFC cap reached — you must cash out before playing again.';
     syncEl.style.color='var(--red)';
   } else {
     syncEl.textContent='';

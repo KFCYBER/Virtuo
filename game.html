@@ -3007,7 +3007,7 @@ body.mp-bet-locked .all-sb-btn {
       <div class="info-row"><span class="info-label">Surrender Sally (5:1)</span><span class="info-val">Surrender vs dealer 10 — recover ½ bet</span></div>
       <div class="info-row"><span class="info-label">Safety Net (4:1)</span><span class="info-val">Any 22 this shoe becomes a push</span></div>
       <div class="info-row"><span class="info-label">Seven-Seeker (4:1)</span><span class="info-val">+2 to all Crazy 7s multipliers</span></div>
-      <div class="info-row"><span class="info-label">BJ Guard</span><span class="info-val">Dealer blackjack → lose half bet</span></div>
+      <div class="info-row"><span class="info-label">BJ Guard</span><span class="info-val">Dealer blackjack → random 50–100% back</span></div>
       <div class="info-row"><span class="info-label">BJ Novak (3:1)</span><span class="info-val">Your blackjack pays 2:1 not 3:2</span></div>
     </div>
 
@@ -3420,7 +3420,7 @@ body.mp-bet-locked .all-sb-btn {
         <p class="help-lead">Purchasable upgrades that last one shoe. Buy them with loyalty points from the ⭐ panel. Standard players can hold 1 at a time; 21 Club Pass holders can hold 2.</p>
         <div class="help-card">
           <div class="help-card-title">Surrender Sally <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
-          <p>Lets you surrender against a dealer 10-upcard, recovering half your bet. Normally surrender isn't available at KFC.</p>
+          <p>Lets you surrender against a dealer 10-upcard, recovering 75% of your bet. Normally surrender isn't available at KFC.</p>
         </div>
         <div class="help-card">
           <div class="help-card-title">Safety Net <span style="color:var(--muted);font-weight:400">— Mid+</span></div>
@@ -3438,7 +3438,7 @@ body.mp-bet-locked .all-sb-btn {
           <div class="help-card-title">BJ Novak <span style="color:var(--muted);font-weight:400">— Legendary+</span></div>
           <p>Your Blackjack pays 2:1 instead of 3:2 for the whole shoe. Does not stack with a Steel Card — both give 2:1.</p>
         </div>
-        <div class="help-note">Points can also be spent on tokens: 2× Leverage (⭐35), Insurance token (⭐25), All Side Bets min (⭐40), Extra shoe (⭐50 standard / ⭐30 pass).</div>
+        <div class="help-note">Points can also be spent on tokens: 2× Leverage (⭐35), Insurance token (⭐80), All Side Bets min (⭐30), Extra shoe (⭐50 standard / ⭐30 pass).</div>
       </div>
 
       <!-- PREDICTION MARKETS -->
@@ -3486,7 +3486,7 @@ body.mp-bet-locked .all-sb-btn {
           <div class="help-card-title">What to Spend On</div>
           <div class="help-row"><span class="help-row-label">Power-Ups (Sally, Net, Seeker…)</span><span class="help-row-val">35–60 pts</span></div>
           <div class="help-row"><span class="help-row-label">2× Leverage token</span><span class="help-row-val">45 pts</span></div>
-          <div class="help-row"><span class="help-row-label">Insurance token</span><span class="help-row-val">40 pts</span></div>
+          <div class="help-row"><span class="help-row-label">Insurance token</span><span class="help-row-val">80 pts</span></div>
           <div class="help-row"><span class="help-row-label">All Side Bets min</span><span class="help-row-val">30 pts</span></div>
           <div class="help-row"><span class="help-row-label">Extra shoe (standard)</span><span class="help-row-val">50 pts</span></div>
           <div class="help-row"><span class="help-row-label">Extra shoe (pass)</span><span class="help-row-val">40 pts</span></div>
@@ -3721,7 +3721,7 @@ const PTS_PASS_MULTIPLIER = 1.5; // pass players earn 1.5×
 const PTS_COST = {
   sally:60, net:50, seeker:50, guard:35, novak:35, // power-ups
   lev2x:45,           // 2× leverage token (high-roller+ only)
-  insurance:40,       // insurance token (all stakes)
+  insurance:80,       // insurance token (all stakes)
   allsb:30,           // all side bets min next hand
   extrashoe_std:50,   // +1 shoe for standard players
   extrashoe_pass:40,  // +1 shoe for pass players
@@ -5282,7 +5282,7 @@ function _afterInsurance(){
   // Now peek dealer hole card
   if(isBJ(G.dealer)){
     revealHole(); renderAll();
-    if(G.puOwned.has('guard')){notif('BJ GUARD — 50% BACK', 'win');setTimeout(()=>settle('push_guard'),500);return;}
+    if(G.puOwned.has('guard')){G._guardPct=Math.floor(50+Math.random()*51);notif('BJ GUARD — '+G._guardPct+'% BACK', 'win');setTimeout(()=>settle('push_guard'),500);return;}
     if(isBJ(G.hands[0])){msg('PUSH — BOTH BLACKJACK','push');renderAll();setTimeout(()=>settle('push_player_bj'),500);return;}
     sfx('dealer_bj'); msg('DEALER BLACKJACK','lose');setTimeout(()=>settle('dealer_bj'),500);return;
   }
@@ -6407,7 +6407,7 @@ async function doLogin(){
   MP2._showModeSelect();
 }
 
-const BALANCE_CAP = 50_000_000_000; // 50 Billion KFC hard cap
+const BALANCE_CAP = 20_000_000_000; // 20 Billion KFC hard cap
 
 function checkBalanceCap(){
   if(G.balance>=BALANCE_CAP){
@@ -6554,7 +6554,7 @@ function openApp(displayName, balance){
   // Balance checks
   if(G.balance>=BALANCE_CAP){
     setTimeout(()=>{
-      notif('50B balance cap reached — cash out required');
+      notif('20B balance cap reached — cash out required');
       G.cashedOut=false;
       showCashout();
     },1500);
@@ -7129,7 +7129,7 @@ function confirmTopUp(){
   const remaining = _topUpMax();
   if(remaining<=0){ if(err) err.textContent='No wallet funds left to top up this session'; return; }
   if(amount>remaining){ if(err) err.textContent='Exceeds available wallet funds — max remaining: '+fmtKFC(remaining); return; }
-  if(G.balance+amount>BALANCE_CAP){ if(err) err.textContent='Would exceed 50B cap (have '+fmtKFC(G.balance)+')'; return; }
+  if(G.balance+amount>BALANCE_CAP){ if(err) err.textContent='Would exceed 20B cap (have '+fmtKFC(G.balance)+')'; return; }
   // Apply: update table balance and sessionStart (for sheet buyIn tracking on cashout)
   // Do NOT touch _walletBalAtLogin or _originalSessionStart — they are permanent references
   G.balance += amount;
@@ -7740,7 +7740,7 @@ function deal(){
     const rem=_shoesRemaining();
     if(rem>0) notif('Shoe 1 started — '+rem+' shoe'+(rem===1?'':'s')+' remaining today');
   }
-  if(G.balance>=BALANCE_CAP){notif('50B balance cap reached — cash out first');showCashout();return;}
+  if(G.balance>=BALANCE_CAP){notif('20B balance cap reached — cash out first');showCashout();return;}
   if(G.mainBet<=0){notif('Place a bet first');return;}
   if(G.mainBet<G.s.min){notif('Minimum bet is '+fmtKFC(G.s.min));return;}
   // If hand 2 is active but hand 1 has no bet, prompt to fill hand 1 first
@@ -8211,7 +8211,7 @@ function surrender(){
   // Skip hole card (index 1) and jesters to find the real face-up value card
   const dealerUp=G.dealer.find((c,i)=>i!==1&&!(c.bonus&&c.bonus.jester));
   if(!dealerUp||cv(dealerUp)!==10){notif('Surrender only available against a dealer 10');return;}
-  sfx('button'); notif('Surrender — half bet returned');
+  sfx('button'); notif('Surrender — 75% bet returned');
   setTimeout(()=>settle('surrender'),300);
 }
 function split(){
@@ -8514,9 +8514,9 @@ function settle(reason){
     let w=0;
     let _thisDesert=false; // true if desert fired as protection on this hand
     if(reason==='surrender'){
-      w=-Math.floor(_betForHand/2); detail='Surrender — half bet returned';
+      w=-Math.floor(_betForHand*0.25); detail='Surrender — 75% bet returned';
     }
-    else if(reason==='push_guard')      {w=-Math.floor(_betForHand/2);detail='BJ Guard — 50% back';}
+    else if(reason==='push_guard')      {const _gp=G._guardPct||50;w=-Math.floor(_betForHand*(1-_gp/100));detail='BJ Guard — '+_gp+'% back';}
     else if(reason==='push_player_bj'){w=0;detail='Both BJ — Push';}
     else if(reason==='safety'){
       // Only push the hand that triggered the safety net; other hands settle on their own merit
@@ -9327,7 +9327,7 @@ function closeResult(){
   // Balance checks after hand
   if(G.balance>=BALANCE_CAP){
     setTimeout(()=>{
-      notif('50B balance cap reached — cash out required');
+      notif('20B balance cap reached — cash out required');
       G.cashedOut=false;
       showCashout();
     },600);

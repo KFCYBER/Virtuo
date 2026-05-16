@@ -5192,9 +5192,6 @@ function evaluateEarlySideBets(){
     // Clear so settle() skips it
     G.sideBets[name]=0;
   });
-  // Adjust preDealBal by the net early SB result
-  // (losses reduce preDealBal so balance formula stays correct)
-  G.preDealBal+=earlyNetPL;
   G._earlySBPL=(G._earlySBPL||0)+earlyNetPL;
   // Evaluate early side bets for hand 2 if active
   if(G._hand2Active&&G.hands.length>1&&G.sideBets2&&G.hands[1]&&G.hands[1].length>=2){
@@ -5216,7 +5213,6 @@ function evaluateEarlySideBets(){
       if(res.pl>0) h2w.push({name,label:res.label,pl:res.pl});
       G.sideBets2[name]=0;
     });
-    G.preDealBal+=h2EarlyPL;
     G._earlySBPL=(G._earlySBPL||0)+h2EarlyPL;
     h2w.forEach((w,i)=>setTimeout(()=>showSideBetWin('[H2] '+w.label,w.pl),i*600+300));
     // Log hand 2 early SB results so they appear in the session log breakdown
@@ -5249,6 +5245,7 @@ function evaluateEarlySideBets(){
   if(wins.length===0&&earlyBets.some(n=>(G.lastSideBets&&G.lastSideBets[n]>0))){
     setTimeout(()=>notif('Side bets — no win this hand'),400);
   }
+  G._earlySBWinCount=wins.length;
   updateBetPanel();
 }
 
@@ -5694,6 +5691,7 @@ async function _expireStaleSession(snap){
   }
   if(!url||!snap.cachedPin) return; // no sheet configured, nothing to do
   try{
+    const _expTxId = snap.txId || ('ae_'+(snap.ts||Date.now())+'_'+(snap.username||'').slice(0,6));
     const params=new URLSearchParams({
       action:    'updatebalance',
       username:  snap.username,
@@ -5703,7 +5701,8 @@ async function _expireStaleSession(snap){
       buyIn:     String(_snapWalletBuyIn(snap)),
       date:      new Date().toISOString(),
       stake:     'AUTO-EXPIRE', // distinguishable from normal cashouts in the log
-      pin:       snap.cachedPin||''
+      pin:       snap.cachedPin||'',
+      txId:      _expTxId
     });
     const _r2 = await fetch(url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
     const _d2 = await _r2.json().catch(()=>({}));
@@ -6073,7 +6072,8 @@ function _logSessionToSheet(stakeLabel){
     buyIn:     String(_walletBuyIn()),
     date:      new Date().toISOString(),
     stake:     stakeLabel || 'RELOAD-EXIT',
-    pin:       G._cachedPin
+    pin:       G._cachedPin,
+    txId:      're_'+Date.now()+'_'+(G.username||'').slice(0,6)
   });
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
@@ -7806,7 +7806,7 @@ function deal(){
   }
   G.arrowCounts=[0,0]; G.kruegerOn=[false,false]; G.desertOn=[false,false]; G.steelOn=[false,false]; G.goldOn=false;
   G.stampedOn=false; G._pendingBJ=false; G._pendingStand=false; G.stampedInitialBet=0; G.stampedCardsViewed=0; G.stampedOn2=false; G.stampedInitialBet2=0; G.stampedCardsViewed2=0; G.plagueOn=false;
-  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G.insuranceBet=0; G._freeDoubleBet=0;
+  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G.insuranceBet=0; G._freeDoubleBet=0; G._surrenderedHand=undefined;
   G._sessionActive=true; // mark session as active after first deal
   G.phase='play'; document.body.classList.remove('betting');
   _h2ChipTarget=false; setH2ChipTarget(false);
@@ -7917,9 +7917,10 @@ function deal(){
       }
       return;
     }
-    // Offer insurance — dealer BJ check happens after player decides
+    // Offer insurance — delay extra if early SB wins need to display first
     setActions(false);
-    setTimeout(()=>offerInsurance(),500);
+    const _insDelay=(G._earlySBWinCount||0)>0?2500:500;
+    setTimeout(()=>offerInsurance(),_insDelay);
     return;
   }
 
@@ -8215,8 +8216,15 @@ function surrender(){
   // Skip hole card (index 1) and jesters to find the real face-up value card
   const dealerUp=G.dealer.find((c,i)=>i!==1&&!(c.bonus&&c.bonus.jester));
   if(!dealerUp||cv(dealerUp)!==10){notif('Surrender only available against a dealer 10');return;}
-  sfx('button'); notif('Surrender — 75% bet returned');
-  setTimeout(()=>settle('surrender'),300);
+  G._surrenderedHand = G.cur; // track which specific hand surrendered
+  const _h2Pending = G._hand2Active && G.hands.length > 1 && G.cur < G.hands.length - 1;
+  sfx('button'); notif('Surrender — 75% bet returned' + (_h2Pending ? ' (Hand 1)' : ''));
+  if(_h2Pending){
+    // Advance to Hand 2 so it plays normally; settle() will apply surrender only to Hand 1
+    setTimeout(()=>advOrEnd('surrender_adv'), 300);
+  } else {
+    setTimeout(()=>settle('surrender'), 300);
+  }
 }
 function split(){
   if(G.phase!=='play')return;
@@ -8283,6 +8291,25 @@ function advOrEnd(reason){
   hideStampedBoost();
   // Clear stamped flag for current hand only — next hand may still need its flag
   if(G.cur===1){ G.stampedOn2=false; } else { G.stampedOn=false; }
+  if(reason==='surrender_adv'){
+    // Hand 1 surrendered — advance to Hand 2 so it can play normally.
+    renderScores();
+    G.cur++; renderAll();
+    if(isBJ(G.hands[G.cur])){
+      const _isH2Seat=G._hand2Active&&G.cur===1&&G.splits===0;
+      sfx('bj'); showBJ();
+      if(_isH2Seat){
+        msg('HAND 2: BLACKJACK!','bj'); setActions(false); revealHole(); renderAll();
+        setTimeout(()=>settle('player_bj'), 600);
+      } else {
+        notif('BLACKJACK on split hand!'); setActions(false);
+        setTimeout(()=>advOrEnd(), 800);
+      }
+    } else {
+      setActions(true); msg('HAND 2');
+    }
+    return;
+  }
   if(reason==='safety'){
     // Safety net: push only the hand that triggered it (G.safetyTriggerHand).
     // Always run dealer play so any other hands can settle on their own merit.
@@ -8517,7 +8544,7 @@ function settle(reason){
     const lm=getLevMult(hi);
     let w=0;
     let _thisDesert=false; // true if desert fired as protection on this hand
-    if(reason==='surrender'){
+    if(G._surrenderedHand === hi){
       w=-Math.floor(_betForHand*0.25); detail='Surrender — 75% bet returned';
     }
     else if(reason==='push_guard')      {const _gp=G._guardPct||50;w=-Math.floor(_betForHand*(1-_gp/100));detail='BJ Guard — '+_gp+'% back';}
@@ -8648,10 +8675,10 @@ function settle(reason){
 
   const totalPL=mainPL+sidePL;
   const earlySBPL = G._earlySBPL||0;
-  // Balance formula: preDealBal (before all deductions) + all P&L (wins positive, losses negative)
-  // earlySBPL already includes early SB profits credited to preDealBal
-  // sidePL includes Dealer Bust win/loss (loss = -amount since stake is in preDealBal)
-  // earlySBPL also includes early SB losses as negative (from evaluateEarlySideBets)
+  // Balance formula: preDealBal (balance before all bet deductions) + all P&L components
+  // earlySBPL: net of early SB wins (+profit) and losses (-stake); stake return is implicit via preDealBal
+  // sidePL: Dealer Bust P&L only (early SBs already settled)
+  // totalPL: mainPL + sidePL
   G.balance = G.preDealBal + earlySBPL + totalPL;
   if(G.balance<0) G.balance=0;
   // Display P&L = everything that moved money vs pre-deal state
@@ -8826,7 +8853,8 @@ function eval21Plus3(hand,dealerUpCard){
   const rNumsHigh=three.map(c=>{const r=cardRank(c);return r==='A'?14:(rankOrder[r]||10);}).sort((a,b)=>a-b);
   const isSeqHigh=(rNumsHigh[2]-rNumsHigh[1]===1&&rNumsHigh[1]-rNumsHigh[0]===1);
   const isStraight=isSeq||isSeqHigh;
-  const lowVal=Math.min(rNums[0],rNumsHigh[0]);
+  // For ace-high straights (e.g. Q-K-A), use the high-ranked sequence's low card for tier check
+  const lowVal=isSeq?rNums[0]:rNumsHigh[0];
   const ranks3=three.map(c=>cardRank(c));
   const isThreeKind=ranks3[0]&&ranks3[0]===ranks3[1]&&ranks3[1]===ranks3[2];
   if(sameSuit&&isThreeKind) return {name:'Suited 3 of a Kind',mult:100};
@@ -9242,7 +9270,7 @@ function closeResult(){
   G.hands=[[]]; G.cur=0; G.splits=0; G.splitBets=[]; G.dealer=[];
   G.arrowCounts=[0,0]; G.kruegerOn=[false,false]; G.desertOn=[false,false]; G.steelOn=[false,false]; G.goldOn=false;
   G.stampedOn=false; G._pendingBJ=false; G._pendingStand=false; G.stampedInitialBet=0; G.stampedCardsViewed=0; G.stampedOn2=false; G.stampedInitialBet2=0; G.stampedCardsViewed2=0; G.plagueOn=false;
-  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeDoubleHand=-1; G._freeSBNames=[]; G._freeSBNames2=[];
+  G.safetyTrigger=false; G.safetyTriggerHand=-1; G.dealerJester=false; G._freeDoubleBet=0; G._freeDoubleHand=-1; G._freeSBNames=[]; G._freeSBNames2=[]; G._surrenderedHand=undefined;
   G._handStartBal=0;
   G.mainBet=0;
   SB_NAMES.forEach(n=>G.sideBets[n]=0);
@@ -9495,7 +9523,8 @@ function selectStake(key){
       date:new Date().toISOString(),
       stake:G.s?G.s.label:G.stake,
       stakeKey:G.stake,
-      pin:G._cachedPin||''
+      pin:G._cachedPin||'',
+      txId:'sk_'+Date.now()+'_'+(G.username||'').slice(0,6)
     };
     attemptSync(_stakePayload).catch(()=>{ storeSyncQueue(_stakePayload); });
     // After this TX, gift chips are absorbed — reset originalSessionStart to current balance
@@ -9706,7 +9735,8 @@ async function confirmCashout(){
     sessionPL: sessionPL,
     buyIn:     walletBuyIn,
     date: new Date().toISOString(),
-    stake: G.s.label, stakeKey: G.stake, pin: G._cachedPin||''
+    stake: G.s.label, stakeKey: G.stake, pin: G._cachedPin||'',
+    txId: 'co_'+Date.now()+'_'+(G.username||'').slice(0,6)
   };
   console.log('[KFC] Sync payload username:', payload.username, '| player:', payload.player);
   // Pre-queue before any network attempt — if the page crashes before doSync completes,

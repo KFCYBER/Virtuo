@@ -2549,8 +2549,15 @@ body.mp-bet-locked .all-sb-btn {
       <button class="btn-primary" onclick="confirmBuyIn()">Enter Table</button>
       <div class="err" id="buyin-err" style="margin-top:8px"></div>
     </div>
-    <div class="step-dots" id="login-step-dots"><div class="step-dot active" id="sdot-1"></div><div class="step-dot" id="sdot-2"></div><div class="step-dot" id="sdot-3"></div></div>
   </div>
+</div>
+
+<!-- Fixed login-flow step indicator — persists across login, mode-select, and buy-in screens -->
+<div id="login-flow-dots" style="position:fixed;bottom:28px;left:0;right:0;display:flex;justify-content:center;gap:8px;z-index:1250;pointer-events:none">
+  <div class="step-dot active" id="fdot-1"></div>
+  <div class="step-dot" id="fdot-2"></div>
+  <div class="step-dot" id="fdot-3"></div>
+  <div class="step-dot" id="fdot-4"></div>
 </div>
 
 <!-- ══════════════ APP ══════════════ -->
@@ -4751,6 +4758,15 @@ let _pendingLogin = null;
 // ── LOGIN FLOW NAVIGATION ────────────────────────────────────
 let _selectedStakeKey = null;
 
+// Flow-dot helpers: fdot-1=credentials, fdot-2=mode select, fdot-3=stake, fdot-4=buy-in
+function _setLoginDot(n){
+  [1,2,3,4].forEach(i=>{ const d=document.getElementById('fdot-'+i); if(d) d.classList.toggle('active',i===n); });
+}
+function _showLoginFlowDots(show){
+  const el=document.getElementById('login-flow-dots');
+  if(el) el.style.display=show?'flex':'none';
+}
+
 // Back button on stake-selection (step2) — goes to mode select when coming from SP flow,
 // otherwise goes back to credentials (step1)
 let _loginFromModeSelect = false;
@@ -4796,11 +4812,8 @@ function goLoginStep(step, back){
     void target.offsetWidth;
     target.classList.add(inCls);
     if(step===1) setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },50);
-    // Sync step dots (3 dots: credentials / stake / buy-in)
-    const d1=document.getElementById('sdot-1'), d2=document.getElementById('sdot-2'), d3=document.getElementById('sdot-3');
-    if(d1){ d1.classList.toggle('active', step===1); }
-    if(d2){ d2.classList.toggle('active', step===2); }
-    if(d3){ d3.classList.toggle('active', step===3); }
+    // Sync flow dots: step1=dot1(credentials), step2=dot3(stake), step3=dot4(buy-in); dot2=mode select (set by _showModeSelect)
+    _setLoginDot(step===1?1:step===2?3:4);
   }, delay);
 }
 
@@ -6458,6 +6471,7 @@ function openApp(displayName, balance){
     document.getElementById('login').style.display='none';
     document.getElementById('app').style.display='flex';
     document.getElementById('app').style.flexDirection='column';
+    _showLoginFlowDots(false);
     setTimeout(updateAnnounceCx, 80); // measure table-area after it's visible
   },400);
 
@@ -6628,6 +6642,7 @@ function doLogout(skipToStake){
   const _msEl=document.getElementById('mp-mode-select'); if(_msEl){ _msEl.style.display='none'; _msEl.classList.remove('ms-enter','ms-exit'); }
   document.getElementById('app').style.display='none';
   document.getElementById('login').style.display='flex';
+  _showLoginFlowDots(true); _setLoginDot(1);
 
   if(skipToStake&&wasPlayer&&wasUsername){
     // Liquidated — re-fetch balance from sheet then go to stake→buy-in flow
@@ -14149,6 +14164,7 @@ const MP2 = {
     el.style.display = 'flex';
     void el.offsetWidth;
     el.classList.add('ms-enter');
+    _setLoginDot(2); // mode select = step 2 in the 4-dot flow
   },
   _hideModeSelect(cb) {
     const el = document.getElementById('mp-mode-select');
@@ -14194,6 +14210,7 @@ const MP2 = {
     this._hideModeSelect(() => {
       const lg = document.getElementById('login');
       if (lg) lg.style.display = 'flex';
+      if (typeof goLoginStep === 'function') goLoginStep(1, true);
     });
   },
   _populateStakes(selId, cat) {

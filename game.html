@@ -6508,6 +6508,7 @@ function openApp(displayName, balance){
   _updatePointsBadge(undefined, false); // show current points in topbar
   _initLeaderboard(); // fetch league table from sheet
   _startSessionTimer();
+  _startGiftPoll();
   if(typeof PM !== 'undefined') setTimeout(()=>{
     PM.init();
     if(_autoOpenPM){ _autoOpenPM=false; setTimeout(()=>{ PM.openModal(); if(_autoMktId){ const _mid=_autoMktId; _autoMktId=null; setTimeout(()=>PM._jumpToMarket(_mid),550); } }, 400); }
@@ -6618,6 +6619,7 @@ function openApp(displayName, balance){
 function doLogout(skipToStake){
   resetSessionChart();
   _stopSessionTimer();
+  _stopGiftPoll();
   _clearIdleFloat();
   if(_idleTimer){ clearTimeout(_idleTimer); _idleTimer=null; }
   _clearSessionIdleTimer();
@@ -9647,7 +9649,8 @@ async function attemptSync(payload){
     date:     payload.date,
     stake:    payload.stake,
     stakeKey: payload.stakeKey||'',
-    pin:      payload.pin||''
+    pin:      payload.pin||'',
+    txId:     String(payload.txId||'')
   });
   let r;
   try{
@@ -10570,6 +10573,33 @@ function _playBustAnimation(handIdx){
 // ── SESSION TIMER ─────────────────────────────────────────────────────────────
 let _sessionTimerInterval = null;
 let _sessionOpenTs = 0; // wall-clock time when this session was opened
+
+// ── IN-SESSION GIFT POLLING ───────────────────────────────────────────────────
+// Checks GAS every 45s for pending deliveries/gifts while player is in active session
+let _giftPollInterval = null;
+function _startGiftPoll(){
+  if(_giftPollInterval) clearInterval(_giftPollInterval);
+  _giftPollInterval = setInterval(async()=>{
+    if(!G.url || !G.username || G.phase==='done') return;
+    try{
+      const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(G.username)+'&pin='+encodeURIComponent(G._cachedPin||''));
+      const credit = parseInt(d.kfcCredit)||0;
+      const deliveries = d.deliveries||[];
+      if(credit > 0 || deliveries.length > 0){
+        clearInterval(_giftPollInterval); _giftPollInterval=null;
+        // GAS already marked orders 'delivered' during the getBalance call above
+        G.balance += credit;
+        G.sessionStart = (G.sessionStart||0) + credit;
+        G.preDealBal  = (G.preDealBal||G.balance);
+        updateUI();
+        _showDeliveryModal(deliveries, credit);
+      }
+    }catch(e){ /* silent — poll will retry next interval */ }
+  }, 45000);
+}
+function _stopGiftPoll(){
+  if(_giftPollInterval){ clearInterval(_giftPollInterval); _giftPollInterval=null; }
+}
 
 function _startSessionTimer(){
   _sessionOpenTs = Date.now();

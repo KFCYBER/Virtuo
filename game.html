@@ -3335,7 +3335,7 @@ body.mp-bet-locked .all-sb-btn {
           <div class="help-row"><span class="help-row-label">Legendary</span><span class="help-row-val">min 50K · max 10M</span></div>
           <div class="help-row"><span class="help-row-label">Mythic</span><span class="help-row-val">min 500K · max 100M</span></div>
           <div class="help-row"><span class="help-row-label">High-Roller</span><span class="help-row-val">min 5M · max 1B</span></div>
-          <div class="help-row"><span class="help-row-label">Champion</span><span class="help-row-val">min 50M · max 10B</span></div>
+          <div class="help-row"><span class="help-row-label">Champion</span><span class="help-row-val">min 50M · max 50B</span></div>
         </div>
         <div class="help-note">You can only move up one stake level at a time. Dropping requires you to have fallen below your peak balance at that level.</div>
       </div>
@@ -4973,7 +4973,7 @@ function confirmBuyIn(){
   // Cap check uses TOTAL balance from sheet, not just buy-in amount
   const totalBal = _pendingLogin.totalBalance||_pendingLogin.balance;
   if(totalBal>=BALANCE_CAP){
-    if(errEl)errEl.textContent='10B cap reached — cash out required';return;
+    if(errEl)errEl.textContent='50B cap reached — cash out required';return;
   }
   _pendingLogin.totalBalance=_pendingLogin.balance; // preserve full sheet balance
   _pendingLogin.balance=raw;
@@ -6233,6 +6233,16 @@ window.onload=()=>{
     const _autoSnap=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
     const _coSnap=localStorage.getItem('kfc_cashout_snap');
     if(_autoSnap && _autoSnap.player && _autoSnap.cachedPin != null && !_autoSnap.cashedOut){
+      // If the hub is logged in as a different user, discard this snap so the hub bypass
+      // takes over for the correct account instead of restoring the wrong player.
+      const _hubSnap = JSON.parse(localStorage.getItem('kfc_hub_session')||'null');
+      const _hubUser  = _hubSnap ? (_hubSnap.username||'').toLowerCase() : null;
+      const _snapUser = (_autoSnap.username||_autoSnap.player||'').toLowerCase();
+      if(_hubUser && _snapUser && _hubUser !== _snapUser){
+        localStorage.removeItem(SESSION_KEY);
+        localStorage.removeItem('kfc_cashout_snap');
+        if(_autoSnap.sessionActive===true) _expireStaleSession(_autoSnap);
+      } else {
       const _age=Date.now()-(_autoSnap.ts||0);
       const _fresh=_age < 10*60*1000;
       const _hasActivity=_autoSnap.sessionActive||(_autoSnap.balance||0)>0||_autoSnap.handCommitted===true;
@@ -6272,6 +6282,7 @@ window.onload=()=>{
         localStorage.removeItem('kfc_cashout_snap');
         if(_autoSnap.sessionActive===true) _expireStaleSession(_autoSnap);
       }
+      } // end else (hub user matches snap user)
     } else if(_coSnap && !_autoSnap){
       localStorage.removeItem('kfc_cashout_snap');
     }
@@ -6508,7 +6519,7 @@ async function doLogin(){
   MP2._showModeSelect();
 }
 
-const BALANCE_CAP = 10_000_000_000; // 10 Billion KFC hard cap
+const BALANCE_CAP = 50_000_000_000; // 50 Billion KFC hard cap
 
 function checkBalanceCap(){
   if(G.balance>=BALANCE_CAP){
@@ -6518,7 +6529,7 @@ function checkBalanceCap(){
       showCashout();
       // Show a prominent modal message
       const co=document.getElementById('co-sync');
-      if(co) co.textContent='Balance cap of 10B KFC reached. You must cash out to continue.';
+      if(co) co.textContent='Balance cap of 50B KFC reached. You must cash out to continue.';
     },800);
     return true;
   }
@@ -6657,7 +6668,7 @@ function openApp(displayName, balance){
   // Balance checks
   if(G.balance>=BALANCE_CAP){
     setTimeout(()=>{
-      notif('10B balance cap reached — cash out required');
+      notif('50B balance cap reached — cash out required');
       G.cashedOut=false;
       showCashout();
     },1500);
@@ -7236,7 +7247,7 @@ function confirmTopUp(){
   const remaining = _topUpMax();
   if(remaining<=0){ if(err) err.textContent='No wallet funds left to top up this session'; return; }
   if(amount>remaining){ if(err) err.textContent='Exceeds available wallet funds — max remaining: '+fmtKFC(remaining); return; }
-  if(G.balance+amount>BALANCE_CAP){ if(err) err.textContent='Would exceed 10B cap (have '+fmtKFC(G.balance)+')'; return; }
+  if(G.balance+amount>BALANCE_CAP){ if(err) err.textContent='Would exceed 50B cap (have '+fmtKFC(G.balance)+')'; return; }
   // Apply: update table balance and sessionStart (for sheet buyIn tracking on cashout)
   // Do NOT touch _walletBalAtLogin or _originalSessionStart — they are permanent references
   G.balance += amount;
@@ -7847,7 +7858,7 @@ function deal(){
     const rem=_shoesRemaining();
     if(rem>0) notif('Shoe 1 started — '+rem+' shoe'+(rem===1?'':'s')+' remaining today');
   }
-  if(G.balance>=BALANCE_CAP){notif('10B balance cap reached — cash out first');showCashout();return;}
+  if(G.balance>=BALANCE_CAP){notif('50B balance cap reached — cash out first');showCashout();return;}
   if(G.mainBet<=0){notif('Place a bet first');return;}
   if(G.mainBet<G.s.min){notif('Minimum bet is '+fmtKFC(G.s.min));return;}
   // If hand 2 is active but hand 1 has no bet, prompt to fill hand 1 first
@@ -9462,7 +9473,7 @@ function closeResult(){
   // Balance checks after hand
   if(G.balance>=BALANCE_CAP){
     setTimeout(()=>{
-      notif('10B balance cap reached — cash out required');
+      notif('50B balance cap reached — cash out required');
       G.cashedOut=false;
       showCashout();
     },600);

@@ -6243,6 +6243,21 @@ window.onload=()=>{
         openApp(G.player, G.balance);
         // Background autosave to confirm GAS has current state
         setTimeout(()=>{ if(G.url && G._sessionActive) _autoSaveToSheet(); }, 1800);
+        // Refresh true wallet total from GAS — snap may have a stale totalBalance if GAS
+        // previously returned a wrong balance (e.g. stale checkpoint). Only update upward:
+        // never reduce G._totalBalance mid-session (player may have won chips already).
+        setTimeout(async()=>{
+          if(!G.url||!G.username||!G._cachedPin) return;
+          try{
+            const _rd=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(G.username)+'&pin='+encodeURIComponent(G._cachedPin));
+            const _gasTotal=(_rd.totalBalance||_rd.balance||0);
+            if(_rd.auth && _gasTotal > (G._totalBalance||0)){
+              G._totalBalance    = _gasTotal;
+              G._walletBalAtLogin= Math.max(G._walletBalAtLogin||0, _gasTotal);
+              updateUI();
+            }
+          }catch(e){}
+        }, 2200);
         // Process any pending sync queue from previous session
         if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{ try{ await attemptSync(_q); clearSyncQueue(); }catch(e){} },2500); } }
       } else {

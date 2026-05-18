@@ -6232,7 +6232,7 @@ window.onload=()=>{
   try{
     const _autoSnap=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
     const _coSnap=localStorage.getItem('kfc_cashout_snap');
-    if(_autoSnap && _autoSnap.player && _autoSnap.cachedPin && !_autoSnap.cashedOut){
+    if(_autoSnap && _autoSnap.player && _autoSnap.cachedPin != null && !_autoSnap.cashedOut){
       const _age=Date.now()-(_autoSnap.ts||0);
       const _fresh=_age < 10*60*1000;
       const _hasActivity=_autoSnap.sessionActive||(_autoSnap.balance||0)>0||_autoSnap.handCommitted===true;

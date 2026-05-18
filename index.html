@@ -2030,7 +2030,7 @@ function _hubLogout() {
 function _initHubAuth() {
   try {
     const snap = JSON.parse(localStorage.getItem('kfc_hub_session') || 'null');
-    if (snap && snap.username && snap.pin && Date.now() - (snap.ts || 0) < 8 * 60 * 60 * 1000) {
+    if (snap && snap.username && snap.pin != null && Date.now() - (snap.ts || 0) < 8 * 60 * 60 * 1000) {
       _hubSession = snap;
     }
   } catch(e) {}

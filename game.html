@@ -13406,27 +13406,6 @@ const PM = (() => {
         });
         _saveMarkets(); render();
 
-        // Admin wipe: GAS returned explicit empty bets array — sheet was cleared.
-        // Void all local open bets and refund their stakes so nothing is stuck.
-        if(Array.isArray(d.bets) && d.bets.length === 0){
-          const _wipedLocal = _loadBets();
-          let _wipeRefund = 0;
-          const _wipedCleaned = _wipedLocal.map(b => {
-            if(b.payout !== null) return b; // already settled, keep as-is
-            _wipeRefund += b.amount || 0;
-            return {...b, payout: 0, refunded: true};
-          });
-          _saveBets(_wipedCleaned);
-          // Also wipe season history and prev-balance snapshots so P&L display starts clean
-          localStorage.removeItem(LS_SEASON_HIST);
-          localStorage.removeItem(LS_PREV_BAL);
-          localStorage.removeItem(LS_SEASON_DATES);
-          _seasonHist  = {};
-          _prevBalances = {};
-          _seasonDates = {};
-          if(_wipeRefund > 0){ G.balance += _wipeRefund; updateUI(); _syncBalanceAfterPM(); }
-        }
-
         // Merge server-side bets into localStorage so portfolio is cross-device.
         // GAS now returns payout=0 for bets on deleted markets (orphaned bets).
         // When we see payout=0 from GAS for a locally-unsettled bet on a market that
@@ -13437,6 +13416,7 @@ const PM = (() => {
           const localSoft  = new Set(local.map(b => b.mktId+'|'+b.outcome));
           let changed = false;
           let _refundTotal = 0;
+          let _reDeductTotal = 0;
           const _openMktIds = new Set(_markets.filter(m => m.status === 'open').map(m => m.id));
           d.bets.forEach(sb => {
             if(!sb.mktId) return;
@@ -13444,9 +13424,14 @@ const PM = (() => {
             const soft  = sb.mktId+'|'+sb.outcome;
             if(localExact.has(exact)){
               const lb = local.find(b => b.mktId===sb.mktId && b.outcome===sb.outcome && b.ts===sb.ts);
-              // Repair: bet was locally closed by the old safety net (payout=0, refunded=true,
-              // no cashout) but GAS still has it open (sb.payout===null). Re-open it.
+              // Repair: bet was locally closed by the old safety net or the removed admin-wipe
+              // (payout=0, refunded=true, no cashout) but GAS still has it open. Re-open it
+              // and re-deduct the stake that was credited back during the false refund.
               if(lb && lb.payout===0 && lb.refunded && !lb.cashoutEarly && sb.payout===null && _openMktIds.has(sb.mktId)){
+                const _reDeduct = lb.amount || 0;
+                G.balance = Math.max(0, (G.balance||0) - _reDeduct);
+                G._totalBalance = Math.max(0, (G._totalBalance||0) - _reDeduct);
+                _reDeductTotal += _reDeduct;
                 lb.payout=null; lb.refunded=false; lb.claimed=false; changed=true;
               } else if(lb && lb.payout===null && sb.payout!==null){
                 lb.payout = sb.payout; changed = true;
@@ -13475,6 +13460,7 @@ const PM = (() => {
           });
           if(changed) _saveBets(local);
           if(_refundTotal > 0){ G.balance += _refundTotal; updateUI(); _syncBalanceAfterPM(); }
+          if(_reDeductTotal > 0){ updateUI(); _syncBalanceAfterPM(); }
         }
         // Safety net removed: it was too aggressive — it voided open bets whenever a market
         // was absent from a single poll response (network hiccup, Cloudflare cache, etc.).

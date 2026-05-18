@@ -5847,7 +5847,8 @@ async function _autoSaveToSheet(){
     stake:G.s?G.s.label:'auto',
     pin:G._cachedPin||'',
     inventory:_inventoryJson(),
-    autosave:'true'
+    autosave:'true',
+    deviceId:_getDeviceId(),
   });
   try{
     await fetch(G.url+'?'+params.toString(),{method:'GET',redirect:'follow',cache:'no-store'});
@@ -6330,6 +6331,39 @@ window.onload=()=>{
   })();
 };
 
+// ── Per-device identity ───────────────────────────────────────────
+function _getDeviceId(){
+  let id = localStorage.getItem('kfc_device_id');
+  if(!id){ id = 'dev_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2,8); localStorage.setItem('kfc_device_id', id); }
+  return id;
+}
+
+// ── Session conflict modal ────────────────────────────────────────
+// Shown when GAS detects an active session on a different device.
+// proceedCb() is called if the player chooses to join anyway.
+function _showSessionConflictModal(minutesAgo, proceedCb){
+  const existing = document.getElementById('session-conflict-modal');
+  if(existing) existing.remove();
+  const el = document.createElement('div');
+  el.id = 'session-conflict-modal';
+  el.style.cssText = 'position:fixed;inset:0;z-index:2100;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,0.82)';
+  const when = minutesAgo <= 0 ? 'just now' : minutesAgo + ' min ago';
+  el.innerHTML = `
+    <div style="background:var(--bg1);border:1px solid rgba(255,180,0,0.35);border-radius:4px;padding:28px 28px 22px;max-width:360px;width:90vw;box-shadow:0 8px 40px rgba(0,0,0,0.7)">
+      <div style="font-size:10px;letter-spacing:4px;color:var(--gold);font-weight:700;text-transform:uppercase;margin-bottom:8px">⚠ Active Session Detected</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--fg);line-height:1.65;margin-bottom:18px">
+        Your account was active on another device <strong>${when}</strong>.<br><br>
+        Playing on two devices simultaneously can cause <span style="color:var(--gold)">balance discrepancies</span>. Make sure the other session has been cashed out before continuing.
+      </div>
+      <div style="display:flex;gap:10px">
+        <button onclick="document.getElementById('session-conflict-modal').remove()" style="flex:1;background:transparent;border:1px solid var(--line2);color:var(--muted);font-family:var(--sans);font-size:10px;font-weight:700;letter-spacing:3px;text-transform:uppercase;padding:10px;border-radius:2px;cursor:pointer">Cancel</button>
+        <button id="scm-join-btn" style="flex:2;background:var(--gold);color:#0d0d0d;font-family:var(--sans);font-size:10px;font-weight:800;letter-spacing:3px;text-transform:uppercase;border:none;padding:10px;border-radius:2px;cursor:pointer">Join Anyway</button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+  document.getElementById('scm-join-btn').onclick = ()=>{ el.remove(); proceedCb(); };
+}
+
 function buildPinRows(){
   const c=document.getElementById('pin-rows');
   if(!c) return;
@@ -6338,8 +6372,7 @@ function buildPinRows(){
 
 // Hub auto-login: player already authenticated on the hub — skip the login form entirely
 // and go straight to mode select. Falls back to the login panel on auth failure.
-async function _hubDirectLogin(username, pin, displayName){
-  console.log('[_hubDirectLogin] called for',username,'G.url=',G.url);
+async function _hubDirectLogin(username, pin, displayName, _kick){
   const loginEl = document.getElementById('login');
   if(loginEl) loginEl.style.display = 'none';
   const _ov = document.createElement('div');
@@ -6347,11 +6380,17 @@ async function _hubDirectLogin(username, pin, displayName){
   _ov.innerHTML = '<div style="font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase">Signing in as '+(displayName||username)+'…</div>';
   document.body.appendChild(_ov);
   try{
-    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
-    console.log('[_hubDirectLogin] GAS response auth=',d.auth,'error=',d.error||'none');
+    const _did = _getDeviceId();
+    const _kickParam = _kick ? '&kick=1' : '';
+    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin)+'&deviceId='+encodeURIComponent(_did)+_kickParam);
     if(!d.auth){
       _ov.remove();
       if(loginEl) loginEl.style.display = 'flex';
+      return;
+    }
+    if(d.activeSession && !_kick){
+      _ov.remove();
+      _showSessionConflictModal(d.activeSession.minutesAgo||0, ()=>_hubDirectLogin(username, pin, displayName, true));
       return;
     }
     G.username   = username;
@@ -6394,12 +6433,19 @@ async function _hubDirectLogin(username, pin, displayName){
 
 // PM-direct login: used when arriving from hub with ?panel=pm.
 // Authenticates with GAS and enters the game directly — no mode-select, no stake screen.
-async function _hubPMDirectLogin(username, pin){
+async function _hubPMDirectLogin(username, pin, _kick){
   const loginEl = document.getElementById('login');
   if(loginEl) loginEl.style.display = 'none';
   try{
-    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
+    const _did = _getDeviceId();
+    const _kickParam = _kick ? '&kick=1' : '';
+    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin)+'&deviceId='+encodeURIComponent(_did)+_kickParam);
     if(!d.auth){ if(loginEl) loginEl.style.display='flex'; return; }
+    if(d.activeSession && !_kick){
+      if(loginEl) loginEl.style.display='flex';
+      _showSessionConflictModal(d.activeSession.minutesAgo||0, ()=>_hubPMDirectLogin(username, pin, true));
+      return;
+    }
     G.username  = username;
     G._cachedPin = pin;
     G._clubPass  = !!d.clubPass;
@@ -6436,6 +6482,35 @@ async function _hubPMDirectLogin(username, pin){
   }
 }
 
+// Shared success handler for doLogin — extracted so the session-conflict
+// "join anyway" retry path can reuse it without duplicating the logic.
+function _applyDoLoginSuccess(d, username, pin){
+  G.username=username; G._cachedPin=pin;
+  G._clubPass=!!d.clubPass; G.playerId=d.playerId||'';
+  const _pq=getSyncQueue();
+  if(_pq&&(_pq.username||'').toLowerCase()===username.toLowerCase()&&(_pq.balance||0)>(d.balance||0)) d.balance=_pq.balance;
+  try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
+  if(d.balance===0){
+    try{
+      const _lb=JSON.parse(localStorage.getItem('kfc_pm_bets_'+username.toLowerCase())||'[]');
+      const _pm=_lb.filter(b=>b.payout==null).reduce((s,b)=>s+(b.amount||0),0);
+      if(_pm>0) d.balance=_pm;
+    }catch(e){}
+  }
+  _pendingLogin={name:d.playerName||username,balance:d.balance,totalBalance:d.totalBalance||d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
+  try{
+    const _os=localStorage.getItem(SESSION_KEY);
+    if(_os){
+      const _op=JSON.parse(_os);
+      const _ou=(_op.username||_op.player||'').toLowerCase();
+      if(_ou&&_ou!==username.toLowerCase()){ localStorage.removeItem(SESSION_KEY); localStorage.removeItem('kfc_cashout_snap'); }
+    }
+  }catch(e){}
+  localStorage.setItem('kfc_last_user', username.toLowerCase());
+  document.getElementById('login-step1').style.display='none';
+  MP2._showModeSelect();
+}
+
 // ── LOGIN ──────────────────────────────────────────────
 async function doLogin(){
   const username=document.getElementById('lusername').value.trim();
@@ -6448,54 +6523,24 @@ async function doLogin(){
   if(G.url){
     err.textContent='Connecting...';
     try{
-      const d=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
+      const _did=_getDeviceId();
+      const d=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin)+'&deviceId='+encodeURIComponent(_did));
       if(d.error&&d.auth===false){
         err.textContent=d.error||'Authentication failed';
         const pinIn=document.getElementById('lpin');
         if(pinIn){pinIn.classList.remove('shake-input');void pinIn.offsetWidth;pinIn.classList.add('shake-input');setTimeout(()=>pinIn.classList.remove('shake-input'),500);}
         return;
       }
+      if(d.auth && d.activeSession){
+        _showSessionConflictModal(d.activeSession.minutesAgo||0, async()=>{
+          const _d2=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin)+'&deviceId='+encodeURIComponent(_did)+'&kick=1');
+          if(_d2.auth && !_d2.activeSession){ _applyDoLoginSuccess(_d2, username, pin); }
+        });
+        return;
+      }
       if(d.auth){
         err.textContent='';
-        G.username=username;
-        G._cachedPin=pin;
-        G._clubPass = !!d.clubPass; // read 21 Club pass status from sheet
-        G.playerId = d.playerId || '';
-        // If a pending sync for this user has a higher balance than GAS (stale sheet),
-        // use the pending-sync balance so chips from the last session aren't lost
-        const _pq = getSyncQueue();
-        if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
-          d.balance = _pq.balance;
-        }
-        // GAS is the source of truth for balance on reload — betlock cap removed.
-        // _syncCommitBalance() writes the committed balance to GAS immediately at deal,
-        // so wagered chips are already reflected there before any reload.
-        try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
-        // Recovery: if GAS returns 0 but the player has open PM bets in localStorage,
-        // those funds are still theirs (locked in bets). Add them back so they're not stuck.
-        if(d.balance === 0){
-          try{
-            const _lsBets = JSON.parse(localStorage.getItem('kfc_pm_bets_'+username.toLowerCase())||'[]');
-            const _pmLocked = _lsBets.filter(b=>b.payout==null).reduce((s,b)=>s+(b.amount||0),0);
-            if(_pmLocked > 0) d.balance = _pmLocked;
-          }catch(e){}
-        }
-        _pendingLogin={name:d.playerName||username,balance:d.balance,totalBalance:d.totalBalance||d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
-        // Clear any session belonging to a different player on this device
-        try{
-          const _oldSnap=localStorage.getItem(SESSION_KEY);
-          if(_oldSnap){
-            const _old=JSON.parse(_oldSnap);
-            const _oldUser=(_old.username||_old.player||'').toLowerCase();
-            if(_oldUser && _oldUser!==username.toLowerCase()){
-              localStorage.removeItem(SESSION_KEY);
-              localStorage.removeItem('kfc_cashout_snap');
-            }
-          }
-        }catch(e){}
-        localStorage.setItem('kfc_last_user', username.toLowerCase());
-        document.getElementById('login-step1').style.display='none';
-        MP2._showModeSelect();
+        _applyDoLoginSuccess(d, username, pin);
         return;
       }
       // Auth returned but auth=false with no error message
@@ -6718,6 +6763,11 @@ function doLogout(skipToStake){
     notif('Please cash out before leaving the table');
     openModal('cashout-modal');
     return;
+  }
+  // Clear session lock on GAS so other devices don't see a stale "active session" warning
+  if(G.url && G.username && G._cachedPin){
+    const _slp=new URLSearchParams({action:'updatebalance',username:G.username,player:G.player||G.username,balance:String(G.balance),sessionPL:'0',buyIn:String(G.balance),date:new Date().toISOString(),stake:'LOGOUT',pin:G._cachedPin,autosave:'true',deviceId:_getDeviceId(),endSession:'true'});
+    fetch(G.url+'?'+_slp.toString(),{method:'GET',keepalive:true,redirect:'follow',cache:'no-store'}).catch(()=>{});
   }
   const wasPlayer=G.player;
   const wasUsername=G.username;

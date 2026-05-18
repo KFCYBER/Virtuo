@@ -11024,9 +11024,20 @@ function _renderTaxPreview(){
   if(!el) return;
   const totalBal = G._totalBalance || G.balance;
   if(!totalBal || totalBal <= 0){ el.innerHTML=''; return; }
-  const rate = G.s ? G.s.tax : 0.04;
+  // Effective tax rate mirrors GAS logic: highest stake the player can currently afford.
+  // If wallet qualifies for a higher stake than currently played, that higher rate applies.
+  const _stakeOrder = ['low','mid','high','royale','legendary','mythic','highroller','champion'];
+  const _stakeLabels = {low:'Low',mid:'Mid',high:'High',royale:'Royale',legendary:'Legendary',mythic:'Mythic',highroller:'High-Roller',champion:'Champion'};
+  let _effectiveStake = G.s || STAKES.low;
+  let _effectiveLabel = G.s ? G.s.label : 'Low';
+  for(let i = _stakeOrder.length-1; i >= 0; i--){
+    const sk = STAKES[_stakeOrder[i]];
+    if(sk && totalBal >= sk.min){ _effectiveStake = sk; _effectiveLabel = sk.label; break; }
+  }
+  const rate = _effectiveStake.tax || 0.04;
   const taxAmt = Math.floor(totalBal * rate);
   const nextDate = _nextTaxDate();
+  const _downgraded = _effectiveStake !== G.s && rate > (G.s ? G.s.tax : 0);
   el.innerHTML = `
     <div style="color:var(--muted);margin-bottom:2px">DEALER TAX ESTIMATE (${nextDate})</div>
     <div style="display:flex;justify-content:space-between;margin-top:3px">
@@ -11034,7 +11045,7 @@ function _renderTaxPreview(){
       <span style="color:var(--white)">${fmtKFC(totalBal)}</span>
     </div>
     <div style="display:flex;justify-content:space-between">
-      <span style="color:var(--muted2)">${Math.round(rate*100)}% tax (${G.s?G.s.label:''} stake)</span>
+      <span style="color:var(--muted2)">${Math.round(rate*100)}% tax (${_effectiveLabel} rate${_downgraded?' · wallet qualifies':''})</span>
       <span style="color:var(--red)">−${fmtKFC(taxAmt)}</span>
     </div>
     <div style="display:flex;justify-content:space-between;border-top:1px solid var(--line);margin-top:4px;padding-top:4px">

@@ -1994,7 +1994,7 @@ async function _doHubLogin() {
   if (!username) { errEl.textContent = 'Enter your username.'; return; }
   errEl.textContent = 'Authenticating…';
   try {
-    const res = await fetch(`${GAME_WORKER}?action=getBalance&username=${encodeURIComponent(username)}&pin=${encodeURIComponent(pin)}`);
+    const res = await fetch(`${GAME_WORKER}?action=getBalance&username=${encodeURIComponent(username)}&pin=${encodeURIComponent(pin)}&hub=1`);
     const d   = await res.json();
     if (!d.auth) {
       errEl.textContent = d.error || 'Authentication failed';

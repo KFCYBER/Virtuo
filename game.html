@@ -6256,6 +6256,12 @@ window.onload=()=>{
               G._walletBalAtLogin= Math.max(G._walletBalAtLogin||0, _gasTotal);
               updateUI();
             }
+            // Show any pending deliveries that arrived between sessions
+            if(_rd.auth && _rd.deliveries && _rd.deliveries.length > 0){
+              const _rc = parseInt(_rd.kfcCredit)||0;
+              if(_rc > 0){ G.balance += _rc; G._totalBalance = (G._totalBalance||0)+_rc; updateUI(); }
+              _showDeliveryModal(_rd.deliveries, _rc);
+            }
           }catch(e){}
         }, 2200);
         // Process any pending sync queue from previous session
@@ -6277,21 +6283,24 @@ window.onload=()=>{
   if(!G.player){
     try{
       const _hub=JSON.parse(localStorage.getItem('kfc_hub_session')||'null');
+      console.log('[HubBypass] G.player=',G.player,'hub=',_hub?{u:_hub.username,pin:_hub.pin,age:Math.round((Date.now()-(_hub.ts||0))/1000)+'s'}:null);
       if(_hub && _hub.username && _hub.pin != null && Date.now()-(_hub.ts||0)<8*60*60*1000){
+        console.log('[HubBypass] Triggering bypass for',_hub.username,'autoOpenPM=',_autoOpenPM);
         if(_autoOpenPM){
-          // PM-direct: bypass mode select + stake selection entirely
           setTimeout(()=>_hubPMDirectLogin(_hub.username, _hub.pin), 160);
         } else {
-          // Hub bypass: skip login form entirely, go straight to mode select
           setTimeout(()=>_hubDirectLogin(_hub.username, _hub.pin, _hub.playerName||_hub.username), 160);
         }
       } else {
+        console.log('[HubBypass] No valid hub session — showing login form');
         setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
       }
     }catch(e){
+      console.log('[HubBypass] Error reading hub session:',e);
       setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
     }
   } else {
+    console.log('[HubBypass] G.player already set (session restored):',G.player);
     setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
   }
 
@@ -6318,6 +6327,7 @@ function buildPinRows(){
 // Hub auto-login: player already authenticated on the hub — skip the login form entirely
 // and go straight to mode select. Falls back to the login panel on auth failure.
 async function _hubDirectLogin(username, pin, displayName){
+  console.log('[_hubDirectLogin] called for',username,'G.url=',G.url);
   const loginEl = document.getElementById('login');
   if(loginEl) loginEl.style.display = 'none';
   const _ov = document.createElement('div');
@@ -6326,6 +6336,7 @@ async function _hubDirectLogin(username, pin, displayName){
   document.body.appendChild(_ov);
   try{
     const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
+    console.log('[_hubDirectLogin] GAS response auth=',d.auth,'error=',d.error||'none');
     if(!d.auth){
       _ov.remove();
       if(loginEl) loginEl.style.display = 'flex';
@@ -6359,9 +6370,11 @@ async function _hubDirectLogin(username, pin, displayName){
       kfcCredit:     d.kfcCredit  || 0,
     };
     _ov.remove();
+    console.log('[_hubDirectLogin] Auth OK — showing mode select');
     document.getElementById('login-step1').style.display = 'none';
     MP2._showModeSelect();
   }catch(e){
+    console.log('[_hubDirectLogin] Exception:',e);
     _ov.remove();
     if(loginEl) loginEl.style.display = 'flex';
   }

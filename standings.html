@@ -598,8 +598,8 @@
    ════════════════════════════════════════════════════════ */
 const SEASON = {
   NUMBER:        3,
-  TARGET:        100_000_000_000,
-  TARGET_LABEL:  '100B',
+  TARGET:        250_000_000_000,
+  TARGET_LABEL:  '250B',
   CONTENDER_MIN: 10_000_000_000,
   START:         new Date('2026-04-25'),  // ★ Metadata only — NOT used in any display calculation
   END:           new Date('2026-09-08'),  // ★ THIS is the only variable that controls "X days remaining" in the header
@@ -613,7 +613,7 @@ const CRUCICON = [
   { level: 4, status: 'Ladder Play',     min: 100_000,         max: 1_000_000,        color: '#36A2EB', bg: 'rgba(54,162,235,0.07)',  desc: 'Climbing standard stakes · entering VIP' },
   { level: 3, status: 'Serious Play',    min: 1_000_000,       max: 100_000_000,      color: '#FFCE56', bg: 'rgba(255,206,86,0.07)',  desc: 'First players to enter VIP stakes · second floor' },
   { level: 2, status: 'Contending Play', min: 100_000_000,     max: 10_000_000_000,   color: '#FF9F40', bg: 'rgba(255,159,64,0.07)',  desc: 'Last stage before the big leagues' },
-  { level: 1, status: 'Endgame',         min: 10_000_000_000,  max: 100_000_000_000,  color: '#e04040', bg: 'rgba(224,64,64,0.10)',   desc: `Crucible Regime in effect · title target ${SEASON.TARGET_LABEL}` },
+  { level: 1, status: 'Endgame',         min: 10_000_000_000,  max: 250_000_000_000,  color: '#e04040', bg: 'rgba(224,64,64,0.10)',   desc: `Crucible Regime in effect · title target ${SEASON.TARGET_LABEL}` },
 ];
 
 /* ════════════════════════════════════════════════════════

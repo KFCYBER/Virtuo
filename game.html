@@ -6277,7 +6277,7 @@ window.onload=()=>{
   if(!G.player){
     try{
       const _hub=JSON.parse(localStorage.getItem('kfc_hub_session')||'null');
-      if(_hub && _hub.username && _hub.pin && Date.now()-(_hub.ts||0)<8*60*60*1000){
+      if(_hub && _hub.username && _hub.pin != null && Date.now()-(_hub.ts||0)<8*60*60*1000){
         if(_autoOpenPM){
           // PM-direct: bypass mode select + stake selection entirely
           setTimeout(()=>_hubPMDirectLogin(_hub.username, _hub.pin), 160);
@@ -13458,18 +13458,10 @@ const PM = (() => {
           if(changed) _saveBets(local);
           if(_refundTotal > 0){ G.balance += _refundTotal; updateUI(); _syncBalanceAfterPM(); }
         }
-        // Safety net: any remaining local open bets for non-open markets get voided.
-        // (Catches bets on markets absent from GAS that weren't in d.bets at all.)
-        const _openAfterPoll = new Set(_markets.filter(m => m.status === 'open').map(m => m.id));
-        const _betsAfterPoll = _loadBets();
-        let _safetyVoided = false;
-        const _cleanedAfterPoll = _betsAfterPoll.map(b => {
-          if(b.payout !== null) return b;
-          if(_openAfterPoll.has(b.mktId)) return b;
-          _safetyVoided = true;
-          return {...b, payout: 0, refunded: true};
-        });
-        if(_safetyVoided) _saveBets(_cleanedAfterPoll);
+        // Safety net removed: it was too aggressive — it voided open bets whenever a market
+        // was absent from a single poll response (network hiccup, Cloudflare cache, etc.).
+        // Orphaned bets are handled correctly by the d.bets GAS merge above, which only
+        // voids a bet when GAS explicitly returns payout=0 for it.
       }
     }catch(e){}
     render();
@@ -14128,9 +14120,25 @@ const PM = (() => {
       if(_backfilled) _saveMarkets();
     }
     render();
-    // Notify player of any unclaimed winning payouts from previous sessions
+    // One-time migration: mark already-settled/refunded/cashed-out bets as claimed so
+    // they don't keep triggering the unclaimed notification on every login.
+    (()=>{
+      const _migKey = 'kfc_pm_claimed_migration_v1_'+(G.username||'').toLowerCase();
+      if(localStorage.getItem(_migKey)) return;
+      const _mb = _loadBets();
+      let _mChanged = false;
+      _mb.forEach(b => {
+        if(!b.claimed && ((b.refunded) || (b.cashoutEarly) || (b.payout===0))){
+          b.claimed = true; _mChanged = true;
+        }
+      });
+      if(_mChanged) _saveBets(_mb);
+      localStorage.setItem(_migKey, '1');
+    })();
+    // Notify player of any unclaimed winning payouts from previous sessions.
+    // Excludes refunded and cashout-early bets — those have no claim button.
     setTimeout(() => {
-      const _unclaimed = _loadBets().filter(b => (b.payout||0) > 0 && !b.claimed && b.mktType !== 'shoe');
+      const _unclaimed = _loadBets().filter(b => (b.payout||0) > 0 && !b.claimed && !b.refunded && !b.cashoutEarly && b.mktType !== 'shoe');
       if(_unclaimed.length > 0){
         notif('💰 '+_unclaimed.length+' unclaimed payout'+ (_unclaimed.length>1?'s':'')+' — open Markets to claim', 'win');
       }

@@ -6321,6 +6321,7 @@ window.onload=()=>{
 
 function buildPinRows(){
   const c=document.getElementById('pin-rows');
+  if(!c) return;
   c.innerHTML='<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7">PINs are managed in the <span style=\"color:var(--gold)\">KFC_ONLINE</span> tab of your Google Sheet (column D). No local config needed when sheet is connected.</div>';
 }
 

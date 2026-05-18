@@ -6267,22 +6267,8 @@ window.onload=()=>{
           // PM-direct: bypass mode select + stake selection entirely
           setTimeout(()=>_hubPMDirectLogin(_hub.username, _hub.pin), 160);
         } else {
-          // Seamless: hide credentials form entirely, show signing-in state
-          const _s1=document.getElementById('login-step1');
-          if(_s1){ _s1.style.visibility='hidden'; _s1.style.minHeight='120px'; }
-          const _lw=document.querySelector('#login .login-wrap');
-          if(_lw){
-            const _si=document.createElement('div');
-            _si.id='hub-signin-msg';
-            _si.style.cssText='font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted);text-align:center;padding:32px 0;text-transform:uppercase';
-            _si.textContent='Signing in as '+(_hub.playerName||_hub.username)+'…';
-            _lw.insertBefore(_si, _s1);
-          }
-          const _u=document.getElementById('lusername');
-          const _p=document.getElementById('lpin');
-          if(_u) _u.value=_hub.username;
-          if(_p) _p.value=_hub.pin;
-          setTimeout(()=>doLogin(), 200);
+          // Hub bypass: skip login form entirely, go straight to mode select
+          setTimeout(()=>_hubDirectLogin(_hub.username, _hub.pin, _hub.playerName||_hub.username), 160);
         }
       } else {
         setTimeout(()=>{ const u=document.getElementById('lusername'); if(u) u.focus(); },120);
@@ -6314,6 +6300,58 @@ function buildPinRows(){
   c.innerHTML='<div style="font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.7">PINs are managed in the <span style=\"color:var(--gold)\">KFC_ONLINE</span> tab of your Google Sheet (column D). No local config needed when sheet is connected.</div>';
 }
 
+// Hub auto-login: player already authenticated on the hub — skip the login form entirely
+// and go straight to mode select. Falls back to the login panel on auth failure.
+async function _hubDirectLogin(username, pin, displayName){
+  const loginEl = document.getElementById('login');
+  if(loginEl) loginEl.style.display = 'none';
+  const _ov = document.createElement('div');
+  _ov.style.cssText = 'position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:1200;background:var(--bg,#0a0a0a)';
+  _ov.innerHTML = '<div style="font-family:var(--mono);font-size:10px;letter-spacing:3px;color:var(--muted);text-transform:uppercase">Signing in as '+(displayName||username)+'…</div>';
+  document.body.appendChild(_ov);
+  try{
+    const d = await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(username)+'&pin='+encodeURIComponent(pin));
+    if(!d.auth){
+      _ov.remove();
+      if(loginEl) loginEl.style.display = 'flex';
+      return;
+    }
+    G.username   = username;
+    G._cachedPin = pin;
+    G._clubPass  = !!d.clubPass;
+    G.playerId   = d.playerId || '';
+    if(d.balance === 0){
+      try{
+        const _lsBets = JSON.parse(localStorage.getItem('kfc_pm_bets_'+username.toLowerCase())||'[]');
+        const _pmLocked = _lsBets.filter(b=>b.payout==null).reduce((s,b)=>s+(b.amount||0),0);
+        if(_pmLocked > 0) d.balance = _pmLocked;
+      }catch(e){}
+    }
+    const _pq = getSyncQueue();
+    if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0)>(d.balance||0)){
+      d.balance = _pq.balance;
+    }
+    localStorage.setItem('kfc_last_user', username.toLowerCase());
+    _pendingLogin = {
+      name:          d.playerName || username,
+      balance:       d.balance,
+      totalBalance:  d.totalBalance || d.balance,
+      clubPass:      !!d.clubPass,
+      loyaltyPoints: d.loyaltyPoints || 0,
+      lastStake:     d.lastStake || '',
+      inventory:     d.inventory || {},
+      deliveries:    d.deliveries || [],
+      kfcCredit:     d.kfcCredit  || 0,
+    };
+    _ov.remove();
+    document.getElementById('login-step1').style.display = 'none';
+    MP2._showModeSelect();
+  }catch(e){
+    _ov.remove();
+    if(loginEl) loginEl.style.display = 'flex';
+  }
+}
+
 // PM-direct login: used when arriving from hub with ?panel=pm.
 // Authenticates with GAS and enters the game directly — no mode-select, no stake screen.
 async function _hubPMDirectLogin(username, pin){
@@ -6342,7 +6380,7 @@ async function _hubPMDirectLogin(username, pin){
     _pendingLogin = {
       name:          d.playerName || username,
       balance:       d.balance,
-      totalBalance:  d.balance,
+      totalBalance:  d.totalBalance || d.balance,
       clubPass:      !!d.clubPass,
       loyaltyPoints: d.loyaltyPoints || 0,
       lastStake:     d.lastStake || '',
@@ -6402,7 +6440,7 @@ async function doLogin(){
             if(_pmLocked > 0) d.balance = _pmLocked;
           }catch(e){}
         }
-        _pendingLogin={name:d.playerName||username,balance:d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
+        _pendingLogin={name:d.playerName||username,balance:d.balance,totalBalance:d.totalBalance||d.balance,clubPass:!!d.clubPass,loyaltyPoints:d.loyaltyPoints||0,lastStake:d.lastStake||'',inventory:d.inventory||{},deliveries:d.deliveries||[],kfcCredit:d.kfcCredit||0};
         // Clear any session belonging to a different player on this device
         try{
           const _oldSnap=localStorage.getItem(SESSION_KEY);
@@ -6436,7 +6474,7 @@ async function doLogin(){
   G._cachedPin=pin; // cache for re-auth
   const localBal=parseFloat(localStorage.getItem('kfc_bal_'+username)||'0');
   const _localLastStake=(()=>{try{return localStorage.getItem('kfc_last_stake_'+username.toLowerCase())||'';}catch(e){return '';}})();
-  _pendingLogin={name:username,balance:localBal,lastStake:_localLastStake}; // G.player set only in openApp
+  _pendingLogin={name:username,balance:localBal,totalBalance:localBal,lastStake:_localLastStake}; // G.player set only in openApp
   document.getElementById('login-step1').style.display='none';
   MP2._showModeSelect();
 }

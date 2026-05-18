@@ -3733,12 +3733,10 @@ const PTS_PER_WIN         = 2;   // per winning hand that shoe
 const PTS_PER_BJ          = 3;   // per blackjack that shoe
 const PTS_PASS_MULTIPLIER = 1.5; // pass players earn 1.5×
 const PTS_COST = {
-  sally:60, net:50, seeker:50, guard:35, novak:35, // power-ups
+  sally:60, net:50, seeker:50, guard:70, novak:70, // power-ups (guard/novak legendary-only → 70)
   lev2x:45,           // 2× leverage token (high-roller+ only)
   insurance:80,       // insurance token (all stakes)
   allsb:60,           // all side bets min next hand
-  extrashoe_std:50,   // +1 shoe for standard players
-  extrashoe_pass:40,  // +1 shoe for pass players
 };
 
 // ── POWER-UP DAILY PURCHASE COUNTERS ────────────────────────────────
@@ -5773,13 +5771,25 @@ function _walletBuyIn(){ return (G._originalSessionStart||G.sessionStart||G.bala
 function _snapWalletBuyIn(s){ return (s.originalSessionStart||s.sessionStart||s.balance) + (s.topUpTotal||0); }
 
 // Immediately writes current inventory to GAS after an item is consumed.
+// Converts a session balance into the correct total wallet checkpoint balance.
+// Session balance (G.balance) is only the buy-in portion — the rest of the wallet
+// stays off-table. GAS needs the full wallet figure so a mid-session reload doesn't
+// wipe out the unplayed portion of the wallet.
+// Falls back to sessionBal if totalBalance / originalSessionStart are not yet set.
+function _totalCheckpointBal(sessionBal){
+  if(G._totalBalance && G._originalSessionStart !== undefined){
+    return Math.max(0, G._totalBalance - _walletBuyIn() + sessionBal);
+  }
+  return sessionBal;
+}
+
 // Uses autosave=true so it doesn't create a TX row or touch the wallet balance.
 function _syncInventoryNow(){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin || !G._sessionActive) return;
   const p=new URLSearchParams({action:'updatebalance',username:G.username,
     player:G.player||G.username,autosave:'true',
-    balance:String(G.balance),sessionPL:String(G.balance-(G.sessionStart||G.balance)),
+    balance:String(_totalCheckpointBal(G.balance)),sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),date:new Date().toISOString(),
     stake:G.s?G.s.label:'auto',pin:G._cachedPin||'',inventory:_inventoryJson()});
   fetch(G.url+'?'+p.toString(),{method:'GET',redirect:'follow',cache:'no-store'}).catch(()=>{});
@@ -5796,7 +5806,7 @@ async function _syncCommitBalance(){
   _syncCommitInFlight = true;
   const params = new URLSearchParams({
     action:'updatebalance', username:G.username, player:G.player||G.username,
-    balance:String(G.balance),
+    balance:String(_totalCheckpointBal(G.balance)),
     sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),
     date:new Date().toISOString(),
@@ -5830,7 +5840,7 @@ async function _autoSaveToSheet(){
   const _pmOpenBets = (typeof PM !== 'undefined') ? PM.getOpenBetsTotal() : 0;
   const params=new URLSearchParams({
     action:'updatebalance', username:G.username, player:G.player||G.username,
-    balance:String(G.balance + _pmOpenBets),
+    balance:String(_totalCheckpointBal(G.balance + _pmOpenBets)),
     sessionPL:String(G.balance-(G.sessionStart||G.balance)),
     buyIn:String(G.sessionStart||G.balance),
     date:new Date().toISOString(),
@@ -13890,6 +13900,7 @@ const PM = (() => {
       G.balance += b.amount;
       b.payout = b.amount; // refund: return exact stake
       b.refunded = true;   // flag so history shows "Refunded" not "+0"
+      b.claimed = true;    // prevent false "unclaimed payout" notification
       changed = true;
       return b;
     });

@@ -13430,7 +13430,11 @@ const PM = (() => {
             const soft  = sb.mktId+'|'+sb.outcome;
             if(localExact.has(exact)){
               const lb = local.find(b => b.mktId===sb.mktId && b.outcome===sb.outcome && b.ts===sb.ts);
-              if(lb && lb.payout===null && sb.payout!==null){
+              // Repair: bet was locally closed by the old safety net (payout=0, refunded=true,
+              // no cashout) but GAS still has it open (sb.payout===null). Re-open it.
+              if(lb && lb.payout===0 && lb.refunded && !lb.cashoutEarly && sb.payout===null && _openMktIds.has(sb.mktId)){
+                lb.payout=null; lb.refunded=false; lb.claimed=false; changed=true;
+              } else if(lb && lb.payout===null && sb.payout!==null){
                 lb.payout = sb.payout; changed = true;
                 // payout=0 from GAS for a bet on a non-existent market = orphaned refund
                 if(sb.payout === 0 && !_openMktIds.has(sb.mktId)){

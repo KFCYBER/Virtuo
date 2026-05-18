@@ -1009,7 +1009,10 @@
     </div>
     <div class="status-bar">
       <div><span class="pulse"></span><span id="update-ts">Fetching live data…</span><span id="countdown-ts" style="opacity:0.5"></span></div>
-      <div>KFC · Season 3: Dark Fall · Auto-refresh 60s</div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <span>KFC · Season 3: Dark Fall · Auto-refresh 60s</span>
+        <button onclick="refresh();_fetchPmMarketsAndRender();" style="font-family:var(--mono,monospace);font-size:9px;letter-spacing:2px;text-transform:uppercase;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:rgba(255,255,255,0.6);border-radius:3px;padding:3px 10px;cursor:pointer;" title="Refresh all data">↻ Refresh</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1762,6 +1765,8 @@ async function refresh() {
     document.getElementById('update-ts').textContent = `Live · last updated ${new Date().toLocaleTimeString()}`;
     _showToast('↻ Updated');
     startCountdown();
+    // Also refresh PM positions and wallet on every data cycle
+    _fetchPmMarketsAndRender();
 
   } catch (err) {
     console.error(err);

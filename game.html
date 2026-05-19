@@ -13548,74 +13548,54 @@ const PM = (() => {
         });
         _saveMarkets(); render();
 
-        // Merge server-side bets into localStorage so portfolio is cross-device.
-        // GAS now returns payout=0 for bets on deleted markets (orphaned bets).
-        // When we see payout=0 from GAS for a locally-unsettled bet on a market that
-        // no longer exists in _markets, treat it as a refund: credit the stake back.
-        if(Array.isArray(d.bets) && d.bets.length){
-          const local = _loadBets();
-          const localExact = new Set(local.map(b => b.mktId+'|'+b.outcome+'|'+b.ts));
-          const localSoft  = new Set(local.map(b => b.mktId+'|'+b.outcome));
-          let changed = false;
-          let _refundTotal = 0;
-          let _reDeductTotal = 0;
-          const _openMktIds = new Set(_markets.filter(m => m.status === 'open').map(m => m.id));
-          d.bets.forEach(sb => {
-            if(!sb.mktId) return;
-            const exact = sb.mktId+'|'+sb.outcome+'|'+sb.ts;
-            const soft  = sb.mktId+'|'+sb.outcome;
-            if(localExact.has(exact)){
-              const lb = local.find(b => b.mktId===sb.mktId && b.outcome===sb.outcome && b.ts===sb.ts);
-              // Repair: bet was locally closed by the old safety net or the removed admin-wipe
-              // (payout=0, refunded=true, no cashout) but GAS still has it open. Re-open it
-              // and re-deduct the stake that was credited back during the false refund.
-              if(lb && lb.payout===0 && lb.refunded && !lb.cashoutEarly && sb.payout===null && _openMktIds.has(sb.mktId)){
-                const _reDeduct = lb.amount || 0;
-                G.balance = Math.max(0, (G.balance||0) - _reDeduct);
-                G._totalBalance = Math.max(0, (G._totalBalance||0) - _reDeduct);
-                _reDeductTotal += _reDeduct;
-                lb.payout=null; lb.refunded=false; lb.claimed=false; changed=true;
-              } else if(lb && lb.payout===null && sb.payout!==null){
-                lb.payout = sb.payout; changed = true;
-                // payout=0 from GAS for a bet on a non-existent market = orphaned refund
-                if(sb.payout === 0 && !_openMktIds.has(sb.mktId)){
-                  _refundTotal += lb.amount || 0;
-                  lb.refunded = true;
-                }
-              }
-            } else if(localSoft.has(soft)){
-              const lb = local.find(b => b.mktId===sb.mktId && b.outcome===sb.outcome && b.payout===null);
-              if(lb && sb.payout!==null){
-                lb.payout = sb.payout; changed = true;
-                if(sb.payout === 0 && !_openMktIds.has(sb.mktId)){
-                  _refundTotal += lb.amount || 0;
-                  lb.refunded = true;
-                }
-              }
-            } else {
-              // From another device — add without re-crediting balance
-              local.push(sb);
-              localExact.add(exact);
-              localSoft.add(soft);
-              changed = true;
-            }
+        // GAS is the canonical source for bets. On every poll we rebuild local storage from
+        // GAS data so all devices always see the same positions. Three categories of local
+        // bets are preserved alongside GAS data:
+        //   1. Shoe bets — purely local, never written to GAS
+        //   2. Optimistic bets — placed <60s ago, GAS hasn't confirmed yet
+        //   3. Market-loop-settled bets — market loop just set payout this cycle but GAS
+        //      bet row hasn't been updated yet; keep local payout so state isn't lost
+        // Balance credits for settlements are handled entirely by the market settle loop
+        // above (which fires when a market transitions open→settled). The bets block
+        // only syncs cross-device state and retries unconfirmed bets.
+        if(Array.isArray(d.bets)){
+          const _now   = Date.now();
+          const prev   = _loadBets(); // snapshot after market-loop settle credits
+          const _gasMap = new Map(d.bets.map(b => [String(b.ts)+'|'+b.mktId, b]));
+          const _gasKeys = new Set(_gasMap.keys());
+
+          // Retry local open bets not confirmed by GAS after >60s
+          prev.filter(b => b.payout===null && !_gasKeys.has(String(b.ts)+'|'+b.mktId) && (_now-(b.ts||0)) > 60000)
+            .forEach(ub => {
+              if(!G.url || !G.username) return;
+              const _rp = new URLSearchParams({action:'pmBet', mktId:ub.mktId, outcome:ub.outcome, amount:String(ub.amount), username:G.username, stakeLevel:ub.stakeLevel||G.stake||'low', ts:String(ub.ts)});
+              fetch(G.url+'?'+_rp.toString(),{method:'GET',cache:'no-store'}).catch(()=>{});
+            });
+
+          // Build canonical list from GAS — prefer local version when local is more settled
+          const canonical = d.bets.map(gb => {
+            const lb = prev.find(b => String(b.ts)===String(gb.ts) && b.mktId===gb.mktId);
+            // Market loop just settled this bet locally but GAS row not updated yet — keep local state
+            if(lb && lb.payout !== null && gb.payout === null) return lb;
+            // GAS wins; carry local mktDesc/mktType when GAS fields are empty (pre-redeploy)
+            return Object.assign({mktDesc:'',mktType:''}, gb, {
+              mktDesc: gb.mktDesc || (lb && lb.mktDesc) || '',
+              mktType: gb.mktType || (lb && lb.mktType) || '',
+            });
           });
-          if(changed) { _saveBets(local); render(); }
-          if(_refundTotal > 0){ G.balance += _refundTotal; updateUI(); _syncBalanceAfterPM(); }
-          if(_reDeductTotal > 0){ updateUI(); _syncBalanceAfterPM(); }
-          // Retry unconfirmed bets — local open bets absent from GAS after >60s
-          const _gasTs = new Set((d.bets||[]).map(b => b.ts));
-          const _unconfirmed = _loadBets().filter(b => b.payout===null && !_gasTs.has(b.ts) && (Date.now()-(b.ts||0)) > 60000);
-          _unconfirmed.forEach(ub => {
-            if(!G.url || !G.username) return;
-            const _rp = new URLSearchParams({action:'pmBet', mktId:ub.mktId, outcome:ub.outcome, amount:String(ub.amount), username:G.username, stakeLevel:ub.stakeLevel||G.stake||'low', ts:String(ub.ts)});
-            fetch(G.url+'?'+_rp.toString(),{method:'GET',cache:'no-store'}).catch(()=>{});
+
+          // Append local-only bets absent from GAS
+          prev.forEach(lb => {
+            if(_gasKeys.has(String(lb.ts)+'|'+lb.mktId)) return; // already in canonical
+            const _isShoe = lb.mktType==='shoe' || (lb.mktId||'').includes('_shoe_') || (lb.mktId||'').startsWith(PM_PFX+'shoe_');
+            const _isOptimistic = lb.payout===null && (_now-(lb.ts||0)) <= 60000;
+            const _isLocalSettled = lb.payout !== null; // credited locally, GAS not updated yet
+            if(_isShoe || _isOptimistic || _isLocalSettled) canonical.push(lb);
           });
+
+          _saveBets(canonical);
+          render();
         }
-        // Safety net removed: it was too aggressive — it voided open bets whenever a market
-        // was absent from a single poll response (network hiccup, Cloudflare cache, etc.).
-        // Orphaned bets are handled correctly by the d.bets GAS merge above, which only
-        // voids a bet when GAS explicitly returns payout=0 for it.
       }
     }catch(e){}
     render();

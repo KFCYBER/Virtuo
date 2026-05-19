@@ -4820,6 +4820,8 @@ function buildLoginStakeList(){
   if(!c)return;
   c.innerHTML='';
   const bal=_pendingLogin?_pendingLogin.balance:0;
+  const _totalBal=_pendingLogin?(_pendingLogin.totalBalance||_pendingLogin.balance||0):0;
+  const _crucibleRegime=_totalBal>=CONTENDER_MIN;
   // Show balance at top
   const bd=document.getElementById('login-bal-display');
   if(bd){
@@ -4840,6 +4842,13 @@ function buildLoginStakeList(){
   })();
   const _lastStakeIdx = _lastStakeKey ? STAKE_ORDER.indexOf(_lastStakeKey) : -1;
   const _lastPlayedMin = _lastStakeKey ? ((STAKES[_lastStakeKey]||{}).min || 1) : 1;
+  // Crucible Regime banner
+  if(_crucibleRegime){
+    const _rb=document.createElement('div');
+    _rb.style.cssText='width:100%;padding:8px 12px;background:rgba(224,64,64,0.10);border:1px solid rgba(224,64,64,0.35);border-radius:var(--radius);font-family:var(--mono);font-size:9px;letter-spacing:1px;color:#e04040;margin-bottom:6px;line-height:1.5';
+    _rb.innerHTML='⚠ CRUCIBLE REGIME ACTIVE<br><span style="color:var(--muted);font-size:8px">Legendary Stakes only · Leverage & power-ups banned · Blood Jester grants no power</span>';
+    c.appendChild(_rb);
+  }
   Object.entries(STAKES).forEach(([key,s])=>{
     // Sub-minimum: balance > 0 but below lowest stake min — only Low stake is clickable (delivery bypass)
     const _lowestMin = Math.min(...Object.values(STAKES).map(s=>s.min));
@@ -4853,6 +4862,8 @@ function buildLoginStakeList(){
     // Mirror in-game rule: one step down allowed when balance < 10× last-played stake minimum
     const stakeDownAvailable=belowLastPlayed&&!tooManySteps&&bal<_lastPlayedMin*10;
     const downgradeBlocked=belowLastPlayed&&(tooManySteps||!stakeDownAvailable);
+    // Crucible Regime: only Legendary is permitted
+    const _regimeLocked=_crucibleRegime && key!=='legendary';
     const btn=document.createElement('button');
     btn.style.cssText='width:100%;padding:11px 14px;background:var(--bg2);border:1px solid var(--line2);font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1px;text-align:left;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius);transition:all .15s;cursor:pointer;color:var(--white);opacity:1';
     btn.className='login-stake-btn';
@@ -4874,7 +4885,17 @@ function buildLoginStakeList(){
         goLoginStep(3);
       }
     };
-    if(!canAfford){
+    if(_regimeLocked){
+      btn.style.opacity='0.25';
+      btn.style.cursor='not-allowed';
+      btn.style.color='var(--muted)';
+      btn.style.background='var(--bg1)';
+      btn.style.borderColor='rgba(224,64,64,0.12)';
+      btn.onmouseover=null; btn.onmouseout=null;
+      btn.onclick=null;
+      btn.title='Crucible Regime — Legendary Stakes only';
+      btn.innerHTML='<span style="color:rgba(255,255,255,0.2)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:9px;color:rgba(224,64,64,0.4)">REGIME LOCKED</span>';
+    } else if(!canAfford){
       btn.style.opacity='0.35';
       btn.style.cursor='not-allowed';
       btn.style.color='var(--muted)';
@@ -5034,6 +5055,8 @@ function finaliseLogin(stakeKey){
   _pendingLogin=null; _selectedStakeKey=null;
   // Show delivery notification if items arrived from the store
   if(_loginDeliveries.length > 0) setTimeout(()=>_showDeliveryModal(_loginDeliveries, _loginKfcCredit), 900);
+  // Notify Contenders that Crucible Regime is active
+  if(_isContender()) setTimeout(()=>notif('Crucible Regime: Legendary Stakes only · Leverage & power-ups suspended', 'info'), 1200);
 }
 
 
@@ -6089,23 +6112,31 @@ function _sendTgBeacon(){
   try{ fetch(G.url+'?'+params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
 
-// Log session to GAS sheet on unload — keepalive ensures delivery even as page closes
+// Log session to GAS sheet on unload — keepalive ensures delivery even as page closes.
+// Also queued in kfc_sync_queue so next login auto-retries if the beacon fails.
 function _logSessionToSheet(stakeLabel){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
   if(!G.log || G.log.length === 0) return; // no hands played — nothing meaningful to log
-  const params = new URLSearchParams({
+  // Use pre-deal balance if exiting mid-hand (bet deducted but outcome not yet resolved)
+  const _exitBal = (G.preDealBal != null && G.phase !== 'bet') ? G.preDealBal : G.balance;
+  const _exitPL  = _exitBal - (G.sessionStart || _exitBal);
+  const payload = {
     action:    'updatebalance',
     username:  G.username,
     player:    G.player || G.username,
-    balance:   String(G.balance),
-    sessionPL: String(G.balance - (G.sessionStart || G.balance)),
+    balance:   String(_exitBal),
+    sessionPL: String(_exitPL),
     buyIn:     String(_walletBuyIn()),
     date:      new Date().toISOString(),
     stake:     stakeLabel || 'RELOAD-EXIT',
     pin:       G._cachedPin,
-    txId:      're_'+Date.now()+'_'+(G.username||'').slice(0,6)
-  });
+    txId:      're_'+Date.now()+'_'+(G.username||'').slice(0,6),
+    skipGames: 'true',
+  };
+  // Queue in sync queue as a fallback so next login retries if the beacon never lands
+  if(!getSyncQueue()) storeSyncQueue(payload);
+  const params = new URLSearchParams(payload);
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
 
@@ -6126,7 +6157,8 @@ window.addEventListener('beforeunload', ()=>{
 window.addEventListener('pagehide', ()=>{
   // Mid-cashout crash guard: if confirmCashout was in-flight when the page died,
   // the payload was already queued — fire a keepalive beacon so GAS still receives it.
-  if(G._atCashout && G.cashedOut && G._syncInProgress){
+  // Also fires when sync already failed (G._syncInProgress=false) but queue still has data.
+  if(G._atCashout && G.cashedOut && (G._syncInProgress || getSyncQueue())){
     try{
       const _cq = getSyncQueue();
       if(_cq && _cq.username && G.url){
@@ -6564,7 +6596,11 @@ async function doLogin(){
   MP2._showModeSelect();
 }
 
-const BALANCE_CAP = 50_000_000_000; // 50 Billion KFC hard cap
+const BALANCE_CAP    = 50_000_000_000; // 50 Billion KFC hard cap
+const CONTENDER_MIN  = 10_000_000_000; // 10 Billion — Crucible Regime threshold
+
+// Returns true if the player's total wallet has reached Contender status (10B+)
+function _isContender(){ return (G._totalBalance || 0) >= CONTENDER_MIN; }
 
 function checkBalanceCap(){
   if(G.balance>=BALANCE_CAP){
@@ -7444,6 +7480,10 @@ function updateSBCircles(){
 function buildLevPanel(){
   const c=document.getElementById('panel-lev');
   c.innerHTML='';
+  if(_isContender()){
+    c.innerHTML='<div style="font-family:var(--mono);font-size:10px;color:#e04040;letter-spacing:1px;padding:4px 0">CRUCIBLE REGIME<br><span style="color:var(--muted);font-size:9px">Leverage suspended</span></div>';
+    return;
+  }
   if(!['highroller','champion'].includes(G.stake)){
     const cost=_levKfcCost();
     const invLev=(G._inventory&&G._inventory.leverage||0);
@@ -7465,6 +7505,7 @@ function buildLevPanel(){
 }
 
 function toggleLev(key){
+  if(_isContender()){notif('Crucible Regime — leverage suspended');return;}
   // Jester cards (c0, c1…) may only be evoked during the betting phase
   if(key.startsWith('c') && G.phase!=='bet'){
     notif('Jester cards can only be evoked before dealing');
@@ -7512,6 +7553,10 @@ function buildPuPanel(){
   const c=document.getElementById('panel-pu');
   if(!c)return;
   c.innerHTML='';
+  if(_isContender()){
+    c.innerHTML='<div style="font-family:var(--mono);font-size:10px;color:#e04040;letter-spacing:1px;padding:4px 0">CRUCIBLE REGIME<br><span style="color:var(--muted);font-size:9px">Power-ups banned</span></div>';
+    return;
+  }
   const myPts = _getPoints(G.username||G.player);
   // Points balance line
   const ptsBadge=document.createElement('div');
@@ -7681,6 +7726,7 @@ function _confirmTip(){
 }
 
 function buyPu(pu,cost){
+  if(_isContender()){notif('Crucible Regime — power-ups banned');return;}
   if(G.puOwned.has(pu.id)){notif(pu.label+' is already active');return;}
   // Enforce per-shoe power-up limit (1 for standard, 2 for pass)
   if(G.puOwned.size>=_puLimit()){
@@ -7721,6 +7767,7 @@ function buyPu(pu,cost){
 }
 
 function buyPuWithPoints(pu, ptsCost){
+  if(_isContender()){notif('Crucible Regime — power-ups banned');return;}
   if(G.puOwned.has(pu.id)){notif(pu.label+' is already active');return;}
   if(G.puOwned.size>=_puLimit()){notif('Max '+_puLimit()+' power-ups active at a time');return;}
   const stakeIdx=STAKE_ORDER.indexOf(G.stake); const minIdx=STAKE_ORDER.indexOf(pu.minStake);
@@ -7732,6 +7779,7 @@ function buyPuWithPoints(pu, ptsCost){
 }
 
 function _redeemLev2x(){
+  if(_isContender()){notif('Crucible Regime — leverage suspended');return;}
   if(['highroller','champion'].includes(G.stake)){notif('2× Token not available at this stake tier');return;}
   if(G.leverage==='2x'){notif('2× Token already active');return;}
   if(G.phase!=='bet'){notif('Must redeem before dealing');return;}
@@ -8207,9 +8255,14 @@ function onBonusCard(bc, cardIndex, handIdx){
       bonusToast(bc,'Steel Card — Blackjack pays 2:1 this hand'+(isHand2?' · Hand 2':''));
       break;
     case 'blood':
-      G._levCardsPending.push('blood');
-      G._bonusPayouts.push({label:'Blood Jester'+(isHand2?' (H2)':'')+' — 2× leverage card earned (next round)',pl:0,type:'info'});
-      bonusToast(bc,'Blood Jester — 2× leverage card earned, usable next round');
+      if(_isContender()){
+        G._bonusPayouts.push({label:'Blood Jester'+(isHand2?' (H2)':'')+' — drawn (Crucible Regime: power suspended)',pl:0,type:'info'});
+        bonusToast(bc,'Blood Jester — drawn · Crucible Regime: 2× power suspended');
+      } else {
+        G._levCardsPending.push('blood');
+        G._bonusPayouts.push({label:'Blood Jester'+(isHand2?' (H2)':'')+' — 2× leverage card earned (next round)',pl:0,type:'info'});
+        bonusToast(bc,'Blood Jester — 2× leverage card earned, usable next round');
+      }
       break;
     case 'plague':{
       G.plagueOn=true;
@@ -9625,6 +9678,7 @@ function buildStakeList(){
   const _mpCat = G.mpMode ? (MP2._state?.category || 'standard') : null;
   const _standardKeys = new Set(['low','mid','high','royale']);
   const _vipKeys      = new Set(['legendary','mythic','highroller','champion']);
+  const _contender = _isContender();
   Object.entries(STAKES).forEach(([key,s])=>{
     if(_mpCat === 'standard' && !_standardKeys.has(key)) return;
     if(_mpCat === 'vip'      && !_vipKeys.has(key))      return;
@@ -9640,7 +9694,11 @@ function buildStakeList(){
     const curStakeMin = (STAKES[G.stake||'low']||{}).min || 1;
     const canStepDown = isDowngrade && !tooManySteps && G.balance < curStakeMin * 10;
     const downgradeBlocked = isDowngrade && (tooManySteps || !canStepDown);
-    if(canAffordSt && !downgradeBlocked){
+    if(_contender && key !== 'legendary'){
+      el.style.opacity='0.25'; el.style.cursor='not-allowed';
+      el.title='Crucible Regime — Legendary Stakes only';
+      el.innerHTML=`<div><div class="stake-name" style="color:rgba(255,255,255,0.25)">${s.label}</div><div class="stake-info">Min ${fmtKFC(s.min)}</div></div><div class="stake-info" style="color:rgba(224,64,64,0.5);font-size:9px">REGIME LOCKED</div>`;
+    } else if(canAffordSt && !downgradeBlocked){
       el.onclick=()=>{selectStake(key);};
     } else if(tooManySteps){
       el.style.opacity='0.35'; el.style.cursor='not-allowed';
@@ -9658,6 +9716,7 @@ function buildStakeList(){
 
 function selectStake(key){
   if(G.phase!=='bet'){notif('Finish the current hand first');return;}
+  if(_isContender() && key!=='legendary'){notif('Crucible Regime — Legendary Stakes only');return;}
   const s=STAKES[key];
   const curIdx = STAKE_ORDER.indexOf(G.stake||'low');
   const newIdx = STAKE_ORDER.indexOf(key);

@@ -2141,6 +2141,14 @@ function _renderHotStripHub(openMarkets) {
   });
   // Merge GAS-authoritative balances
   Object.assign(currBals, _hubGasBals);
+  // Deduplicated map (one entry per player) used as the eligible pool in _raceYesBias
+  // — currBals has both name and username keys per player, causing double-counting of
+  // eligTotal and halving each player's YES ratio. uniqueBals uses username as sole key.
+  const uniqueBals = {};
+  _hubPlayers.forEach(p => {
+    const key = (p.username || p.name || '').toLowerCase();
+    uniqueBals[key] = _hubGasBals[key] || _hubGasBals[(p.name||'').toLowerCase()] || p.balance;
+  });
 
   const top = openMarkets
     .filter(m => (m.betVolume || 0) > 0)
@@ -2164,7 +2172,7 @@ function _renderHotStripHub(openMarkets) {
       if (target > 0) {
         yPct = m.type === 'season'
           ? Math.round(_milestoneYesBias(bal, target, Date.now()) * 100)
-          : Math.round(_raceYesBias(bal, currBals, target) * 100);
+          : Math.round(_raceYesBias(bal, uniqueBals, target) * 100);
       }
     }
 
@@ -2236,6 +2244,12 @@ function _renderPmMarkets(markets, txData) {
   _hubPlayers.forEach(p => {
     currBals[p.name.toLowerCase()] = p.balance;
     if (p.username) currBals[p.username.toLowerCase()] = p.balance;
+  });
+  // Deduplicated pool for _raceYesBias (one entry per player, no double-counting)
+  const uniqueBals = {};
+  _hubPlayers.forEach(p => {
+    const key = (p.username || p.name || '').toLowerCase();
+    uniqueBals[key] = _hubGasBals[key] || _hubGasBals[(p.name||'').toLowerCase()] || p.balance;
   });
 
   // Resolve a market's params.player (may be username or display name) to balance + TX series.
@@ -2345,13 +2359,13 @@ function _renderPmMarkets(markets, txData) {
     const target = p.amount  || 0;
     const { bal, series } = resolvePlayer(player);
     const pct    = target > 0 ? Math.min(100, (bal / target) * 100) : 0;
-    // Use all players' balances as eligible pool — mirrors game.html _fundamentalPct
-    const yesP   = Math.round(_raceYesBias(bal, currBals, target) * 100);
+    // Use uniqueBals (one entry per player) — mirrors game.html _fundamentalPct, no double-count
+    const yesP   = Math.round(_raceYesBias(bal, uniqueBals, target) * 100);
     const noP    = 100 - yesP;
     const sparkId = 'spark_rc_' + mkt.id.replace(/[^a-z0-9]/gi, '');
     const sparkPts = series.map(e => ({
       x: e.game,
-      y: Math.round(_raceYesBias(e.balance, currBals, target) * 100),
+      y: Math.round(_raceYesBias(e.balance, uniqueBals, target) * 100),
     }));
     const hasChart = sparkPts.length >= 2;
 

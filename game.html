@@ -13415,6 +13415,7 @@ const PM = (() => {
             const bets = _loadBets();
             let credit = 0;
             const settleIdx = _stkIdx();
+            const _myOpenBets = bets.filter(b => b.mktId === sm.id && b.payout === null);
             bets.forEach(bet => {
               if(bet.mktId!==sm.id || bet.payout!==null) return;
               if(bet.outcome !== sm.result){ bet.payout=0; return; }
@@ -13427,6 +13428,16 @@ const PM = (() => {
               credit += bet.payout;
             });
             if(credit > 0){ G.balance += credit; updateUI(); _saveBets(bets); _syncBalanceAfterPM(); }
+            // Notify player whenever their position auto-settles (win or loss)
+            if(_myOpenBets.length > 0){
+              const _mktTitle = sm.desc ? (sm.desc.length > 55 ? sm.desc.slice(0,53)+'…' : sm.desc) : 'Market';
+              const _staked   = _myOpenBets.reduce((s,b)=>s+(b.amount||0),0);
+              if(credit > 0){
+                setTimeout(()=>notif('Settled: '+_mktTitle+' — +'+fmtFull(credit-_staked),'win'),300);
+              } else {
+                setTimeout(()=>notif('Settled: '+_mktTitle+' — '+sm.result+' (no payout)','info'),300);
+              }
+            }
           } else if(sm.status==='open' && local.status==='open'){
             // If the player has a pending (unsettled) bet on this market, keep the max
             // so a locally-placed bet that hasn't reached GAS yet isn't wiped.
@@ -13592,6 +13603,14 @@ const PM = (() => {
           if(changed) _saveBets(local);
           if(_refundTotal > 0){ G.balance += _refundTotal; updateUI(); _syncBalanceAfterPM(); }
           if(_reDeductTotal > 0){ updateUI(); _syncBalanceAfterPM(); }
+          // Retry unconfirmed bets — local open bets absent from GAS after >60s
+          const _gasTs = new Set((d.bets||[]).map(b => b.ts));
+          const _unconfirmed = _loadBets().filter(b => b.payout===null && !_gasTs.has(b.ts) && (Date.now()-(b.ts||0)) > 60000);
+          _unconfirmed.forEach(ub => {
+            if(!G.url || !G.username) return;
+            const _rp = new URLSearchParams({action:'pmBet', mktId:ub.mktId, outcome:ub.outcome, amount:String(ub.amount), username:G.username, stakeLevel:ub.stakeLevel||G.stake||'low', ts:String(ub.ts)});
+            fetch(G.url+'?'+_rp.toString(),{method:'GET',cache:'no-store'}).catch(()=>{});
+          });
         }
         // Safety net removed: it was too aggressive — it voided open bets whenever a market
         // was absent from a single poll response (network hiccup, Cloudflare cache, etc.).

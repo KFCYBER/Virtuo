@@ -13600,7 +13600,7 @@ const PM = (() => {
               changed = true;
             }
           });
-          if(changed) _saveBets(local);
+          if(changed) { _saveBets(local); render(); }
           if(_refundTotal > 0){ G.balance += _refundTotal; updateUI(); _syncBalanceAfterPM(); }
           if(_reDeductTotal > 0){ updateUI(); _syncBalanceAfterPM(); }
           // Retry unconfirmed bets — local open bets absent from GAS after >60s

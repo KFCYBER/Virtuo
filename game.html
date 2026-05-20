@@ -6833,8 +6833,18 @@ function doLogout(skipToStake){
   _showLoginFlowDots(true); _setLoginDot(1);
 
   if(skipToStake&&wasPlayer&&wasUsername){
-    // Liquidated — re-fetch balance from sheet then go to stake→buy-in flow
-    _pendingLogin={name:wasPlayer,balance:0};
+    // Liquidated — re-fetch balance from sheet then go to stake→buy-in flow.
+    // Seed _pendingLogin from current session state so stake restrictions apply
+    // correctly even before the GAS fetch returns (or if it fails).
+    _pendingLogin={
+      name:          wasPlayer,
+      balance:       wasBalance,
+      totalBalance:  G._totalBalance || wasBalance,
+      lastStake:     G.stake || '',
+      clubPass:      G._clubPass || false,
+      loyaltyPoints: G._pts || 0,
+      inventory:     G.inventory || {},
+    };
     ['login-step1','login-step2','login-step-buyin'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';
     });
@@ -6852,7 +6862,11 @@ function doLogout(skipToStake){
           const pin=G._cachedPin||'';
           const d=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(wasUsername)+'&pin='+encodeURIComponent(pin));
           if(d.auth&&typeof d.balance==='number'){
-            _pendingLogin.balance=d.balance;
+            _pendingLogin.balance      = d.balance;
+            _pendingLogin.totalBalance = d.totalBalance || d.balance;
+            if(d.lastStake) _pendingLogin.lastStake = d.lastStake;
+            if(d.loyaltyPoints !== undefined) _pendingLogin.loyaltyPoints = d.loyaltyPoints;
+            if(d.inventory)  _pendingLogin.inventory  = d.inventory;
           }
         }catch(e){
           // Sheet unreachable — balance stays 0

@@ -13726,20 +13726,26 @@ const PM = (() => {
             });
 
           // Build canonical list from GAS — prefer local version when local is more settled
+          let _canonicalCredit = 0;
           const canonical = d.bets.map(gb => {
             const lb = prev.find(b => String(b.ts)===String(gb.ts) && b.mktId===gb.mktId);
             // Market loop just settled this bet locally but GAS row not updated yet — keep local state
             if(lb && lb.payout !== null && gb.payout === null) return lb;
+            // GAS has a winning payout but local bet was still pending (market settled server-side
+            // or placed on another device) — auto-credit and mark claimed so no false notification fires
+            const _gasWin = (gb.payout||0) > 0 && (!lb || lb.payout === null);
+            if(_gasWin) _canonicalCredit += (gb.payout - (gb.amount||0));
             // GAS wins; carry client-only fields that GAS never stores
             return Object.assign({mktDesc:'',mktType:''}, gb, {
               mktDesc:      gb.mktDesc      || (lb && lb.mktDesc)      || '',
               mktType:      gb.mktType      || (lb && lb.mktType)      || '',
-              claimed:      gb.claimed      || (lb && lb.claimed)      || false,
+              claimed:      _gasWin ? true : (gb.claimed || (lb && lb.claimed) || false),
               refunded:     gb.refunded     || (lb && lb.refunded)     || false,
               cashoutEarly: gb.cashoutEarly || (lb && lb.cashoutEarly) || false,
               lockedPayout: gb.lockedPayout !== undefined ? gb.lockedPayout : (lb && lb.lockedPayout),
             });
           });
+          if(_canonicalCredit > 0){ G.balance += _canonicalCredit; updateUI(); _syncBalanceAfterPM(); }
 
           // Append local-only bets absent from GAS
           prev.forEach(lb => {

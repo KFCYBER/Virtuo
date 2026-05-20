@@ -6139,7 +6139,6 @@ function _sendTgBeacon(){
 }
 
 // Log session to GAS sheet on unload — keepalive ensures delivery even as page closes.
-// Also queued in kfc_sync_queue so next login auto-retries if the beacon fails.
 function _logSessionToSheet(stakeLabel){
   if(_isCreator()) return;
   if(!G.url || !G.username || !G._cachedPin) return;
@@ -6488,10 +6487,6 @@ async function _hubPMDirectLogin(username, pin, _kick){
       }catch(e){}
     }
     _loginGasBal = d.balance || 0;
-    const _pq = getSyncQueue();
-    if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
-      d.balance = _pq.balance;
-    }
     localStorage.setItem('kfc_last_user', username.toLowerCase());
     _pendingLogin = {
       name:          d.playerName || username,
@@ -6726,10 +6721,11 @@ function openApp(displayName, balance){
   const db2=document.getElementById('btn-deal'); if(db2) db2.disabled=true;
   // Retry any previously failed sync in background
   if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{
+    // RELOAD-EXIT payloads (skipGames:'true') are best-effort beacon syncs — never retry them.
+    // The beacon already fired on exit; if it failed, the balance discrepancy is minor and
+    // retrying just creates duplicate rows in the log. Clear and move on.
+    if(_q.skipGames === 'true'){ clearSyncQueue(); return; }
     // Guard: skip retry if GAS already has a balance >= what the payload would produce.
-    // Use expectedWalletBal (wallet total) when set — _logSessionToSheet/_spLeaveNow store
-    // session chips as balance, not wallet total, so comparing balance directly is wrong.
-    // Fall back to balance for legacy/contender payloads that already store wallet total.
     const _guardBal = Number(_q.expectedWalletBal || _q.balance || 0);
     if(_guardBal <= _loginGasBal){ clearSyncQueue(); return; }
     try{ await attemptSync(_q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){ storeSyncQueue(_q); setSyncBadge('error','FAILED'); notif('Auto-sync failed — open cashout to retry'); }

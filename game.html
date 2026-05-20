@@ -6305,43 +6305,12 @@ window.onload=()=>{
       } else {
       const _age=Date.now()-(_autoSnap.ts||0);
       const _fresh=_age < 10*60*1000;
-      const _hasActivity=_autoSnap.sessionActive||(_autoSnap.balance||0)>0||_autoSnap.handCommitted===true;
-      if(_fresh && _hasActivity && restoreSession(null)){
-        // Fresh session — restore directly without login screen
-        // inventory already restored inside restoreSession()
-        document.getElementById('login').style.display='none';
-        openApp(G.player, G.balance);
-        // Background autosave to confirm GAS has current state
-        setTimeout(()=>{ if(G.url && G._sessionActive) _autoSaveToSheet(); }, 1800);
-        // Refresh true wallet total from GAS — snap may have a stale totalBalance if GAS
-        // previously returned a wrong balance (e.g. stale checkpoint). Only update upward:
-        // never reduce G._totalBalance mid-session (player may have won chips already).
-        setTimeout(async()=>{
-          if(!G.url||!G.username||!G._cachedPin) return;
-          try{
-            const _rd=await sheetGet(G.url+'?action=getBalance&username='+encodeURIComponent(G.username)+'&pin='+encodeURIComponent(G._cachedPin));
-            const _gasTotal=(_rd.totalBalance||_rd.balance||0);
-            if(_rd.auth && _gasTotal > (G._totalBalance||0)){
-              G._totalBalance    = _gasTotal;
-              G._walletBalAtLogin= Math.max(G._walletBalAtLogin||0, _gasTotal);
-              updateUI();
-            }
-            // Show any pending deliveries that arrived between sessions
-            if(_rd.auth && _rd.deliveries && _rd.deliveries.length > 0){
-              const _rc = parseInt(_rd.kfcCredit)||0;
-              if(_rc > 0){ G.balance += _rc; G._totalBalance = (G._totalBalance||0)+_rc; updateUI(); }
-              _showDeliveryModal(_rd.deliveries, _rc);
-            }
-          }catch(e){}
-        }, 2200);
-        // Process any pending sync queue from previous session
-        if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{ try{ await attemptSync(_q); clearSyncQueue(); }catch(e){} },2500); } }
-      } else {
-        // Stale or no-activity — sync to GAS and show login
-        localStorage.removeItem(SESSION_KEY);
-        localStorage.removeItem('kfc_cashout_snap');
-        if(_autoSnap.sessionActive===true) _expireStaleSession(_autoSnap);
-      }
+      // Reload = exit. Always clear the snap and go to login.
+      // Fresh: RELOAD-EXIT beacon already synced — skip _expireStaleSession to avoid double-logging.
+      // Stale: beacon may not have fired — _expireStaleSession recovers the TX row.
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem('kfc_cashout_snap');
+      if(!_fresh && _autoSnap.sessionActive===true) _expireStaleSession(_autoSnap);
       } // end else (hub user matches snap user)
     } else if(_coSnap && !_autoSnap){
       localStorage.removeItem('kfc_cashout_snap');

@@ -6146,6 +6146,7 @@ function _logSessionToSheet(stakeLabel){
   // Use pre-deal balance if exiting mid-hand (bet deducted but outcome not yet resolved)
   const _exitBal = (G.preDealBal != null && G.phase !== 'bet') ? G.preDealBal : G.balance;
   const _exitPL  = _exitBal - (G.sessionStart || _exitBal);
+  const _exitWalletTotal = _totalCheckpointBal(_exitBal); // wallet total after this session
   const payload = {
     action:    'updatebalance',
     username:  G.username,
@@ -6158,11 +6159,11 @@ function _logSessionToSheet(stakeLabel){
     pin:       G._cachedPin,
     txId:      're_'+Date.now()+'_'+(G.username||'').slice(0,6),
     skipGames: 'true',
+    expectedWalletBal: String(_exitWalletTotal),
   };
-  // Queue as fallback: always keep the highest balance so a winning session never
-  // gets silently dropped because an older losing-session entry is already queued
+  // Queue as fallback: always keep the highest expected wallet total
   const _existingQ = getSyncQueue();
-  if(!_existingQ || Number(payload.balance) > Number(_existingQ.balance || 0)) storeSyncQueue(payload);
+  if(!_existingQ || Number(payload.expectedWalletBal) > Number(_existingQ.expectedWalletBal || _existingQ.balance || 0)) storeSyncQueue(payload);
   const params = new URLSearchParams(payload);
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
@@ -6723,9 +6724,12 @@ function openApp(displayName, balance){
   const db2=document.getElementById('btn-deal'); if(db2) db2.disabled=true;
   // Retry any previously failed sync in background
   if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{
-    // Only retry if queued balance >= GAS balance — a stale losing-session payload must
-    // not overwrite a correctly saved winning balance that GAS already has.
-    if(Number(_q.balance||0) < _loginGasBal){ clearSyncQueue(); return; }
+    // Guard: skip retry if GAS already has a balance >= what the payload would produce.
+    // Use expectedWalletBal (wallet total) when set — _logSessionToSheet/_spLeaveNow store
+    // session chips as balance, not wallet total, so comparing balance directly is wrong.
+    // Fall back to balance for legacy/contender payloads that already store wallet total.
+    const _guardBal = Number(_q.expectedWalletBal || _q.balance || 0);
+    if(_guardBal <= _loginGasBal){ clearSyncQueue(); return; }
     try{ await attemptSync(_q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){ storeSyncQueue(_q); setSyncBadge('error','FAILED'); notif('Auto-sync failed — open cashout to retry'); }
   },2000); } }
   // Set initial betting phase
@@ -9986,7 +9990,8 @@ function _spLeaveNow(){
     balance:G.balance, sessionPL:_sessionPL, buyIn:_walletBI,
     date:new Date().toISOString(),
     stake:G.s.label, stakeKey:G.stake, pin:G._cachedPin||'',
-    txId:'co_'+Date.now()+'_'+(G.username||'').slice(0,6)
+    txId:'co_'+Date.now()+'_'+(G.username||'').slice(0,6),
+    expectedWalletBal:String(_newTotal),
   };
   storeSyncQueue(_payload);
   if(G.url){

@@ -2082,7 +2082,17 @@ async function _fetchPmMarketsAndRender() {
     // GAS PM_Bets can have historical rows with payout==null from past bugs; cross-reference
     // against d.markets so those orphaned GAS rows don't inflate the open-positions count.
     const openMktMap = new Map((d.markets || []).filter(m => m.status === 'open').map(m => [m.id, m]));
-    const openBets  = (d.bets || []).filter(b => b.payout == null && openMktMap.has(b.mktId));
+    // Cross-reference local PM bets (same device) — client may have refunded/settled a bet
+    // that GAS doesn't know about yet (e.g. orphan cleanup or offline cashout).
+    const _localBetsRaw = (() => { try { return JSON.parse(localStorage.getItem('kfc_pm_bets_'+(_hubSession.username||'').toLowerCase())||'[]'); } catch(e){ return []; } })();
+    const _localBetMap = new Map(_localBetsRaw.map(b => [String(b.ts)+'|'+b.mktId, b]));
+    const openBets  = (d.bets || []).filter(b => {
+      if (b.payout != null) return false;
+      if (!openMktMap.has(b.mktId)) return false;
+      const local = _localBetMap.get(String(b.ts)+'|'+b.mktId);
+      if (local && (local.refunded || local.payout != null)) return false;
+      return true;
+    });
     const lockedAmt = openBets.reduce((s,b) => s + (b.amount||0), 0);
     const cntEl  = document.getElementById('wc-pm-count');
     const lckEl  = document.getElementById('wc-pm-locked');

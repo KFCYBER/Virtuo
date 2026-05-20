@@ -14214,6 +14214,11 @@ const PM = (() => {
       b.refunded = true;   // flag so history shows "Refunded" not "+0"
       b.claimed = true;    // prevent false "unclaimed payout" notification
       changed = true;
+      // Notify GAS so cross-device hub reflects the void (fire-and-forget)
+      if(G.url && G.username && G._cachedPin && b.ts){
+        const _vp = new URLSearchParams({action:'pmVoidBet', username:G.username, pin:G._cachedPin, ts:String(b.ts), mktId:b.mktId||''});
+        fetch(G.url+'?'+_vp.toString(),{method:'GET',cache:'no-store'}).catch(()=>{});
+      }
       return b;
     });
     if(changed){ _saveBets(cleaned); updateUI(); _syncBalanceAfterPM(); }

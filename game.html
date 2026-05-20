@@ -11817,13 +11817,13 @@ const PM = (() => {
 
   // Purge settled/refunded bets on every init — settled bets are already credited,
   // keeping them only causes stale display after buggy resolves or refunds.
-  // Also drops bets older than 30 days regardless of settlement status.
+  // Drop only pending bets older than 30 days. Keep settled bets so claimed/history state
+  // is preserved across reloads — purging them caused poll to re-add them with claimed:false.
   (function _purgeStaleBets(){
     const _30d = 30 * 24 * 60 * 60 * 1000;
     const now  = Date.now();
-    const cleaned = _loadBets().filter(b => b.payout == null && (now - (b.ts||0)) < _30d);
+    const cleaned = _loadBets().filter(b => b.payout !== null || (now - (b.ts||0)) < _30d);
     _saveBets(cleaned);
-    // Clear legacy one-time migration flag so future cleanup always runs
     try{ localStorage.removeItem(PM_PFX+'bets_migrated_v1_'+(G.username||G.player||'guest').toLowerCase()); }catch(e){}
   })();
 
@@ -14434,9 +14434,24 @@ const PM = (() => {
       localStorage.setItem(_migKey, '1');
     })();
     // Notify player of any unclaimed winning payouts from previous sessions.
-    // Excludes refunded and cashout-early bets — those have no claim button.
+    // Before checking, auto-claim any winning bets that arrived from GAS poll with
+    // claimed:false (poll re-adds settled bets without the claimed flag). Those bets
+    // have no visible claim button and the balance was already credited server-side.
     setTimeout(() => {
-      const _unclaimed = _loadBets().filter(b => (b.payout||0) > 0 && !b.claimed && !b.refunded && !b.cashoutEarly && b.mktType !== 'shoe');
+      const _allBets = _loadBets();
+      let _autoFixed = false;
+      _allBets.forEach(b => {
+        if((b.payout||0) > 0 && !b.claimed && !b.refunded && !b.cashoutEarly && b.mktType !== 'shoe'){
+          // Only auto-claim if the market is already settled (no active claim button to show)
+          const mkt = _markets.find(m => m.id === b.mktId);
+          if(!mkt || mkt.status === 'settled'){
+            b.claimed = true;
+            _autoFixed = true;
+          }
+        }
+      });
+      if(_autoFixed) _saveBets(_allBets);
+      const _unclaimed = _allBets.filter(b => (b.payout||0) > 0 && !b.claimed && !b.refunded && !b.cashoutEarly && b.mktType !== 'shoe');
       if(_unclaimed.length > 0){
         notif('💰 '+_unclaimed.length+' unclaimed payout'+ (_unclaimed.length>1?'s':'')+' — open Markets to claim', 'win');
       }

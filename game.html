@@ -6161,9 +6161,10 @@ function _logSessionToSheet(stakeLabel){
     skipGames: 'true',
     expectedWalletBal: String(_exitWalletTotal),
   };
-  // Queue as fallback: always keep the highest expected wallet total
-  const _existingQ = getSyncQueue();
-  if(!_existingQ || Number(payload.expectedWalletBal) > Number(_existingQ.expectedWalletBal || _existingQ.balance || 0)) storeSyncQueue(payload);
+  // Fire beacon only — do NOT store in sync queue. The queue retry in openApp would
+  // re-fire this payload on the next login, creating a duplicate RELOAD-EXIT row even
+  // when the beacon already succeeded. Graceful exits use _spLeaveNow which has proper
+  // queue + attemptSync; this path is best-effort only.
   const params = new URLSearchParams(payload);
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
@@ -6968,26 +6969,11 @@ async function _triggerContenderMilestone(){
   if(G._contenderMilestoneFired || G.cashedOut) return;
   G._contenderMilestoneFired = true;
   const _alreadyLegendary = G.stake === 'legendary';
-  if(!_alreadyLegendary){
-    G.cashedOut  = true;
-    G._atCashout = true;
-  }
+  if(!_alreadyLegendary){ G.cashedOut = true; G._atCashout = true; }
   const _fullBal = _totalCheckpointBal(G.balance);
-  G._totalBalance = _fullBal; // update so _isContender() reflects reality going forward
-  const _payload = {
-    action:'updatebalance', username:G.username, player:G.player||G.username,
-    balance:   String(_fullBal),
-    sessionPL: String(G.balance - (G.sessionStart||G.balance)),
-    buyIn:     String(_walletBuyIn()),
-    date:      new Date().toISOString(),
-    stake:     G.stake||'legendary',
-    pin:       G._cachedPin,
-    txId:      'cm_'+Date.now()+'_'+(G.username||'').slice(0,6),
-  };
-  const _existingQ = getSyncQueue();
-  if(!_existingQ || Number(_payload.balance) > Number(_existingQ.balance||0)) storeSyncQueue(_payload);
-  if(G.url){ try{ await attemptSync(_payload); clearSyncQueue(); }catch(e){} }
-  // Set modal button text and action based on whether player must switch stakes
+  G._totalBalance = _fullBal;
+
+  // Wire modal button BEFORE opening so it's ready immediately
   const _btn = document.getElementById('contender-milestone-btn');
   if(_btn){
     if(_alreadyLegendary){
@@ -6998,7 +6984,44 @@ async function _triggerContenderMilestone(){
       _btn.onclick = () => { closeModal('contender-milestone-modal'); doLogout(true); };
     }
   }
+  // Open modal immediately — legendary players must not deal during async GAS sync
   openModal('contender-milestone-modal');
+
+  if(!_alreadyLegendary){
+    // Non-legendary: forced cashout — this IS the final session sync
+    // balance = G.balance (session chips), NOT _fullBal (wallet total) — GAS formula handles rest
+    const _payload = {
+      action:'updatebalance', username:G.username, player:G.player||G.username,
+      balance:   String(G.balance),
+      sessionPL: String(G.balance - (G.sessionStart||G.balance)),
+      buyIn:     String(_walletBuyIn()),
+      date:      new Date().toISOString(),
+      stake:     G.s.label||G.stake, stakeKey: G.stake,
+      pin:       G._cachedPin||'',
+      txId:      'cm_'+Date.now()+'_'+(G.username||'').slice(0,6),
+      expectedWalletBal: String(_fullBal),
+    };
+    const _existingQ = getSyncQueue();
+    if(!_existingQ || Number(_payload.expectedWalletBal) > Number(_existingQ.expectedWalletBal||_existingQ.balance||0)) storeSyncQueue(_payload);
+    if(G.url){ try{ await attemptSync(_payload); clearSyncQueue(); }catch(e){} }
+  } else {
+    // Legendary: do NOT fire GAS sync — leave sync handles the session log to avoid double-counting
+    // Store a crash-recovery queue entry only (correct session chips, not wallet total)
+    const _crashPayload = {
+      action:'updatebalance', username:G.username, player:G.player||G.username,
+      balance:   String(G.balance),
+      sessionPL: String(G.balance - (G.sessionStart||G.balance)),
+      buyIn:     String(_walletBuyIn()),
+      date:      new Date().toISOString(),
+      stake:     G.s.label||G.stake, stakeKey: G.stake,
+      pin:       G._cachedPin||'',
+      txId:      'cm_'+Date.now()+'_'+(G.username||'').slice(0,6),
+      expectedWalletBal: String(_fullBal),
+    };
+    const _existingQ = getSyncQueue();
+    if(!_existingQ || Number(_crashPayload.expectedWalletBal) > Number(_existingQ.expectedWalletBal||_existingQ.balance||0)) storeSyncQueue(_crashPayload);
+    // No attemptSync — leave sync handles GAS update
+  }
 }
 
 function _dismissContenderMilestone(){

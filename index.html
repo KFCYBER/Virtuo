@@ -2137,7 +2137,7 @@ async function _fetchPmMarketsAndRender() {
               const bias = mkt.type === 'race'
                 ? _raceYesBias(bal, _posUniqueBals, target)
                 : _milestoneYesBias(bal, target, Date.now());
-              modelPct = isYes ? bias : (1 - bias);
+              if (isFinite(bias)) modelPct = isYes ? bias : (1 - bias);
             }
           }
           let estPayout;
@@ -2216,9 +2216,10 @@ function _renderHotStripHub(openMarkets) {
       const bal    = currBals[low] || _hubGasBals[low] || 0;
       const target = cp.amount || cp.target || 0;
       if (target > 0) {
-        yPct = m.type === 'season'
-          ? Math.round(_milestoneYesBias(bal, target, Date.now()) * 100)
-          : Math.round(_raceYesBias(bal, uniqueBals, target) * 100);
+        const _bias = m.type === 'season'
+          ? _milestoneYesBias(bal, target, Date.now())
+          : _raceYesBias(bal, uniqueBals, target);
+        if (isFinite(_bias)) yPct = Math.round(_bias * 100);
       }
     }
 

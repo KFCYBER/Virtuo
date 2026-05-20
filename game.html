@@ -6812,6 +6812,8 @@ function doLogout(skipToStake){
   G.cashedOut=false;
   G._atCashout=false;
   G._sessionActive=false;
+  G.log=[]; _handLogOffset=0; // clear hand log so it doesn't bleed into next session
+  const wasPts=G._pts;
   G.player=''; G.username=''; G._pts=0; // clear identity so beforeunload won't re-save
   clearSession();
   _selectedStakeKey=null;
@@ -6831,8 +6833,8 @@ function doLogout(skipToStake){
       totalBalance:  G._totalBalance || wasBalance,
       lastStake:     G.stake || '',
       clubPass:      G._clubPass || false,
-      loyaltyPoints: G._pts || 0,
-      inventory:     G.inventory || {},
+      loyaltyPoints: wasPts,
+      inventory:     G._inventory || {},
     };
     ['login-step1','login-step2','login-step-buyin'].forEach(id=>{
       const el=document.getElementById(id); if(el) el.style.display='none';

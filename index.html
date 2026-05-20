@@ -1320,11 +1320,13 @@ function parseTransactions(rows) {
       const game    = parseInt(gameRaw, 10);
       const balance = parseFloat(balRaw.replace(/,/g, ''));
       if (!isFinite(game) || !isFinite(balance) || balance <= 0) continue;
+      const stake   = (row[col + 2] ?? '').trim();
+      if (stake.toUpperCase() === 'RELOAD-EXIT') continue; // audit-only rows — excluded from chart
       series.push({
         game,
         balance,
         date:     (row[col + 0] ?? '').trim(),
-        stake:    (row[col + 2] ?? '').trim(),
+        stake,
         beginBal: parseFloat((row[col + 4] ?? '0').replace(/,/g, '')) || 0,
         result:   (row[col + 8] ?? '').trim().toUpperCase(),
         netKfc:   parseNet((row[col + 9]  ?? '').trim()),

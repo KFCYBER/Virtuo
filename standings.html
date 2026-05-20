@@ -741,6 +741,7 @@ function parseTransactions(rows) {
       const game    = parseInt(gameRaw, 10);
       const balance = parseFloat(balRaw.replace(/,/g, ''));
       if (!isFinite(game) || !isFinite(balance) || balance <= 0) continue;
+      if ((row[col + 2] ?? '').trim().toUpperCase() === 'RELOAD-EXIT') continue; // audit-only rows — excluded from chart
 
       series.push({
         game,

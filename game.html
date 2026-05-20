@@ -4076,9 +4076,10 @@ function isBust(h){ return hv(h)>21; }
 // ── FORMAT ──────────────────────────────────────────────
 function fmt(n){
   const abs=Math.abs(n);
-  if(abs>=1e9)return (n/1e9).toFixed(2)+'B';
-  if(abs>=1e6)return (n/1e6).toFixed(2)+'M';
-  if(abs>=1e3)return (n/1e3).toFixed(1)+'K';
+  const s=n<0?'-':'';
+  if(abs>=1e9)return s+(Math.floor(abs/1e7)/100).toFixed(2)+'B';
+  if(abs>=1e6)return s+(Math.floor(abs/1e4)/100).toFixed(2)+'M';
+  if(abs>=1e3)return s+(Math.floor(abs/100)/10).toFixed(1)+'K';
   return n.toLocaleString();
 }
 function fmtKFC(n){ return fmt(n)+' KFC'; }

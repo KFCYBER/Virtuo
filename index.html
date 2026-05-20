@@ -1342,10 +1342,12 @@ function parseTransactions(rows) {
    FORMAT
 ══════════════════════════════════════════ */
 function fmt(n) {
-  if (n >= 1e12) return (n / 1e12).toFixed(2) + 'T';
-  if (n >= 1e9)  return (n / 1e9).toFixed(2)  + 'B';
-  if (n >= 1e6)  return (n / 1e6).toFixed(2)  + 'M';
-  if (n >= 1e3)  return (n / 1e3).toFixed(1)  + 'K';
+  const abs = Math.abs(n);
+  const s = n < 0 ? '-' : '';
+  if (abs >= 1e12) return s+(Math.floor(abs/1e10)/100).toFixed(2)+'T';
+  if (abs >= 1e9)  return s+(Math.floor(abs/1e7)/100).toFixed(2)+'B';
+  if (abs >= 1e6)  return s+(Math.floor(abs/1e4)/100).toFixed(2)+'M';
+  if (abs >= 1e3)  return s+(Math.floor(abs/100)/10).toFixed(1)+'K';
   return n.toLocaleString();
 }
 function fmtSigned(n) {
@@ -1868,10 +1870,10 @@ function _raceYesBias(playerBal, allBalsObj, target) {
 /* ── Helpers ── */
 function _fmtHub(n) {
   if (!isFinite(n)) return '—';
-  if (n >= 1e12) return (n/1e12).toFixed(1)+'T';
-  if (n >= 1e9)  return (n/1e9).toFixed(1)+'B';
-  if (n >= 1e6)  return (n/1e6).toFixed(1)+'M';
-  if (n >= 1e3)  return (n/1e3).toFixed(0)+'K';
+  if (n >= 1e12) return (Math.floor(n/1e11)/10).toFixed(1)+'T';
+  if (n >= 1e9)  return (Math.floor(n/1e8)/10).toFixed(1)+'B';
+  if (n >= 1e6)  return (Math.floor(n/1e5)/10).toFixed(1)+'M';
+  if (n >= 1e3)  return Math.floor(n/1e3).toFixed(0)+'K';
   return String(Math.round(n));
 }
 function _parseTxDate(str) {

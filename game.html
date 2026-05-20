@@ -6434,10 +6434,6 @@ async function _hubDirectLogin(username, pin, displayName, _kick){
       }catch(e){}
     }
     _loginGasBal = d.balance || 0;
-    const _pq = getSyncQueue();
-    if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0)>(d.balance||0)){
-      d.balance = _pq.balance;
-    }
     localStorage.setItem('kfc_last_user', username.toLowerCase());
     _pendingLogin = {
       name:          d.playerName || username,
@@ -6518,9 +6514,7 @@ async function _hubPMDirectLogin(username, pin, _kick){
 function _applyDoLoginSuccess(d, username, pin){
   G.username=username; G._cachedPin=pin;
   G._clubPass=!!d.clubPass; G.playerId=d.playerId||'';
-  _loginGasBal = d.balance || 0; // capture raw GAS balance before any queue override
-  const _pq=getSyncQueue();
-  if(_pq&&(_pq.username||'').toLowerCase()===username.toLowerCase()&&(_pq.balance||0)>(d.balance||0)) d.balance=_pq.balance;
+  _loginGasBal = d.balance || 0; // capture raw GAS balance — queue retry fires in openApp, never overrides session balance
   try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
   if(d.balance===0){
     try{

@@ -2092,6 +2092,20 @@ async function _fetchPmMarketsAndRender() {
       ? _fmtHub(lockedAmt) + ' KFC locked'
       : 'No open positions';
     if (posEl) {
+      // Build balance maps locally — _hubPlayers may or may not be loaded yet.
+      // If empty, model odds fall back to pool ratio gracefully.
+      const _posCurrBals = {};
+      _hubPlayers.forEach(p => {
+        _posCurrBals[(p.name||'').toLowerCase()] = p.balance;
+        if (p.username) _posCurrBals[p.username.toLowerCase()] = p.balance;
+      });
+      Object.assign(_posCurrBals, _hubGasBals);
+      const _posUniqueBals = {};
+      _hubPlayers.forEach(p => {
+        const key = (p.username || p.name || '').toLowerCase();
+        _posUniqueBals[key] = _hubGasBals[key] || _hubGasBals[(p.name||'').toLowerCase()] || p.balance;
+      });
+
       if (openBets.length === 0) {
         posEl.innerHTML = '';
       } else {
@@ -2105,11 +2119,11 @@ async function _fetchPmMarketsAndRender() {
           if (mkt && (mkt.type === 'race' || mkt.type === 'season') && mkt.condition && mkt.condition.params) {
             const cp = mkt.condition.params;
             const playerName = (cp.player || '').toLowerCase();
-            const bal = uniqueBals[playerName] || currBals[playerName] || 0;
+            const bal = _posUniqueBals[playerName] || _posCurrBals[playerName] || 0;
             const target = cp.amount || cp.target || 0;
             if (target > 0) {
               const bias = mkt.type === 'race'
-                ? _raceYesBias(bal, uniqueBals, target)
+                ? _raceYesBias(bal, _posUniqueBals, target)
                 : _milestoneYesBias(bal, target, Date.now());
               modelPct = isYes ? bias : (1 - bias);
             }

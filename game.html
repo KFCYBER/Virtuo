@@ -3240,7 +3240,7 @@ body.mp-bet-locked .all-sb-btn {
     <!-- Pre-confirm buttons -->
     <div id="co-actions-pre" style="display:flex;gap:8px;flex-direction:column">
       <div style="display:flex;gap:8px">
-        <button class="btn-primary" style="flex:1" id="co-confirm-btn" onclick="confirmCashout()">Confirm &amp; Sync</button>
+        <button class="btn-primary" style="flex:1" id="co-confirm-btn" onclick="confirmCashout()">Leave Table</button>
         <button class="btn-ghost" onclick="if(!G.mpMode&&G.balance>=BALANCE_CAP){notif('Balance cap reached — cash out first');}else{G._atCashout=false;closeModal('cashout-modal');}">Stay</button>
       </div>
       <!-- Top Up option: shown when balance is low/zero — SP only -->
@@ -9986,8 +9986,65 @@ async function sheetGet(url){
   return JSON.parse(text);
 }
 
+function _spLeaveNow(){
+  // SP: fire-and-forget beacon sync + immediate logout — no pending UI
+  if(G._prebustSynced){
+    clearSyncQueue(); clearSession(); localStorage.removeItem('kfc_cashout_snap');
+    G.balance=0; updateUI();
+    closeModal('cashout-modal'); doLogout(false);
+    return;
+  }
+  G.cashedOut=true;
+  if(_shoeHandCount>0){
+    const _pts=_calcShoePoints(true);
+    if(_pts>0){
+      const _cw=_shoeLog.filter(e=>e.pl>0).length, _cb=_shoeLog.filter(e=>e.bj).length;
+      _addPoints(_pts);
+      notif('⭐ +'+_pts+' points ('+_shoeHandCount+'h · '+_cw+'w · '+_cb+'bj)', 'win');
+    }
+    _shoeHandCount=0; _shoeLog=[];
+  }
+  _syncPtsToSheet(true).catch(()=>{});
+  _flushHandLog(true);
+  _sendTgNotif();
+  const _sessionPL=G.balance-G.sessionStart;
+  const _walletBI=_walletBuyIn();
+  const _newTotal=(G._totalBalance||_walletBI)-_walletBI+G.balance;
+  if(!G.username){ notif('Cannot sync — username missing.'); return; }
+  const _payload={
+    username:G.username, player:G.player||'',
+    balance:G.balance, sessionPL:_sessionPL, buyIn:_walletBI,
+    date:new Date().toISOString(),
+    stake:G.s.label, stakeKey:G.stake, pin:G._cachedPin||'',
+    txId:'co_'+Date.now()+'_'+(G.username||'').slice(0,6)
+  };
+  storeSyncQueue(_payload);
+  if(G.url){
+    const _p=new URLSearchParams({
+      action:'updatebalance',
+      username:String(_payload.username), player:String(_payload.player||''),
+      balance:String(_payload.balance), sessionPL:String(_payload.sessionPL),
+      buyIn:String(_payload.buyIn), date:_payload.date,
+      stake:_payload.stake, stakeKey:_payload.stakeKey||'',
+      pin:_payload.pin||'', txId:String(_payload.txId||'')
+    });
+    try{ fetch(G.url+'?'+_p.toString(),{method:'GET',cache:'no-store',keepalive:true,redirect:'follow'}).catch(()=>{}); }catch(e){}
+  } else {
+    localStorage.setItem('kfc_bal_'+(G.username||G.player), G.balance);
+  }
+  G.sessionStart=G.balance; G._totalBalance=_newTotal;
+  G.log=[]; _handLogOffset=0; renderLog(); resetSessionChart();
+  clearSession(); localStorage.removeItem('kfc_cashout_snap');
+  setSyncBadge('live','SYNCED');
+  G.balance=0; updateUI();
+  closeModal('cashout-modal');
+  doLogout(false);
+}
+
 async function confirmCashout(){
   if(G._syncInProgress){ notif('Already syncing — please wait'); return; }
+  // SP: beacon sync + immediate leave — no pending UI
+  if(!G.mpMode){ _spLeaveNow(); return; }
   // Immediate visual feedback — disable button before any async work
   const _confirmBtn = document.getElementById('co-confirm-btn');
   if(_confirmBtn){ _confirmBtn.disabled = true; _confirmBtn.textContent = 'Please wait…'; }

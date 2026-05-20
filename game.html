@@ -6220,7 +6220,7 @@ window.addEventListener('pagehide', ()=>{
     if(!_unloadFired){ _unloadFired=true; _sendTgBeacon(); _logSessionToSheet('RELOAD-EXIT'); }
     try{
       const _s=JSON.parse(localStorage.getItem(SESSION_KEY)||'null');
-      if(_s){ _s.needsAutoSync=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
+      if(_s){ _s.needsAutoSync=true; _s.reloadExitFired=true; localStorage.setItem(SESSION_KEY,JSON.stringify(_s)); }
     }catch(e){}
     // MP: send leave beacon here (pagehide) — not in beforeunload, so "Stay" keeps the player in the table
     if(G.mpMode && MP2.tableId && MP2._url && MP2._me){
@@ -6310,7 +6310,8 @@ window.onload=()=>{
       // Stale: beacon may not have fired — _expireStaleSession recovers the TX row.
       localStorage.removeItem(SESSION_KEY);
       localStorage.removeItem('kfc_cashout_snap');
-      if(!_fresh && _autoSnap.sessionActive===true) _expireStaleSession(_autoSnap);
+      // Only expire-sync if the RELOAD-EXIT beacon never fired (genuine crash — pagehide didn't run)
+      if(!_fresh && _autoSnap.sessionActive===true && !_autoSnap.reloadExitFired) _expireStaleSession(_autoSnap);
       } // end else (hub user matches snap user)
     } else if(_coSnap && !_autoSnap){
       localStorage.removeItem('kfc_cashout_snap');

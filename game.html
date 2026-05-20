@@ -3201,6 +3201,27 @@ body.mp-bet-locked .all-sb-btn {
   </div>
 </div>
 
+<!-- CONTENDER MILESTONE -->
+<div class="overlay" id="contender-milestone-modal">
+  <div class="modal" style="max-width:320px;text-align:center">
+    <div style="font-size:32px;margin-bottom:10px">🏆</div>
+    <div style="font-family:var(--mono);font-size:11px;letter-spacing:3px;color:var(--gold);margin-bottom:10px">CONTENDER UNLOCKED</div>
+    <div style="font-size:14px;color:var(--white);margin-bottom:4px">Your wallet has crossed <strong>10B KFC</strong>.</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:20px">Your balance has been saved.</div>
+    <div style="background:rgba(224,64,64,0.07);border:1px solid rgba(224,64,64,0.25);border-radius:var(--radius);padding:14px 16px;text-align:left;margin-bottom:20px">
+      <div style="font-family:var(--mono);font-size:9px;letter-spacing:2px;color:#e04040;margin-bottom:10px">CRUCIBLE REGIME NOW ACTIVE</div>
+      <div style="font-size:11px;color:var(--muted);line-height:2">
+        · Legendary Stakes only<br>
+        · Leverage suspended<br>
+        · Power-ups banned<br>
+        · Blood Jester grants no 2× power<br>
+        · Online play ends at 50B — IRL only above that
+      </div>
+    </div>
+    <button class="btn-primary" style="width:100%;letter-spacing:1px" onclick="_dismissContenderMilestone()">GOT IT — ENTER CRUCIBLE →</button>
+  </div>
+</div>
+
 <!-- CASHOUT -->
 <div class="overlay" id="cashout-modal">
   <div class="modal" style="min-width:300px">
@@ -5036,6 +5057,8 @@ function finaliseLogin(stakeKey){
     G._totalBalance            = _pendingLogin.totalBalance;
     G._walletBalAtLogin        = _pendingLogin.totalBalance;
   }
+  G._wasContenderAtLogin     = (G._totalBalance || 0) >= CONTENDER_MIN;
+  G._contenderMilestoneFired = G._wasContenderAtLogin; // skip if already contender at login
   G._sessionActive=false;
   // Record who just logged in — used to prevent auto-restoring a different player's session on reload
   localStorage.setItem('kfc_last_user', (G.username||'').toLowerCase());
@@ -6966,6 +6989,39 @@ function updateUI(){
   if(fill) fill.style.height=pct+'%';
   if(dc) dc.textContent=used>0?used:'';
   updateInventoryBar();
+  // Contender milestone: fire once when live wallet crosses 10B mid-session
+  if(G._sessionActive && !G._contenderMilestoneFired && G.phase==='bet' &&
+     !G._wasContenderAtLogin && _totalCheckpointBal(G.balance) >= CONTENDER_MIN){
+    _triggerContenderMilestone();
+  }
+}
+
+async function _triggerContenderMilestone(){
+  if(G._contenderMilestoneFired || G.cashedOut) return;
+  G._contenderMilestoneFired = true;
+  G.cashedOut   = true;
+  G._atCashout  = true;
+  const _fullBal = _totalCheckpointBal(G.balance);
+  G._totalBalance = _fullBal; // update so _isContender() reflects reality going forward
+  const _payload = {
+    action:'updatebalance', username:G.username, player:G.player||G.username,
+    balance:   String(_fullBal),
+    sessionPL: String(G.balance - (G.sessionStart||G.balance)),
+    buyIn:     String(_walletBuyIn()),
+    date:      new Date().toISOString(),
+    stake:     G.stake||'legendary',
+    pin:       G._cachedPin,
+    txId:      'cm_'+Date.now()+'_'+(G.username||'').slice(0,6),
+  };
+  const _existingQ = getSyncQueue();
+  if(!_existingQ || Number(_payload.balance) > Number(_existingQ.balance||0)) storeSyncQueue(_payload);
+  if(G.url){ try{ await attemptSync(_payload); clearSyncQueue(); }catch(e){} }
+  openModal('contender-milestone-modal');
+}
+
+function _dismissContenderMilestone(){
+  closeModal('contender-milestone-modal');
+  doLogout(true); // skipToStake — returns to stake selection with Crucible Regime active
 }
 
 function setSyncBadge(cls,txt){
@@ -10130,6 +10186,7 @@ document.addEventListener&&document.addEventListener('DOMContentLoaded',()=>{
       if(o.id==='cashout-modal'&&typeof G!=='undefined'&&G.balance>=BALANCE_CAP){
         notif('Balance cap reached — cash out first'); return;
       }
+      if(o.id==='contender-milestone-modal') return; // forced cashout — must use the button
       o.classList.remove('open');
     });
   });

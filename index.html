@@ -2099,13 +2099,31 @@ async function _fetchPmMarketsAndRender() {
           const mkt = openMktMap.get(b.mktId);
           const desc = mkt ? (mkt.desc || '—') : (b.mktId || '—');
           const isYes = (b.outcome || '').toUpperCase() === 'YES';
-          const poolYes = mkt?.pools?.YES || 1;
-          const poolNo  = mkt?.pools?.NO  || 1;
-          const totalPool = poolYes + poolNo;
-          const winOdds = isYes
-            ? (totalPool / poolYes).toFixed(2)
-            : (totalPool / poolNo).toFixed(2);
-          const estPayout = Math.round((b.amount || 0) * parseFloat(winOdds));
+          // Use model probability (matches game.html _fundamentalPct) for race/season markets.
+          // Fall back to pool ratio for shoe markets (no live deck data in hub).
+          let modelPct = null;
+          if (mkt && (mkt.type === 'race' || mkt.type === 'season') && mkt.condition && mkt.condition.params) {
+            const cp = mkt.condition.params;
+            const playerName = (cp.player || '').toLowerCase();
+            const bal = uniqueBals[playerName] || currBals[playerName] || 0;
+            const target = cp.amount || cp.target || 0;
+            if (target > 0) {
+              const bias = mkt.type === 'race'
+                ? _raceYesBias(bal, uniqueBals, target)
+                : _milestoneYesBias(bal, target, Date.now());
+              modelPct = isYes ? bias : (1 - bias);
+            }
+          }
+          let estPayout;
+          if (modelPct && modelPct > 0) {
+            estPayout = Math.round((b.amount || 0) / modelPct);
+          } else {
+            const poolYes = mkt?.pools?.YES || 1;
+            const poolNo  = mkt?.pools?.NO  || 1;
+            const totalPool = poolYes + poolNo;
+            const winOdds = isYes ? (totalPool / poolYes) : (totalPool / poolNo);
+            estPayout = Math.round((b.amount || 0) * winOdds);
+          }
           return `<div class="pm-pos-item">
             <div class="pm-pos-desc">${desc}</div>
             <div class="pm-pos-meta">

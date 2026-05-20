@@ -3218,7 +3218,7 @@ body.mp-bet-locked .all-sb-btn {
         · Online play ends at 50B — IRL only above that
       </div>
     </div>
-    <button class="btn-primary" style="width:100%;letter-spacing:1px" onclick="_dismissContenderMilestone()">GOT IT — ENTER CRUCIBLE →</button>
+    <button id="contender-milestone-btn" class="btn-primary" style="width:100%;letter-spacing:1px" onclick="_dismissContenderMilestone()">GOT IT — ENTER CRUCIBLE →</button>
   </div>
 </div>
 
@@ -6999,8 +6999,11 @@ function updateUI(){
 async function _triggerContenderMilestone(){
   if(G._contenderMilestoneFired || G.cashedOut) return;
   G._contenderMilestoneFired = true;
-  G.cashedOut   = true;
-  G._atCashout  = true;
+  const _alreadyLegendary = G.stake === 'legendary';
+  if(!_alreadyLegendary){
+    G.cashedOut  = true;
+    G._atCashout = true;
+  }
   const _fullBal = _totalCheckpointBal(G.balance);
   G._totalBalance = _fullBal; // update so _isContender() reflects reality going forward
   const _payload = {
@@ -7016,12 +7019,23 @@ async function _triggerContenderMilestone(){
   const _existingQ = getSyncQueue();
   if(!_existingQ || Number(_payload.balance) > Number(_existingQ.balance||0)) storeSyncQueue(_payload);
   if(G.url){ try{ await attemptSync(_payload); clearSyncQueue(); }catch(e){} }
+  // Set modal button text and action based on whether player must switch stakes
+  const _btn = document.getElementById('contender-milestone-btn');
+  if(_btn){
+    if(_alreadyLegendary){
+      _btn.textContent = 'GOT IT — CONTINUE PLAYING';
+      _btn.onclick = () => { closeModal('contender-milestone-modal'); };
+    } else {
+      _btn.textContent = 'GOT IT — ENTER CRUCIBLE →';
+      _btn.onclick = () => { closeModal('contender-milestone-modal'); doLogout(true); };
+    }
+  }
   openModal('contender-milestone-modal');
 }
 
 function _dismissContenderMilestone(){
+  // Fallback — button onclick is set dynamically in _triggerContenderMilestone
   closeModal('contender-milestone-modal');
-  doLogout(true); // skipToStake — returns to stake selection with Crucible Regime active
 }
 
 function setSyncBadge(cls,txt){
@@ -10186,7 +10200,7 @@ document.addEventListener&&document.addEventListener('DOMContentLoaded',()=>{
       if(o.id==='cashout-modal'&&typeof G!=='undefined'&&G.balance>=BALANCE_CAP){
         notif('Balance cap reached — cash out first'); return;
       }
-      if(o.id==='contender-milestone-modal') return; // forced cashout — must use the button
+      if(o.id==='contender-milestone-modal' && typeof G!=='undefined' && G.stake!=='legendary') return; // forced cashout when not on legendary — must use the button
       o.classList.remove('open');
     });
   });

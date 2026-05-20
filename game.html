@@ -13674,10 +13674,14 @@ const PM = (() => {
             const lb = prev.find(b => String(b.ts)===String(gb.ts) && b.mktId===gb.mktId);
             // Market loop just settled this bet locally but GAS row not updated yet — keep local state
             if(lb && lb.payout !== null && gb.payout === null) return lb;
-            // GAS wins; carry local mktDesc/mktType when GAS fields are empty (pre-redeploy)
+            // GAS wins; carry client-only fields that GAS never stores
             return Object.assign({mktDesc:'',mktType:''}, gb, {
-              mktDesc: gb.mktDesc || (lb && lb.mktDesc) || '',
-              mktType: gb.mktType || (lb && lb.mktType) || '',
+              mktDesc:      gb.mktDesc      || (lb && lb.mktDesc)      || '',
+              mktType:      gb.mktType      || (lb && lb.mktType)      || '',
+              claimed:      gb.claimed      || (lb && lb.claimed)      || false,
+              refunded:     gb.refunded     || (lb && lb.refunded)     || false,
+              cashoutEarly: gb.cashoutEarly || (lb && lb.cashoutEarly) || false,
+              lockedPayout: gb.lockedPayout !== undefined ? gb.lockedPayout : (lb && lb.lockedPayout),
             });
           });
 

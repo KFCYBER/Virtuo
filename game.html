@@ -4752,6 +4752,7 @@ document.addEventListener('click',(e)=>{
 });
 
 let _pendingLogin = null;
+let _loginGasBal  = 0; // raw GAS balance at login, before sync-queue override — used to guard stale queue retries
 
 // ── LOGIN FLOW NAVIGATION ────────────────────────────────────
 let _selectedStakeKey = null;
@@ -4862,7 +4863,8 @@ function buildLoginStakeList(){
     // Mirror in-game rule: one step down allowed when balance < 10× last-played stake minimum
     const stakeDownAvailable=belowLastPlayed&&!tooManySteps&&bal<_lastPlayedMin*10;
     const downgradeBlocked=belowLastPlayed&&(tooManySteps||!stakeDownAvailable);
-    // Crucible Regime: only Legendary is permitted
+    // Crucible Regime: only Legendary is permitted; bypasses all step-down restrictions
+    const _crucibleForced = _crucibleRegime && key === 'legendary';
     const _regimeLocked=_crucibleRegime && key!=='legendary';
     const btn=document.createElement('button');
     btn.style.cssText='width:100%;padding:11px 14px;background:var(--bg2);border:1px solid var(--line2);font-family:var(--sans);font-size:13px;font-weight:600;letter-spacing:1px;text-align:left;display:flex;justify-content:space-between;align-items:center;border-radius:var(--radius);transition:all .15s;cursor:pointer;color:var(--white);opacity:1';
@@ -4905,7 +4907,7 @@ function buildLoginStakeList(){
       btn.onmouseover=null; btn.onmouseout=null;
       btn.onclick=null;
       btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
-    } else if(tooManySteps){
+    } else if(tooManySteps && !_crucibleForced){
       btn.style.opacity='0.35';
       btn.style.cursor='not-allowed';
       btn.style.color='var(--muted)';
@@ -4916,7 +4918,7 @@ function buildLoginStakeList(){
       btn.onclick=null;
       btn.title='Can only drop one stake level at a time';
       btn.innerHTML='<span style="color:var(--muted)">'+s.label+' Stakes</span><span style="font-family:var(--mono);font-size:10px;color:rgba(255,255,255,0.2)">min '+fmt(s.min)+'</span>';
-    } else if(belowLastPlayed&&!stakeDownAvailable){
+    } else if(belowLastPlayed&&!stakeDownAvailable&&!_crucibleForced){
       btn.style.opacity='0.35';
       btn.style.cursor='not-allowed';
       btn.style.color='var(--muted)';
@@ -6134,8 +6136,10 @@ function _logSessionToSheet(stakeLabel){
     txId:      're_'+Date.now()+'_'+(G.username||'').slice(0,6),
     skipGames: 'true',
   };
-  // Queue in sync queue as a fallback so next login retries if the beacon never lands
-  if(!getSyncQueue()) storeSyncQueue(payload);
+  // Queue as fallback: always keep the highest balance so a winning session never
+  // gets silently dropped because an older losing-session entry is already queued
+  const _existingQ = getSyncQueue();
+  if(!_existingQ || Number(payload.balance) > Number(_existingQ.balance || 0)) storeSyncQueue(payload);
   const params = new URLSearchParams(payload);
   try{ fetch(G.url + '?' + params.toString(), {method:'GET', keepalive:true, redirect:'follow', cache:'no-store'}); }catch(e){}
 }
@@ -6436,6 +6440,7 @@ async function _hubDirectLogin(username, pin, displayName, _kick){
         if(_pmLocked > 0) d.balance = _pmLocked;
       }catch(e){}
     }
+    _loginGasBal = d.balance || 0;
     const _pq = getSyncQueue();
     if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0)>(d.balance||0)){
       d.balance = _pq.balance;
@@ -6490,6 +6495,7 @@ async function _hubPMDirectLogin(username, pin, _kick){
         if(_pmLocked > 0) d.balance = _pmLocked;
       }catch(e){}
     }
+    _loginGasBal = d.balance || 0;
     const _pq = getSyncQueue();
     if(_pq && (_pq.username||'').toLowerCase()===username.toLowerCase() && (_pq.balance||0) > (d.balance||0)){
       d.balance = _pq.balance;
@@ -6519,6 +6525,7 @@ async function _hubPMDirectLogin(username, pin, _kick){
 function _applyDoLoginSuccess(d, username, pin){
   G.username=username; G._cachedPin=pin;
   G._clubPass=!!d.clubPass; G.playerId=d.playerId||'';
+  _loginGasBal = d.balance || 0; // capture raw GAS balance before any queue override
   const _pq=getSyncQueue();
   if(_pq&&(_pq.username||'').toLowerCase()===username.toLowerCase()&&(_pq.balance||0)>(d.balance||0)) d.balance=_pq.balance;
   try{ localStorage.removeItem('kfc_betlock_'+username.toLowerCase()); }catch(e){}
@@ -6728,7 +6735,12 @@ function openApp(displayName, balance){
   document.addEventListener('keydown',     _doWelcome, {once:true});
   const db2=document.getElementById('btn-deal'); if(db2) db2.disabled=true;
   // Retry any previously failed sync in background
-  if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{ try{ await attemptSync(_q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){ storeSyncQueue(_q); setSyncBadge('error','FAILED'); notif('Auto-sync failed — open cashout to retry'); } },2000); } }
+  if(G.url){ const _q=getSyncQueue(); if(_q){ setTimeout(async()=>{
+    // Only retry if queued balance >= GAS balance — a stale losing-session payload must
+    // not overwrite a correctly saved winning balance that GAS already has.
+    if(Number(_q.balance||0) < _loginGasBal){ clearSyncQueue(); return; }
+    try{ await attemptSync(_q); clearSyncQueue(); setSyncBadge('live','LIVE'); notif('Pending sync completed'); }catch(e){ storeSyncQueue(_q); setSyncBadge('error','FAILED'); notif('Auto-sync failed — open cashout to retry'); }
+  },2000); } }
   // Set initial betting phase
   G.phase='bet';
   document.body.classList.add('betting');

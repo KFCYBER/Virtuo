@@ -9669,6 +9669,12 @@ function closeResult(){
     notif('New shoe — '+rem2+' shoe'+(rem2===1?'':'s')+' remaining today');
     setTimeout(()=>_earlyShoePreview(), 800);
   }
+  // Contender milestone: wallet just crossed 10B this hand
+  if(G._sessionActive && !G._contenderMilestoneFired && !G._wasContenderAtLogin &&
+     _totalCheckpointBal(G.balance) >= CONTENDER_MIN){
+    _triggerContenderMilestone(); // async — handles sync + modal
+    return;
+  }
   // Balance checks after hand
   if(G.balance>=BALANCE_CAP){
     setTimeout(()=>{
